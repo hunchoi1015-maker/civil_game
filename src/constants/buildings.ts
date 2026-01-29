@@ -1,149 +1,157 @@
-import { BuildingDefinition, BuildingType } from '../types';
+import { BuildingDefinition, BuildingType, TerrainType } from '../types';
 
-// QA ver1 기준 건물 목록
+// ver3 기준 건물 목록 - 새 정의
 export const BUILDINGS: Record<BuildingType, BuildingDefinition> = {
   walls: {
     type: 'walls',
     name: '성벽',
-    description: '도시 방어력 강화. 도시당 1개만 건설 가능.',
+    description: '도시 방어 +4. 도시 타일에만 건설 가능.',
     productionCost: 4,
     effects: {
       productionBonus: 0,
       tradeBonus: 0,
       cultureBonus: 0,
-      combatBonus: 4,
+      combatBonus: 0,
+      cityDefenseBonus: 4,  // 신규: 도시 방어 보너스
       techCostReduction: 0,
       currencyPerTurn: 0,
     },
     requiredTech: null,
     requiredBuilding: null,
-    allowedTerrain: null,  // 도시 타일에만
+    allowedTerrain: ['city'],  // 도시 타일에만
     maxPerCity: 1,
   },
   barracks: {
     type: 'barracks',
     name: '막사',
-    description: '군사 훈련 시설. 전투 보너스 +2',
-    productionCost: 4,
-    effects: {
-      productionBonus: 0,
-      tradeBonus: 0,
-      cultureBonus: 0,
-      combatBonus: 2,
-      techCostReduction: 0,
-      currencyPerTurn: 0,
-    },
-    requiredTech: null,
-    requiredBuilding: null,
-    allowedTerrain: null,
-    maxPerCity: 1,
-  },
-  library: {
-    type: 'library',
-    name: '도서관',
-    description: '지식 축적. 기술 비용 -1',
-    productionCost: 4,
-    effects: {
-      productionBonus: 0,
-      tradeBonus: 0,
-      cultureBonus: 0,
-      combatBonus: 0,
-      techCostReduction: 1,
-      currencyPerTurn: 0,
-    },
-    requiredTech: 'writing',
-    requiredBuilding: null,
-    allowedTerrain: null,
-    maxPerCity: 1,
-  },
-  market: {
-    type: 'market',
-    name: '시장',
-    description: '교역 활성화. 교역 +2',
+    description: '교역 +2, 전투 보너스 +2. 물 제외 모든 지형에 건설 가능.',
     productionCost: 4,
     effects: {
       productionBonus: 0,
       tradeBonus: 2,
       cultureBonus: 0,
+      combatBonus: 2,
+      cityDefenseBonus: 0,
+      techCostReduction: 0,
+      currencyPerTurn: 0,
+    },
+    requiredTech: null,
+    requiredBuilding: null,
+    allowedTerrain: ['grassland', 'forest', 'mountain', 'desert'],
+    maxPerCity: 1,
+  },
+  library: {
+    type: 'library',
+    name: '도서관',
+    description: '교역 +1, 문화 +1. 숲, 초원에만 건설 가능.',
+    productionCost: 4,
+    effects: {
+      productionBonus: 0,
+      tradeBonus: 1,
+      cultureBonus: 1,
       combatBonus: 0,
+      cityDefenseBonus: 0,
+      techCostReduction: 0,
+      currencyPerTurn: 0,
+    },
+    requiredTech: 'writing',
+    requiredBuilding: null,
+    allowedTerrain: ['forest', 'grassland'],
+    maxPerCity: 1,
+  },
+  university: {
+    type: 'university',
+    name: '대학교',
+    description: '교역 +2, 문화 +2. 숲, 초원에만 건설 가능. (도서관 필요)',
+    productionCost: 6,
+    effects: {
+      productionBonus: 0,
+      tradeBonus: 2,
+      cultureBonus: 2,
+      combatBonus: 0,
+      cityDefenseBonus: 0,
+      techCostReduction: 0,
+      currencyPerTurn: 0,
+    },
+    requiredTech: 'philosophy',
+    requiredBuilding: 'library',
+    allowedTerrain: ['forest', 'grassland'],
+    maxPerCity: 1,
+  },
+  market: {
+    type: 'market',
+    name: '시장',
+    description: '생산 +1, 교역 +1, 문화 +1. 물 제외 모든 지형에 건설 가능.',
+    productionCost: 4,
+    effects: {
+      productionBonus: 1,
+      tradeBonus: 1,
+      cultureBonus: 1,
+      combatBonus: 0,
+      cityDefenseBonus: 0,
       techCostReduction: 0,
       currencyPerTurn: 0,
     },
     requiredTech: 'currency',
     requiredBuilding: null,
-    allowedTerrain: null,
+    allowedTerrain: ['grassland', 'forest', 'mountain', 'desert'],
+    maxPerCity: 1,
+  },
+  bank: {
+    type: 'bank',
+    name: '은행',
+    description: '생산 +1, 교역 +1, 문화 +1, 화폐 +1. 물 제외. (시장 필요)',
+    productionCost: 6,
+    effects: {
+      productionBonus: 1,
+      tradeBonus: 1,
+      cultureBonus: 1,
+      combatBonus: 0,
+      cityDefenseBonus: 0,
+      techCostReduction: 0,
+      currencyPerTurn: 1,
+    },
+    requiredTech: 'banking',
+    requiredBuilding: 'market',
+    allowedTerrain: ['grassland', 'forest', 'mountain', 'desert'],
     maxPerCity: 1,
   },
   temple: {
     type: 'temple',
     name: '사원',
-    description: '종교와 문화의 중심지. 문화 +2',
+    description: '문화 +2. 물 제외 모든 지형에 건설 가능.',
     productionCost: 4,
     effects: {
       productionBonus: 0,
       tradeBonus: 0,
       cultureBonus: 2,
       combatBonus: 0,
+      cityDefenseBonus: 0,
       techCostReduction: 0,
       currencyPerTurn: 0,
     },
     requiredTech: 'philosophy',
     requiredBuilding: null,
-    allowedTerrain: null,
-    maxPerCity: 1,
-  },
-  university: {
-    type: 'university',
-    name: '대학교',
-    description: '고급 교육 기관. 기술 비용 -2 (도서관 필요)',
-    productionCost: 6,
-    effects: {
-      productionBonus: 0,
-      tradeBonus: 0,
-      cultureBonus: 0,
-      combatBonus: 0,
-      techCostReduction: 2,
-      currencyPerTurn: 0,
-    },
-    requiredTech: 'philosophy',
-    requiredBuilding: 'library',
-    allowedTerrain: null,
+    allowedTerrain: ['grassland', 'forest', 'mountain', 'desert'],
     maxPerCity: 1,
   },
   cathedral: {
     type: 'cathedral',
     name: '대성당',
-    description: '웅장한 종교 건축물. 문화 +4 (사원 필요)',
+    description: '문화 +3. 물 제외. (사원 필요)',
     productionCost: 8,
     effects: {
       productionBonus: 0,
       tradeBonus: 0,
-      cultureBonus: 4,
+      cultureBonus: 3,
       combatBonus: 0,
+      cityDefenseBonus: 0,
       techCostReduction: 0,
       currencyPerTurn: 0,
     },
     requiredTech: 'theology',
     requiredBuilding: 'temple',
-    allowedTerrain: null,
-    maxPerCity: 1,
-  },
-  bank: {
-    type: 'bank',
-    name: '은행',
-    description: '금융의 중심지. 턴당 화폐 +1 (시장 필요)',
-    productionCost: 6,
-    effects: {
-      productionBonus: 0,
-      tradeBonus: 0,
-      cultureBonus: 0,
-      combatBonus: 0,
-      techCostReduction: 0,
-      currencyPerTurn: 1,
-    },
-    requiredTech: 'banking',
-    requiredBuilding: 'market',
-    allowedTerrain: null,
+    allowedTerrain: ['grassland', 'forest', 'mountain', 'desert'],
     maxPerCity: 1,
   },
 };
@@ -193,4 +201,15 @@ export function calculateTechCostReduction(buildings: BuildingType[]): number {
   }
 
   return reduction;
+}
+
+// 도시의 도시 방어 보너스 계산 (공격받을 때만 적용)
+export function calculateCityDefenseBonus(buildings: BuildingType[]): number {
+  let bonus = 0;
+
+  for (const buildingType of buildings) {
+    bonus += BUILDINGS[buildingType].effects.cityDefenseBonus;
+  }
+
+  return bonus;
 }

@@ -1,4 +1,9 @@
-import { GameState, GamePhase, Player, WinCondition } from '../types';
+import { GameState, GamePhase, Player, WinCondition, GameMap } from '../types';
+import {
+  calculatePlayerTrade as calculatePlayerTradeFromTiles,
+  calculatePlayerProduction as calculatePlayerProductionFromTiles,
+  calculatePlayerCulture as calculatePlayerCultureFromTiles,
+} from './ResourceCalculator';
 
 export interface PhaseAction {
   type: string;
@@ -83,18 +88,27 @@ export function checkPhaseComplete(
   return phaseComplete.every((complete) => complete);
 }
 
-// QA ver1: 새로운 건물 시스템에 맞게 수정
-export function calculateTradeIncome(player: Player): number {
+// ver3: 타일 기반 교역 수입 계산
+// 맵이 제공되면 타일 기반, 아니면 기본값 (하위 호환성)
+export function calculateTradeIncome(player: Player, map?: GameMap): number {
+  if (map) {
+    return calculatePlayerTradeFromTiles(player, map);
+  }
+
+  // 기본값 (맵 없이 호출 시 - 하위 호환성)
   let income = 0;
 
-  // 도시별 교역 수입
+  // 도시별 기본 교역 수입
   for (const city of player.cities) {
     income += city.isCapital ? 3 : 2;
 
-    // 건물 보너스 (새 건물 목록)
+    // 건물 보너스
     for (const building of city.buildings) {
-      if (building.type === 'market') income += 2;
-      if (building.type === 'bank') income += 1;  // 턴당 화폐가 아닌 교역 보너스
+      if (building.type === 'market') income += 1;
+      if (building.type === 'bank') income += 1;
+      if (building.type === 'barracks') income += 2;
+      if (building.type === 'library') income += 1;
+      if (building.type === 'university') income += 2;
     }
   }
 
@@ -106,12 +120,23 @@ export function calculateTradeIncome(player: Player): number {
   return Math.max(0, income);
 }
 
-export function calculateProductionCapacity(player: Player): number {
+// ver3: 타일 기반 생산량 계산
+export function calculateProductionCapacity(player: Player, map?: GameMap): number {
+  if (map) {
+    return calculatePlayerProductionFromTiles(player, map);
+  }
+
+  // 기본값 (맵 없이 호출 시 - 하위 호환성)
   let production = 0;
 
   for (const city of player.cities) {
     production += city.production;
-    // 새 건물 시스템에서는 별도의 생산 보너스 건물 없음
+
+    // 건물 보너스
+    for (const building of city.buildings) {
+      if (building.type === 'market') production += 1;
+      if (building.type === 'bank') production += 1;
+    }
   }
 
   // 정치체제 보너스
@@ -122,14 +147,24 @@ export function calculateProductionCapacity(player: Player): number {
   return production;
 }
 
-export function calculateCultureIncome(player: Player): number {
+// ver3: 타일 기반 문화량 계산
+export function calculateCultureIncome(player: Player, map?: GameMap): number {
+  if (map) {
+    return calculatePlayerCultureFromTiles(player, map);
+  }
+
+  // 기본값 (맵 없이 호출 시 - 하위 호환성)
   let culture = 0;
 
   for (const city of player.cities) {
-    // 건물 보너스 (새 건물 목록)
+    // 건물 보너스
     for (const building of city.buildings) {
       if (building.type === 'temple') culture += 2;
-      if (building.type === 'cathedral') culture += 4;
+      if (building.type === 'cathedral') culture += 3;
+      if (building.type === 'library') culture += 1;
+      if (building.type === 'university') culture += 2;
+      if (building.type === 'market') culture += 1;
+      if (building.type === 'bank') culture += 1;
     }
   }
 

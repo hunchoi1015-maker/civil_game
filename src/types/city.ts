@@ -10,8 +10,10 @@ export interface City {
   production: number;
   currentProduction: ProductionItem | null;
   productionProgress: number;
-  combatBonus: number;    // 전투 보너스 (성벽, 막사 등에서 획득)
-  hasWalls: boolean;       // 성벽 건설 여부 (도시당 1개)
+  combatBonus: number;        // 전투 보너스 (막사 등에서 획득)
+  hasWalls: boolean;          // 성벽 건설 여부 (도시당 1개)
+  cityDefenseBonus: number;   // 도시 방어 보너스 (성벽에서 획득, 공격받을 때만 적용)
+  hasActedThisTurn: boolean;  // 턴당 행동 제한 (건물 건설/유닛 생산/문화 수입 중 1회)
 }
 
 export interface Building {
@@ -48,6 +50,7 @@ export interface BuildingEffect {
   tradeBonus: number;
   cultureBonus: number;
   combatBonus: number;       // 전투 보너스
+  cityDefenseBonus: number;  // 도시 방어 보너스 (공격받을 때만 적용)
   techCostReduction: number; // 기술 비용 감소
   currencyPerTurn: number;   // 턴당 화폐 생산
 }
@@ -86,5 +89,7 @@ export function createCity(
     productionProgress: 0,
     combatBonus: isCapital ? CAPITAL_BASE_COMBAT_BONUS : 0,  // 수도는 기본 전투 보너스
     hasWalls: false,
+    cityDefenseBonus: 0,      // 도시 방어 보너스 (성벽에서 획득)
+    hasActedThisTurn: false,  // 턴당 행동 제한
   };
 }

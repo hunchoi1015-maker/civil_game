@@ -27,7 +27,8 @@ import {
 import { TECHNOLOGIES } from '../constants/technologies';
 import { NATIONS } from '../types/nation';
 import { BUILDINGS } from '../constants/buildings';
-import { calculateTradeIncome } from '../engine/GameEngine';
+import { calculateTradeIncome, calculateProductionCapacity } from '../engine/GameEngine';
+import { calculateCityProduction, canAffordBuilding } from '../engine/ResourceCalculator';
 
 const PLAYER_COLORS: PlayerColor[] = ['red', 'blue', 'green', 'yellow'];
 
@@ -408,6 +409,13 @@ export const useGameStore = create<GameStore>()(
         state.currentPlayerIndex = state.firstPlayerIndex;
         state.currentPhase = 'start';
         state.phaseComplete = new Array(state.players.length).fill(false);
+
+        // 모든 도시의 턴당 행동 제한 초기화
+        state.players.forEach((player) => {
+          player.cities.forEach((city) => {
+            city.hasActedThisTurn = false;
+          });
+        });
       });
 
       get().checkVictory();
@@ -524,8 +532,8 @@ export const useGameStore = create<GameStore>()(
         return false;
       }
 
-      // 교역 수입 계산
-      const tradeIncome = calculateTradeIncome(player);
+      // 교역 수입 계산 (타일 기반)
+      const tradeIncome = calculateTradeIncome(player, state.map);
 
       set((state) => {
         const p = state.players.find((p) => p.id === playerId);
@@ -602,6 +610,8 @@ export const useGameStore = create<GameStore>()(
     },
 
     buildInCity: (cityId: string, buildingType: string, position?: Position) => {
+      const currentState = get();
+
       set((state) => {
         for (const player of state.players) {
           const city = player.cities.find((c) => c.id === cityId);
@@ -609,6 +619,17 @@ export const useGameStore = create<GameStore>()(
             // 건물 정의 가져오기
             const buildingDef = BUILDINGS[buildingType as keyof typeof BUILDINGS];
             if (!buildingDef) return;
+
+            // 도시가 이번 턴에 이미 행동했는지 확인
+            if (city.hasActedThisTurn) {
+              return; // 턴당 1회 행동 제한
+            }
+
+            // 생산량 >= 비용 검증
+            const cityProduction = calculateCityProduction(city, state.map);
+            if (cityProduction < buildingDef.productionCost) {
+              return; // 생산량 부족
+            }
 
             // maxPerCity 체크 (성벽 등 도시당 1개 제한 건물)
             const existingCount = city.buildings.filter((b) => b.type === buildingType).length;
@@ -620,6 +641,23 @@ export const useGameStore = create<GameStore>()(
             const alreadyBuilt = city.buildings.some((b) => b.type === buildingType);
             if (alreadyBuilt) {
               return; // 이미 건설된 건물은 다시 건설 불가
+            }
+
+            // 건물 지형 제한 확인
+            if (buildingDef.allowedTerrain) {
+              // 'city'는 도시 타일에만
+              if (buildingDef.allowedTerrain.includes('city')) {
+                // 성벽은 도시 타일에만 건설 (position이 없거나 도시 위치와 같아야 함)
+                if (position && (position.x !== city.position.x || position.y !== city.position.y)) {
+                  return; // 도시 타일이 아님
+                }
+              } else if (position) {
+                // 다른 건물은 지정된 지형에만 건설
+                const targetTile = state.map.tiles[position.y]?.[position.x];
+                if (targetTile && !buildingDef.allowedTerrain.includes(targetTile.terrain)) {
+                  return; // 허용되지 않은 지형
+                }
+              }
             }
 
             const buildingId = uuidv4();
@@ -638,15 +676,18 @@ export const useGameStore = create<GameStore>()(
               }
             }
 
-            // 성벽인 경우 hasWalls 설정 및 전투 보너스 추가
+            // 성벽인 경우 hasWalls 설정 및 도시 방어 보너스 추가
             if (buildingType === 'walls') {
               city.hasWalls = true;
-              city.combatBonus += 4;
+              city.cityDefenseBonus += buildingDef.effects.cityDefenseBonus;
             }
             // 막사인 경우 전투 보너스 추가
             if (buildingType === 'barracks') {
-              city.combatBonus += 2;
+              city.combatBonus += buildingDef.effects.combatBonus;
             }
+
+            // 턴당 행동 완료 표시
+            city.hasActedThisTurn = true;
             break;
           }
         }
