@@ -1,3 +1,5 @@
+// src/pages/GameScreen.tsx
+
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import { MapGrid } from '../components/game/Map/MapGrid';
@@ -15,6 +17,7 @@ import { CapitalSelectionScreen } from '../components/game/CapitalSelectionScree
 import { ArmyCardsWidget } from '../components/game/ArmyCardsWidget';
 import { ResearchResultsModal } from '../components/game/ResearchResultsModal';
 import { useState, useEffect } from 'react';
+// import { TradePanel } from '../components/game/TradePanel'; // [삭제]
 
 type PanelView = 'map' | 'tech' | 'city' | 'units';
 
@@ -67,7 +70,7 @@ export function GameScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col">
+    <div className="relative w-full h-screen bg-slate-950 overflow-hidden text-slate-100">
       {/* 상단 바 */}
       <header className="bg-slate-800 border-b border-slate-700 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -150,12 +153,14 @@ export function GameScreen() {
             {activeView === 'units' && <UnitPanel />}
           </div>
         </main>
-
+            
         {/* 오른쪽 패널 - 액션 */}
-        <aside className="w-72 bg-slate-800 border-l border-slate-700 overflow-y-auto">
+        <aside className="w-72 bg-slate-800 border-l border-slate-700 overflow-y-auto z-10">
           <ActionPanel />
         </aside>
       </div>
+
+      {/* [삭제됨] TradePanel 제거 */}
 
       {/* 부대 카드 위젯 */}
       <ArmyCardsWidget />

@@ -36,7 +36,7 @@ export function generateMap(config: MapGeneratorConfig): GameMap {
         terrain,
         resource,
         cityId: null,
-        buildingId: null,
+        buildingType: null,
         unitIds: [],
         ownerId: null,
         isExplored: true,

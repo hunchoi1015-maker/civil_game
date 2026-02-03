@@ -1,3 +1,5 @@
+import { Position } from './map';
+
 export type ArmyCardType = 'infantry' | 'artillery' | 'cavalry' | 'airforce';
 export type ArmyTier = 1 | 2 | 3 | 4;
 
@@ -55,45 +57,118 @@ export const ARMY_CARD_DEFINITIONS: Record<ArmyCardType, ArmyCardDefinition> = {
   },
 };
 
-export interface CombatState {
-  isActive: boolean;
-  attackerId: string | null;
-  defenderId: string | null;
-  attackerCards: ArmyCard[];
-  defenderCards: ArmyCard[];
-  attackerDeployed: ArmyCard[];  // 배치된 카드
-  defenderDeployed: ArmyCard[];
-  round: number;
-  maxRounds: number;
-  log: CombatLogEntry[];
-  phase: 'setup' | 'battle' | 'result';
+// === 전투 타입 ===
+export type CombatType = 'field' | 'city' | 'capital';
+
+// === 전장 (Battlefield) ===
+export interface BattlefieldResult {
+  attackerSurvived: boolean;
+  defenderSurvived: boolean;
+  attackerDamageDealt: number;
+  defenderDamageDealt: number;
+  firstStriker: 'attacker' | 'defender' | 'simultaneous';
 }
 
+export interface Battlefield {
+  id: string;
+  attackerCard: ArmyCard | null;
+  defenderCard: ArmyCard | null;
+  resolved: boolean;
+  result: BattlefieldResult | null;
+}
+
+// === 배치 상태 ===
+export interface PlacementState {
+  currentTurn: 'attacker' | 'defender';
+  attackerPassed: boolean;
+  defenderPassed: boolean;
+  attackerDeployCount: number;
+  defenderDeployCount: number;
+  attackerMaxCards: number;
+  defenderMaxCards: number;
+}
+
+// === 전리품 ===
+export interface LootSelection {
+  type: 'trade' | 'culture';
+  amount: number;
+}
+
+export const LOOT_MAX_PER_SELECTION = 3;
+export const CITY_CAPITAL_MAX_CARDS = 6;
+
+// 공격자 카드 제한: 유닛 수 기반 (1→3, 2→5, 3→7)
+export function getAttackerMaxCards(unitCount: number): number {
+  if (unitCount <= 0) return 1;
+  return Math.min(1 + unitCount * 2, 7);
+}
+
+// === 전투 로그 ===
 export interface CombatLogEntry {
-  round: number;
   message: string;
+  battlefieldId?: string;
   attackerCard?: string;
   defenderCard?: string;
-  damage: number;
 }
 
-export interface CombatResult {
-  winner: 'attacker' | 'defender';
-  attackerScore: number;
-  defenderScore: number;
-  lootChoice: 'trade' | 'culture' | null;
+// === 전투 상태 ===
+export type CombatPhase = 'placement' | 'resolution' | 'scoring' | 'loot' | 'result';
+
+export interface CombatState {
+  isActive: boolean;
+
+  // 원래 이동자/방어자 (역할 교환 전)
+  originalMoverId: string | null;
+  originalDefenderId: string | null;
+
+  // 현재 전투 역할 (성벽 도시 시 교환될 수 있음)
+  attackerRoleId: string | null;
+  defenderRoleId: string | null;
+
+  // 전투 컨텍스트
+  combatType: CombatType;
+  targetTilePosition: Position | null;
+  targetCityId: string | null;
+  isWalledCity: boolean;
+  rolesSwapped: boolean;
+
+  // 카드 풀
+  attackerAvailableCards: ArmyCard[];
+  defenderAvailableCards: ArmyCard[];
+
+  // 전장
+  battlefields: Battlefield[];
+
+  // 배치 상태
+  placement: PlacementState;
+
+  // 묘지 (전투 중 사망한 카드)
+  graveyard: ArmyCard[];
+
+  // 전투 단계
+  phase: CombatPhase;
+
+  // 보너스 (전투 시작 시 계산)
+  attackerCombatBonus: number;
+  defenderCombatBonus: number;
+  defenderCityDefenseBonus: number;
+
+  // 점수 (해결 후 계산)
+  attackerFinalScore: number;
+  defenderFinalScore: number;
+
+  // 결과
+  winner: 'attacker' | 'defender' | null;
+  winnerPlayerId: string | null;
+  loserPlayerId: string | null;
+
+  // 전리품
+  lootSelections: LootSelection[];
+  maxLootSelections: number;
+
+  // 로그
+  log: CombatLogEntry[];
 }
-
-export interface Loot {
-  trade: number;
-  culture: number;
-}
-
-// 전선 크기: 최대 20장
-export const FRONTLINE_SIZE = 20;
-
-// 전리품
-export const LOOT_AMOUNT = 3;
 
 // 부대 카드 생성 (공격력/체력 선택)
 export function createArmyCard(
@@ -124,8 +199,12 @@ export function hasFirstStrike(attacker: ArmyCardType, defender: ArmyCardType): 
   return attackerDef.strongAgainst === defender;
 }
 
-// 전투 점수 계산
-export function calculateBattleScore(cards: ArmyCard[], combatBonus: number): number {
-  const cardScore = cards.reduce((sum, card) => sum + card.attack + card.health, 0);
-  return cardScore + combatBonus;
+// 전투 점수 계산: 공격력만 합산 + 보너스
+export function calculateBattleScore(
+  cards: ArmyCard[],
+  combatBonus: number,
+  cityDefenseBonus: number = 0
+): number {
+  const cardScore = cards.reduce((sum, card) => sum + card.attack, 0);
+  return cardScore + combatBonus + cityDefenseBonus;
 }

@@ -30,11 +30,12 @@ export function MapGrid() {
       : null;
 
     // 이동 단계에서 선택된 유닛이 있고, 이동 가능한 타일을 클릭한 경우
-    if (currentPhase === 'movement' && selectedUnitData && !selectedUnitData.hasMoved && selectedUnitData.movement > 0) {
+    if (currentPhase === 'movement' && selectedUnitData && selectedUnitData.movement > 0) {
+      // 상하좌우 4방향만 이동 가능 (대각선 불가)
+      const dx = Math.abs(x - selectedUnitData.position.x);
+      const dy = Math.abs(y - selectedUnitData.position.y);
       const canMoveHere = tile.terrain !== 'water' &&
-        Math.abs(x - selectedUnitData.position.x) <= 1 &&
-        Math.abs(y - selectedUnitData.position.y) <= 1 &&
-        !(x === selectedUnitData.position.x && y === selectedUnitData.position.y);
+        ((dx === 1 && dy === 0) || (dx === 0 && dy === 1));
 
       if (canMoveHere) {
         // 그룹 이동 또는 단일 이동

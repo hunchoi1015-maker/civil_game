@@ -4,6 +4,7 @@ import { useGameStore } from '../../../store/gameStore';
 import { City, UnitType, UNIT_DEFINITIONS, Position, TERRAIN_PROPERTIES, BuildingDefinition, TerrainType } from '../../../types';
 import { BUILDINGS, getAvailableBuildings } from '../../../constants/buildings';
 import { getAvailableArmyCards, ArmyCardTemplate } from '../../../constants/armyCards';
+import { calculateCityProduction, calculateCityCulture } from '../../../engine/ResourceCalculator';
 import clsx from 'clsx';
 
 type ProductionTab = 'buildings' | 'units' | 'armyCards';
@@ -68,6 +69,8 @@ function BuildingLocationModal({ building, city, onSelect, onClose }: BuildingLo
 
   // 도시 주변 8칸 + 도시 중앙 타일 가져오기
   const getAdjacentTiles = () => {
+    if (!map) return []; // 맵 데이터 보호
+
     const tiles: { position: Position; isValid: boolean; terrain: string; hasBuilding: boolean }[] = [];
     const directions = [
       { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
@@ -82,7 +85,7 @@ function BuildingLocationModal({ building, city, onSelect, onClose }: BuildingLo
       if (x >= 0 && x < map.width && y >= 0 && y < map.height) {
         const tile = map.tiles[y][x];
         const isCenter = dir.x === 0 && dir.y === 0;
-        const isValid = !tile.buildingId &&
+        const isValid = !tile.buildingType &&
           tile.terrain !== 'water' &&
           tile.terrain !== 'mountain' &&
           tile.ownerId === city.ownerId;
@@ -91,7 +94,7 @@ function BuildingLocationModal({ building, city, onSelect, onClose }: BuildingLo
           position: { x, y },
           isValid: isCenter || isValid, // 도시 중앙은 항상 허용
           terrain: tile.terrain,
-          hasBuilding: !!tile.buildingId || (isCenter && city.buildings.length > 0),
+          hasBuilding: !!tile.buildingType || (isCenter && city.buildings.length > 0),
         });
       }
     }
@@ -151,11 +154,12 @@ function BuildingLocationModal({ building, city, onSelect, onClose }: BuildingLo
 }
 
 export function CityPanel() {
-  const { players, currentPlayerIndex, currentPhase, buildInCity, createUnit, produceArmyCard } = useGameStore();
+  const { players, currentPlayerIndex, currentPhase, buildInCity, createUnit, produceArmyCard, harvestCityCulture, map } = useGameStore();
   const currentPlayer = players[currentPlayerIndex];
-  const [selectedCity, setSelectedCity] = useState<City | null>(
-    currentPlayer.cities[0] || null
+  const [selectedCityId, setSelectedCityId] = useState<string | null>(
+    currentPlayer.cities[0]?.id || null
   );
+  const selectedCity = currentPlayer.cities.find(c => c.id === selectedCityId) || null;
   const [productionTab, setProductionTab] = useState<ProductionTab>('buildings');
   const [selectedArmyTemplate, setSelectedArmyTemplate] = useState<ArmyCardTemplate | null>(null);
   const [selectedBuildingToBuild, setSelectedBuildingToBuild] = useState<BuildingDefinition | null>(null);
@@ -184,7 +188,18 @@ export function CityPanel() {
       alert('도시 경영 단계에서만 건물을 건설할 수 있습니다.');
       return;
     }
-    if (selectedCity) {
+    if (selectedCity?.hasActedThisTurn) {
+      alert('이 도시는 이번 턴에 이미 행동했습니다.');
+      return;
+    }
+
+    // [추가] 건설 비용 확인 (실제 생산력 기준)
+    if (selectedCity && map) {
+      const currentProduction = calculateCityProduction(selectedCity, map);
+      if (currentProduction < building.productionCost) {
+        alert(`생산력이 부족합니다. (현재: ${currentProduction}, 필요: ${building.productionCost})`);
+        return;
+      }
       // 위치 선택 모달 표시
       setSelectedBuildingToBuild(building);
     }
@@ -203,6 +218,20 @@ export function CityPanel() {
       return;
     }
     if (!selectedCity) return;
+    if (selectedCity.hasActedThisTurn) {
+      alert('이 도시는 이번 턴에 이미 행동했습니다.');
+      return;
+    }
+
+    // [추가] 유닛 생산 비용 확인 (실제 생산력 기준)
+    const def = UNIT_DEFINITIONS[type];
+    if (map) {
+      const currentProduction = calculateCityProduction(selectedCity, map);
+      if (currentProduction < def.productionCost) {
+        alert(`생산력이 부족합니다. (현재: ${currentProduction}, 필요: ${def.productionCost})`);
+        return;
+      }
+    }
 
     if (type === 'military' && militaryCount >= 6) {
       alert('군사 유닛은 최대 6개까지만 생산할 수 있습니다.');
@@ -222,15 +251,58 @@ export function CityPanel() {
       return;
     }
     if (!selectedArmyTemplate) return;
+    if (selectedCity?.hasActedThisTurn) {
+      alert('이 도시는 이번 턴에 이미 행동했습니다.');
+      setSelectedArmyTemplate(null);
+      return;
+    }
+
+    // [추가] 부대 카드 비용 확인 (실제 생산력 기준)
+    if (selectedCity && map) {
+       const currentProduction = calculateCityProduction(selectedCity, map);
+       if (currentProduction < selectedArmyTemplate.productionCost) {
+         alert(`생산력이 부족합니다. (현재: ${currentProduction}, 필요: ${selectedArmyTemplate.productionCost})`);
+         return;
+       }
+    }
+
     produceArmyCard(
       currentPlayer.id,
       selectedArmyTemplate.type,
       selectedArmyTemplate.tier,
       attack,
       health,
-      selectedArmyTemplate.name
+      selectedArmyTemplate.name,
+      selectedCity?.id
     );
     setSelectedArmyTemplate(null);
+  };
+
+  // 선택된 도시의 실시간 생산력 계산
+  const selectedCityProduction = (selectedCity && map)
+    ? calculateCityProduction(selectedCity, map)
+    : 0;
+
+  // 선택된 도시의 문화 수확량 계산
+  const selectedCityCulture = (selectedCity && map)
+    ? calculateCityCulture(selectedCity, map)
+    : 0;
+
+  const handleHarvestCulture = () => {
+    if (!canManageCity) {
+      alert('도시 경영 단계에서만 문화를 수확할 수 있습니다.');
+      return;
+    }
+    if (!selectedCity) return;
+    if (selectedCity.hasActedThisTurn) {
+      alert('이 도시는 이번 턴에 이미 행동했습니다.');
+      return;
+    }
+    if (selectedCityCulture <= 0) {
+      alert('이 도시에서 수확할 문화가 없습니다.');
+      return;
+    }
+    harvestCityCulture(currentPlayer.id, selectedCity.id);
   };
 
   return (
@@ -257,26 +329,30 @@ export function CityPanel() {
       {/* 도시 목록 */}
       <div className="w-64 space-y-2">
         <h3 className="text-lg font-semibold text-white mb-3">내 도시</h3>
-        {currentPlayer.cities.map((city) => (
-          <button
-            key={city.id}
-            onClick={() => setSelectedCity(city)}
-            className={clsx(
-              'w-full p-3 rounded-lg text-left transition-colors',
-              selectedCity?.id === city.id
-                ? 'bg-amber-600 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-            )}
-          >
-            <div className="font-medium flex items-center gap-2">
-              {city.isCapital && <span>👑</span>}
-              {city.name}
-            </div>
-            <div className="text-sm opacity-75 mt-1">
-              생산력: {city.production} | 건물: {city.buildings.length}
-            </div>
-          </button>
-        ))}
+        {currentPlayer.cities.map((city) => {
+          // [수정] 목록에서도 실시간 생산력 표시
+          const cityProduction = map ? calculateCityProduction(city, map) : 0;
+          return (
+            <button
+              key={city.id}
+              onClick={() => setSelectedCityId(city.id)}
+              className={clsx(
+                'w-full p-3 rounded-lg text-left transition-colors',
+                selectedCity?.id === city.id
+                  ? 'bg-amber-600 text-white'
+                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              )}
+            >
+              <div className="font-medium flex items-center gap-2">
+                {city.isCapital && <span>👑</span>}
+                {city.name}
+              </div>
+              <div className="text-sm opacity-75 mt-1">
+                생산력: {cityProduction} | 건물: {city.buildings.length}
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {/* 선택된 도시 상세 */}
@@ -289,7 +365,8 @@ export function CityPanel() {
             </h3>
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div className="text-slate-300">
-                <span className="text-orange-400">생산력:</span> {selectedCity.production}
+                {/* [수정] 실시간 계산된 생산력 표시 */}
+                <span className="text-orange-400">생산력:</span> {selectedCityProduction}
               </div>
               <div className="text-slate-300">
                 <span className="text-red-400">전투 보너스:</span> {selectedCity.combatBonus}
@@ -298,7 +375,37 @@ export function CityPanel() {
                 <span className="text-blue-400">성벽:</span> {selectedCity.hasWalls ? '있음' : '없음'}
               </div>
             </div>
+            {/* [추가] 생산력 출처 설명 */}
+            <div className="text-xs text-slate-500 mt-2">
+              * 생산력은 도시 주변 8칸의 지형/자원과 건물의 합산입니다.
+            </div>
           </div>
+
+          {/* 문화 수확 */}
+          {canManageCity && selectedCityCulture > 0 && (
+            <div className="bg-slate-800 rounded-lg p-4 mb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-lg font-medium text-white">문화 수확</h4>
+                  <p className="text-sm text-purple-400 mt-1">
+                    이 도시에서 +{selectedCityCulture} 문화를 수확할 수 있습니다.
+                  </p>
+                </div>
+                <button
+                  onClick={handleHarvestCulture}
+                  disabled={selectedCity.hasActedThisTurn}
+                  className={clsx(
+                    'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                    selectedCity.hasActedThisTurn
+                      ? 'bg-slate-700 opacity-40 cursor-not-allowed text-slate-400'
+                      : 'bg-purple-600 hover:bg-purple-500 text-white'
+                  )}
+                >
+                  문화 수확
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* 현재 건물 */}
           <div className="bg-slate-800 rounded-lg p-4 mb-4">
@@ -330,6 +437,14 @@ export function CityPanel() {
               <div className="mb-4 p-3 bg-yellow-900/50 border border-yellow-600 rounded-lg">
                 <p className="text-yellow-400 text-sm">
                   ⚠️ 도시 경영 단계에서만 건물 건설, 유닛 생산, 부대 카드 생산이 가능합니다.
+                </p>
+              </div>
+            )}
+            {/* 행동 완료 경고 */}
+            {canManageCity && selectedCity?.hasActedThisTurn && (
+              <div className="mb-4 p-3 bg-red-900/50 border border-red-600 rounded-lg">
+                <p className="text-red-400 text-sm">
+                  ⚠️ 이 도시는 이번 턴에 이미 행동했습니다. (1턴에 도시당 1회 행동)
                 </p>
               </div>
             )}
@@ -373,23 +488,26 @@ export function CityPanel() {
             {productionTab === 'buildings' && (
               <div className="grid grid-cols-2 gap-2">
                 {availableBuildings.map((building) => {
+                  // [추가] 비용 부족 시 비활성화 로직 (시각적 처리)
+                  const canAfford = selectedCityProduction >= building.productionCost;
+                  const cityActed = selectedCity?.hasActedThisTurn ?? false;
                   return (
                     <motion.button
                       key={building.type}
-                      whileHover={canManageCity ? { scale: 1.02 } : {}}
+                      whileHover={canManageCity && canAfford && !cityActed ? { scale: 1.02 } : {}}
                       onClick={() => handleBuild(building)}
-                      disabled={!canManageCity}
+                      disabled={!canManageCity || !canAfford || cityActed}
                       className={clsx(
                         'p-3 rounded-lg text-left transition-colors',
-                        canManageCity
+                        (canManageCity && canAfford && !cityActed)
                           ? 'bg-slate-700 hover:bg-slate-600'
-                          : 'bg-slate-700 opacity-50 cursor-not-allowed'
+                          : 'bg-slate-700 opacity-40 cursor-not-allowed'
                       )}
                     >
                       <div className="text-white font-medium text-sm">{building.name}</div>
                       <div className="text-slate-400 text-xs mt-1">{building.description}</div>
-                      <div className="text-amber-400 text-xs mt-1">
-                        비용: {building.productionCost}
+                      <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>
+                        비용: {building.productionCost} {canAfford ? "" : "(부족)"}
                       </div>
                     </motion.button>
                   );
@@ -408,7 +526,9 @@ export function CityPanel() {
                   const currentCount = unitType === 'military' ? militaryCount : settlerCount;
                   const maxCount = unitType === 'military' ? 6 : 2;
                   const isMaxed = currentCount >= maxCount;
-                  const isDisabled = isMaxed || !canManageCity;
+                  const canAfford = selectedCityProduction >= def.productionCost;
+                  const cityActed = selectedCity?.hasActedThisTurn ?? false;
+                  const isDisabled = isMaxed || !canManageCity || !canAfford || cityActed;
 
                   return (
                     <motion.button
@@ -419,7 +539,7 @@ export function CityPanel() {
                       className={clsx(
                         'p-3 rounded-lg text-left transition-colors',
                         isDisabled
-                          ? 'bg-slate-700 opacity-50 cursor-not-allowed'
+                          ? 'bg-slate-700 opacity-40 cursor-not-allowed'
                           : 'bg-slate-700 hover:bg-slate-600'
                       )}
                     >
@@ -428,8 +548,8 @@ export function CityPanel() {
                         {def.name}
                       </div>
                       <div className="text-slate-400 text-xs mt-1">{def.description}</div>
-                      <div className="text-amber-400 text-xs mt-1">
-                        비용: {def.productionCost}
+                      <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>
+                        비용: {def.productionCost} {canAfford ? "" : "(부족)"}
                       </div>
                       <div className="text-slate-400 text-xs mt-1">
                         보유: {currentCount}/{maxCount}
@@ -453,18 +573,21 @@ export function CityPanel() {
                     cavalry: '🐴',
                     airforce: '✈️',
                   }[card.type];
+                  const canAfford = selectedCityProduction >= card.productionCost;
+                  const cityActed = selectedCity?.hasActedThisTurn ?? false;
+                  const isDisabled = !canManageCity || !canAfford || cityActed;
 
                   return (
                     <motion.button
                       key={`${card.type}-${card.tier}`}
-                      whileHover={canManageCity ? { scale: 1.02 } : {}}
-                      onClick={() => canManageCity && setSelectedArmyTemplate(card)}
-                      disabled={!canManageCity}
+                      whileHover={!isDisabled ? { scale: 1.02 } : {}}
+                      onClick={() => !isDisabled && setSelectedArmyTemplate(card)}
+                      disabled={isDisabled}
                       className={clsx(
                         'p-3 rounded-lg text-left transition-colors',
-                        canManageCity
-                          ? 'bg-slate-700 hover:bg-slate-600'
-                          : 'bg-slate-700 opacity-50 cursor-not-allowed'
+                        isDisabled
+                          ? 'bg-slate-700 opacity-40 cursor-not-allowed'
+                          : 'bg-slate-700 hover:bg-slate-600'
                       )}
                     >
                       <div className="text-white font-medium text-sm flex items-center gap-2">
@@ -474,8 +597,8 @@ export function CityPanel() {
                       <div className="text-slate-400 text-xs mt-1">
                         Tier {card.tier} | 총 전투력: {card.totalCombatPower}
                       </div>
-                      <div className="text-amber-400 text-xs mt-1">
-                        비용: {card.productionCost}
+                      <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>
+                        비용: {card.productionCost} {canAfford ? "" : "(부족)"}
                       </div>
                     </motion.button>
                   );

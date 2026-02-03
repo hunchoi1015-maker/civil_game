@@ -88,87 +88,28 @@ export function checkPhaseComplete(
   return phaseComplete.every((complete) => complete);
 }
 
-// ver3: 타일 기반 교역 수입 계산
-// 맵이 제공되면 타일 기반, 아니면 기본값 (하위 호환성)
+// ▼▼▼ [핵심 변경 사항] 교역 수입 계산 로직 단순화 ▼▼▼
 export function calculateTradeIncome(player: Player, map?: GameMap): number {
-  if (map) {
-    return calculatePlayerTradeFromTiles(player, map);
+  // 맵이 없으면 교역 수입은 0 (혹은 에러 처리)
+  if (!map) {
+    console.warn('calculateTradeIncome: Map is missing!');
+    return 0;
   }
 
-  // 기본값 (맵 없이 호출 시 - 하위 호환성)
-  let income = 0;
-
-  // 도시별 기본 교역 수입
-  for (const city of player.cities) {
-    income += city.isCapital ? 3 : 2;
-
-    // 건물 보너스
-    for (const building of city.buildings) {
-      if (building.type === 'market') income += 1;
-      if (building.type === 'bank') income += 1;
-      if (building.type === 'barracks') income += 2;
-      if (building.type === 'library') income += 1;
-      if (building.type === 'university') income += 2;
-    }
-  }
-
-  // 정치체제 보너스
-  if (player.government === 'democracy') income += 3;
-  if (player.government === 'republic') income += 1;
-  if (player.government === 'communism') income -= 1;
-
-  return Math.max(0, income);
+  // ResourceCalculator에 이미 구현된 "도시 주변 8칸 합산 로직"을 그대로 사용
+  return calculatePlayerTradeFromTiles(player, map);
 }
 
-// ver3: 타일 기반 생산량 계산
+// 생산량 계산도 동일하게 맵 기반으로 통일
 export function calculateProductionCapacity(player: Player, map?: GameMap): number {
-  if (map) {
-    return calculatePlayerProductionFromTiles(player, map);
-  }
-
-  // 기본값 (맵 없이 호출 시 - 하위 호환성)
-  let production = 0;
-
-  for (const city of player.cities) {
-    production += city.production;
-
-    // 건물 보너스
-    for (const building of city.buildings) {
-      if (building.type === 'market') production += 1;
-      if (building.type === 'bank') production += 1;
-    }
-  }
-
-  // 정치체제 보너스
-  if (player.government === 'monarchy') production += 2;
-  if (player.government === 'communism') production += 3;
-  if (player.government === 'republic') production += 1;
-
-  return production;
+  if (!map) return 0;
+  return calculatePlayerProductionFromTiles(player, map);
 }
 
-// ver3: 타일 기반 문화량 계산
+// 문화량 계산도 동일하게 맵 기반으로 통일
 export function calculateCultureIncome(player: Player, map?: GameMap): number {
-  if (map) {
-    return calculatePlayerCultureFromTiles(player, map);
-  }
-
-  // 기본값 (맵 없이 호출 시 - 하위 호환성)
-  let culture = 0;
-
-  for (const city of player.cities) {
-    // 건물 보너스
-    for (const building of city.buildings) {
-      if (building.type === 'temple') culture += 2;
-      if (building.type === 'cathedral') culture += 3;
-      if (building.type === 'library') culture += 1;
-      if (building.type === 'university') culture += 2;
-      if (building.type === 'market') culture += 1;
-      if (building.type === 'bank') culture += 1;
-    }
-  }
-
-  return culture;
+  if (!map) return 0;
+  return calculatePlayerCultureFromTiles(player, map);
 }
 
 // 도시의 기술 비용 감소 계산

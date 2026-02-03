@@ -1,5 +1,5 @@
 import { useGameStore } from '../../store/gameStore';
-import { getPhaseDisplayName, getPhaseDescription, calculateTradeIncome, calculateCultureIncome } from '../../engine/GameEngine';
+import { getPhaseDisplayName, getPhaseDescription, calculateTradeIncome } from '../../engine/GameEngine';
 import { TERRAIN_PROPERTIES, RESOURCE_PROPERTIES } from '../../types';
 import { GovernmentPanel } from './GovernmentPanel';
 
@@ -19,6 +19,7 @@ export function ActionPanel() {
     setSelectedUnit,
     firstPlayerIndex,
     getPlayerOrderForCurrentRound,
+    debugSkipPhase,
   } = useGameStore();
 
   const currentPlayer = players[currentPlayerIndex];
@@ -31,16 +32,12 @@ export function ActionPanel() {
     : null;
 
   // 계산된 수입
-  const tradeIncome = calculateTradeIncome(currentPlayer);
-  const cultureIncome = calculateCultureIncome(currentPlayer);
+  const tradeIncome = calculateTradeIncome(currentPlayer,map);
 
   const handleCollectTrade = () => {
     collectTradeIncome(currentPlayer.id);
   };
 
-  const handleCollectCulture = () => {
-    addCulture(currentPlayer.id, cultureIncome);
-  };
 
   return (
     <div className="p-4 space-y-4">
@@ -154,7 +151,7 @@ export function ActionPanel() {
             <p className="text-sm text-slate-400">
               유닛 관리 탭에서 유닛을 선택하고 이동시키세요.
             </p>
-            {currentPlayer.units.some(u => !u.hasMoved && u.movement > 0) ? (
+            {currentPlayer.units.some(u => u.movement > 0) ? (
               <p className="text-xs text-green-400">
                 이동 가능한 유닛이 있습니다.
               </p>
@@ -175,20 +172,6 @@ export function ActionPanel() {
               <p className="text-slate-300">교역 토큰: {currentPlayer.resources.trade}/27</p>
               <p className="text-slate-300">연구한 기술: {currentPlayer.technologies.length}개</p>
             </div>
-            {cultureIncome > 0 && (
-              <>
-                <div className="bg-slate-600 rounded-lg p-3 text-sm">
-                  <p className="text-slate-300 mb-1">문화 수입:</p>
-                  <p className="text-purple-400 font-semibold">+{cultureIncome} 문화</p>
-                </div>
-                <button
-                  onClick={handleCollectCulture}
-                  className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm transition-colors"
-                >
-                  🎭 문화 수입 수령
-                </button>
-              </>
-            )}
           </div>
         )}
       </div>
@@ -226,6 +209,18 @@ export function ActionPanel() {
           {currentPhase === 'research'
             ? '연구 완료 →'
             : '다음 플레이어 / 단계 →'}
+        </button>
+        <button
+          onClick={debugSkipPhase}
+          className="w-full py-1.5 bg-red-900/50 hover:bg-red-800/50 text-red-300 rounded-lg text-xs transition-colors border border-red-700/30"
+        >
+          [DEV] 페이즈 건너뛰기 →{' '}
+          {currentPhase === 'research' ? '차례시작' : {
+            start: '교역',
+            trade: '도시관리',
+            cityManagement: '이동',
+            movement: '연구',
+          }[currentPhase]}
         </button>
       </div>
 

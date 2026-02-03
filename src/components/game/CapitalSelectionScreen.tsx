@@ -114,14 +114,32 @@ export function CapitalSelectionScreen() {
     if (tile.cityId !== null || tile.ownerId !== null) {
       return;
     }
+    // 다른 도시와 최소 3칸 이상 떨어져야 함
+    if (isTooCloseToCity(x, y)) {
+      return;
+    }
 
     selectCapitalPosition(currentPlayerIndex, { x, y });
+  };
+
+  const isTooCloseToCity = (x: number, y: number): boolean => {
+    for (const p of players) {
+      for (const city of p.cities) {
+        const dx = Math.abs(city.position.x - x);
+        const dy = Math.abs(city.position.y - y);
+        if (Math.max(dx, dy) < 3) {
+          return true;
+        }
+      }
+    }
+    return false;
   };
 
   const isValidTile = (tile: Tile) => {
     if (tile.terrain === 'water' || tile.terrain === 'mountain') return false;
     if (tile.cityId !== null) return false;
     if (tile.ownerId !== null) return false;
+    if (isTooCloseToCity(tile.position.x, tile.position.y)) return false;
     return true;
   };
 

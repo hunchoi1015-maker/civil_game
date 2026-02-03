@@ -1,3 +1,6 @@
+import { CityPanel } from "@/components/game/City/CityPanel";
+import {BuildingType} from "./city";
+
 export interface Position {
   x: number;
   y: number;
@@ -19,13 +22,14 @@ export type ResourceType =
   | 'spice'
   | 'none';
 
+
 export interface Tile {
   id: string;
   position: Position;
   terrain: TerrainType;
   resource: ResourceType;
   cityId: string | null;
-  buildingId: string | null; // 타일에 건설된 건물
+  buildingType: BuildingType | null; // 타일에 건설된 건물
   unitIds: string[];
   ownerId: string | null;
   isExplored: boolean;

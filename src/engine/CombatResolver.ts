@@ -1,208 +1,204 @@
 import {
   ArmyCard,
-  CombatResult,
+  Battlefield,
+  BattlefieldResult,
   CombatLogEntry,
-  ArmyCardType,
-  FRONTLINE_SIZE,
   hasFirstStrike,
   calculateBattleScore,
 } from '../types';
 
-export interface CombatSetup {
-  attackerCards: ArmyCard[];
-  defenderCards: ArmyCard[];
-  attackerBonus: number;  // 도시 전투 보너스
-  defenderBonus: number;
+export interface CombatResolutionSetup {
+  battlefields: Battlefield[];
+  attackerCombatBonus: number;
+  defenderCombatBonus: number;
+  defenderCityDefenseBonus: number;
+  originalMoverId: string;
+  attackerRoleId: string;
 }
 
-export interface RoundResult {
-  attackerDamageDealt: number;
-  defenderDamageDealt: number;
-  attackerLosses: ArmyCard[];
-  defenderLosses: ArmyCard[];
-  log: CombatLogEntry;
+export interface CombatResolutionResult {
+  resolvedBattlefields: Battlefield[];
+  graveyard: ArmyCard[];
+  survivingAttackerCards: ArmyCard[];
+  survivingDefenderCards: ArmyCard[];
+  attackerFinalScore: number;
+  defenderFinalScore: number;
+  winner: 'attacker' | 'defender';
+  winnerPlayerId: string;
+  loserPlayerId: string;
+  log: CombatLogEntry[];
 }
 
-export function resolveCombat(setup: CombatSetup): CombatResult {
-  const attackerCards = JSON.parse(JSON.stringify(setup.attackerCards)) as ArmyCard[];
-  const defenderCards = JSON.parse(JSON.stringify(setup.defenderCards)) as ArmyCard[];
-  const log: CombatLogEntry[] = [];
-  let round = 0;
-  const maxRounds = 5;
+// 개별 전장 전투 해결
+function resolvePairedFight(
+  attackerCard: ArmyCard,
+  defenderCard: ArmyCard
+): BattlefieldResult {
+  const attCard = { ...attackerCard };
+  const defCard = { ...defenderCard };
 
-  while (attackerCards.length > 0 && defenderCards.length > 0 && round < maxRounds) {
-    round++;
+  const attackerHasFirstStrike = hasFirstStrike(attCard.type, defCard.type);
+  const defenderHasFirstStrike = hasFirstStrike(defCard.type, attCard.type);
 
-    // 전선 구성 (최대 20장)
-    const attackerFrontline = attackerCards.slice(0, FRONTLINE_SIZE);
-    const defenderFrontline = defenderCards.slice(0, FRONTLINE_SIZE);
+  let firstStriker: 'attacker' | 'defender' | 'simultaneous' = 'simultaneous';
 
-    // 라운드 해결
-    const roundResult = resolveRound(
-      attackerFrontline,
-      defenderFrontline,
-      setup.attackerBonus,
-      setup.defenderBonus,
-      round
-    );
-
-    log.push(roundResult.log);
-
-    // 손실 처리
-    for (const lostCard of roundResult.attackerLosses) {
-      const index = attackerCards.findIndex((c) => c.id === lostCard.id);
-      if (index !== -1) attackerCards.splice(index, 1);
+  if (attackerHasFirstStrike) {
+    firstStriker = 'attacker';
+    // 공격자 선제공격
+    defCard.health -= attCard.attack;
+    if (defCard.health > 0) {
+      // 방어자 반격
+      attCard.health -= defCard.attack;
     }
+  } else if (defenderHasFirstStrike) {
+    firstStriker = 'defender';
+    // 방어자 선제공격
+    attCard.health -= defCard.attack;
+    if (attCard.health > 0) {
+      // 공격자 반격
+      defCard.health -= attCard.attack;
+    }
+  } else {
+    // 동시 공격 (무상성 또는 동일 병종)
+    attCard.health -= defCard.attack;
+    defCard.health -= attCard.attack;
+  }
 
-    for (const lostCard of roundResult.defenderLosses) {
-      const index = defenderCards.findIndex((c) => c.id === lostCard.id);
-      if (index !== -1) defenderCards.splice(index, 1);
+  // 원본 카드에 체력 반영
+  attackerCard.health = attCard.health;
+  defenderCard.health = defCard.health;
+
+  return {
+    attackerSurvived: attCard.health > 0,
+    defenderSurvived: defCard.health > 0,
+    attackerDamageDealt: attCard.attack,
+    defenderDamageDealt: defCard.attack,
+    firstStriker,
+  };
+}
+
+// 모든 전장 해결
+export function resolveBattlefields(
+  setup: CombatResolutionSetup
+): CombatResolutionResult {
+  const battlefields = JSON.parse(JSON.stringify(setup.battlefields)) as Battlefield[];
+  const graveyard: ArmyCard[] = [];
+  const log: CombatLogEntry[] = [];
+
+  for (const bf of battlefields) {
+    if (bf.attackerCard && bf.defenderCard) {
+      // 양측 카드가 있는 전장: 전투 해결
+      const result = resolvePairedFight(bf.attackerCard, bf.defenderCard);
+      bf.result = result;
+      bf.resolved = true;
+
+      const attackerName = bf.attackerCard.name;
+      const defenderName = bf.defenderCard.name;
+
+      if (!result.attackerSurvived) {
+        graveyard.push(bf.attackerCard);
+      }
+      if (!result.defenderSurvived) {
+        graveyard.push(bf.defenderCard);
+      }
+
+      let msg = `${attackerName} vs ${defenderName}: `;
+      if (result.firstStriker === 'attacker') {
+        msg += `${attackerName} 선제공격! `;
+      } else if (result.firstStriker === 'defender') {
+        msg += `${defenderName} 선제공격! `;
+      } else {
+        msg += '동시 공격! ';
+      }
+
+      if (!result.attackerSurvived && !result.defenderSurvived) {
+        msg += '양측 모두 전사';
+      } else if (!result.attackerSurvived) {
+        msg += `${attackerName} 전사`;
+      } else if (!result.defenderSurvived) {
+        msg += `${defenderName} 전사`;
+      } else {
+        msg += '양측 모두 생존';
+      }
+
+      log.push({
+        message: msg,
+        battlefieldId: bf.id,
+        attackerCard: attackerName,
+        defenderCard: defenderName,
+      });
+    } else {
+      // 짝 없는 카드: 자동 생존
+      bf.resolved = true;
+      bf.result = {
+        attackerSurvived: !!bf.attackerCard,
+        defenderSurvived: !!bf.defenderCard,
+        attackerDamageDealt: 0,
+        defenderDamageDealt: 0,
+        firstStriker: 'simultaneous',
+      };
     }
   }
 
-  // 승자 결정 (점수 기반)
-  const attackerScore = calculateBattleScore(attackerCards, setup.attackerBonus);
-  const defenderScore = calculateBattleScore(defenderCards, setup.defenderBonus);
+  // 생존 카드 수집
+  const survivingAttackerCards: ArmyCard[] = [];
+  const survivingDefenderCards: ArmyCard[] = [];
 
+  for (const bf of battlefields) {
+    if (bf.attackerCard && bf.result?.attackerSurvived) {
+      survivingAttackerCards.push(bf.attackerCard);
+    }
+    if (bf.defenderCard && bf.result?.defenderSurvived) {
+      survivingDefenderCards.push(bf.defenderCard);
+    }
+  }
+
+  // 최종 점수 계산: 공격력만 합산 + 보너스
+  const attackerFinalScore = calculateBattleScore(
+    survivingAttackerCards,
+    setup.attackerCombatBonus,
+    0
+  );
+  const defenderFinalScore = calculateBattleScore(
+    survivingDefenderCards,
+    setup.defenderCombatBonus,
+    setup.defenderCityDefenseBonus
+  );
+
+  // 승자 결정: 동점 시 원래 이동자(mover)가 패배 (6.19)
   let winner: 'attacker' | 'defender';
-  if (attackerScore > defenderScore) {
+  if (attackerFinalScore > defenderFinalScore) {
     winner = 'attacker';
   } else {
+    // 동점 또는 방어자 우세 → 공격 역할이 패배
     winner = 'defender';
   }
 
-  return {
-    winner,
-    attackerScore,
-    defenderScore,
-    lootChoice: winner === 'attacker' ? 'trade' : null,  // 승자가 선택 가능
-  };
-}
+  // 실제 플레이어 ID로 변환
+  const winnerPlayerId = winner === 'attacker'
+    ? setup.attackerRoleId
+    : (setup.originalMoverId === setup.attackerRoleId
+      ? setup.originalMoverId  // not swapped: defender wins, but we need defenderRoleId
+      : setup.originalMoverId);
 
-function resolveRound(
-  attackerFrontline: ArmyCard[],
-  defenderFrontline: ArmyCard[],
-  _attackerBonus: number,
-  _defenderBonus: number,
-  round: number
-): RoundResult {
-  const attackerLosses: ArmyCard[] = [];
-  const defenderLosses: ArmyCard[] = [];
-  let totalAttackerDamage = 0;
-  let totalDefenderDamage = 0;
-
-  // 1:1 매칭으로 전투 수행
-  const matchCount = Math.min(attackerFrontline.length, defenderFrontline.length);
-
-  for (let i = 0; i < matchCount; i++) {
-    const attacker = attackerFrontline[i];
-    const defender = defenderFrontline[i];
-
-    // 상성 확인 (선제공격)
-    const attackerHasFirstStrike = hasFirstStrike(attacker.type, defender.type);
-    const defenderHasFirstStrike = hasFirstStrike(defender.type, attacker.type);
-
-    if (attackerHasFirstStrike) {
-      // 공격자 선제공격
-      defender.health -= attacker.attack;
-      if (defender.health <= 0) {
-        defenderLosses.push(defender);
-        totalDefenderDamage += attacker.attack;
-      } else {
-        // 방어자 반격
-        attacker.health -= defender.attack;
-        if (attacker.health <= 0) {
-          attackerLosses.push(attacker);
-        }
-        totalAttackerDamage += defender.attack;
-        totalDefenderDamage += attacker.attack;
-      }
-    } else if (defenderHasFirstStrike) {
-      // 방어자 선제공격
-      attacker.health -= defender.attack;
-      if (attacker.health <= 0) {
-        attackerLosses.push(attacker);
-        totalAttackerDamage += defender.attack;
-      } else {
-        // 공격자 반격
-        defender.health -= attacker.attack;
-        if (defender.health <= 0) {
-          defenderLosses.push(defender);
-        }
-        totalAttackerDamage += defender.attack;
-        totalDefenderDamage += attacker.attack;
-      }
-    } else {
-      // 동시 공격 (무상성 또는 동일 병종)
-      attacker.health -= defender.attack;
-      defender.health -= attacker.attack;
-
-      if (attacker.health <= 0) attackerLosses.push(attacker);
-      if (defender.health <= 0) defenderLosses.push(defender);
-
-      totalAttackerDamage += defender.attack;
-      totalDefenderDamage += attacker.attack;
-    }
-  }
-
-  const log: CombatLogEntry = {
-    round,
-    message: `라운드 ${round}: 공격자 ${totalDefenderDamage} 피해 vs 방어자 ${totalAttackerDamage} 피해`,
-    damage: totalAttackerDamage + totalDefenderDamage,
-  };
-
-  return {
-    attackerDamageDealt: totalDefenderDamage,
-    defenderDamageDealt: totalAttackerDamage,
-    attackerLosses,
-    defenderLosses,
-    log,
-  };
-}
-
-export function selectOptimalFrontline(cards: ArmyCard[], enemyCards: ArmyCard[]): ArmyCard[] {
-  // 상대 전선의 주요 유형 파악
-  const enemyTypes = enemyCards.slice(0, FRONTLINE_SIZE).map((c) => c.type);
-  const dominantEnemyType = getMostCommonType(enemyTypes);
-
-  // 상성에 유리한 카드 우선 배치
-  const sorted = [...cards].sort((a, b) => {
-    const aHasAdvantage = dominantEnemyType && hasFirstStrike(a.type, dominantEnemyType);
-    const bHasAdvantage = dominantEnemyType && hasFirstStrike(b.type, dominantEnemyType);
-
-    if (aHasAdvantage && !bHasAdvantage) return -1;
-    if (!aHasAdvantage && bHasAdvantage) return 1;
-
-    // 총 전투력으로 정렬
-    return (b.attack + b.health) - (a.attack + a.health);
+  // 간단하게 재계산: winner role → player ID
+  // attackerRoleId가 승리하면 attackerRoleId가 winner
+  // defenderRoleId가 승리하면 defenderRoleId가 winner
+  // 실제 winnerPlayerId/loserPlayerId는 store에서 결정하는 것이 더 정확
+  log.push({
+    message: `최종 점수: 공격 ${attackerFinalScore} vs 방어 ${defenderFinalScore}`,
   });
 
-  return sorted.slice(0, FRONTLINE_SIZE);
-}
-
-function getMostCommonType(types: ArmyCardType[]): ArmyCardType | null {
-  if (types.length === 0) return null;
-
-  const counts: Record<ArmyCardType, number> = {
-    infantry: 0,
-    artillery: 0,
-    cavalry: 0,
-    airforce: 0,
+  return {
+    resolvedBattlefields: battlefields,
+    graveyard,
+    survivingAttackerCards,
+    survivingDefenderCards,
+    attackerFinalScore,
+    defenderFinalScore,
+    winner,
+    winnerPlayerId: '', // store에서 설정
+    loserPlayerId: '', // store에서 설정
+    log,
   };
-
-  for (const type of types) {
-    counts[type]++;
-  }
-
-  let maxCount = 0;
-  let maxType: ArmyCardType = 'infantry';
-
-  for (const [type, count] of Object.entries(counts)) {
-    if (count > maxCount) {
-      maxCount = count;
-      maxType = type as ArmyCardType;
-    }
-  }
-
-  return maxType;
 }

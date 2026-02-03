@@ -31,6 +31,7 @@ export function UnitPanel() {
   const [showFoundCityModal, setShowFoundCityModal] = useState(false);
   const [newCityName, setNewCityName] = useState('');
   const [isGroupSelectMode, setIsGroupSelectMode] = useState(false);
+  const [movementMode, setMovementMode] = useState<'single' | 'group'>('single');
 
   const militaryUnits = currentPlayer.units.filter((u) => u.type === 'military');
   const settlerUnits = currentPlayer.units.filter((u) => u.type === 'settler');
@@ -57,6 +58,7 @@ export function UnitPanel() {
     } else {
       setSelectedUnit(unit.id);
       setSelectedTile(unit.position);
+      setMovementMode('single');
     }
   };
 
@@ -84,13 +86,15 @@ export function UnitPanel() {
   };
 
   const getValidMoves = (unit: Unit): { position: Position; isFull: boolean }[] => {
-    if (unit.movement <= 0 || unit.hasMoved) return [];
+    if (unit.movement <= 0) return [];
 
     const validMoves: { position: Position; isFull: boolean }[] = [];
+    // 상하좌우 4방향만 이동 가능
     const directions = [
-      { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
-      { x: -1, y: 0 },                   { x: 1, y: 0 },
-      { x: -1, y: 1 },  { x: 0, y: 1 },  { x: 1, y: 1 },
+      { x: 0, y: -1 },  // 상
+      { x: -1, y: 0 },  // 좌
+      { x: 1, y: 0 },   // 우
+      { x: 0, y: 1 },   // 하
     ];
 
     for (const dir of directions) {
@@ -113,23 +117,29 @@ export function UnitPanel() {
   };
 
   const handleMoveUnit = (targetPos: Position) => {
-    if (currentPhase === 'movement') {
-      if (selectedUnits.length > 1) {
-        // 그룹 이동
-        moveSelectedUnits(targetPos);
-      } else if (selectedUnitData) {
-        // 단일 이동
-        moveUnit(selectedUnitData.id, targetPos);
-      }
+    if (currentPhase !== 'movement') return;
+
+    if (movementMode === 'group' && unitsOnSameTile.length > 1) {
+      // 함께 이동: 같은 타일의 이동 가능한 유닛 모두 선택 후 그룹 이동
+      const movableOnTile = unitsOnSameTile.filter(u => u.movement > 0);
+      setSelectedUnits(movableOnTile.map(u => u.id));
+      moveSelectedUnits(targetPos);
+    } else if (selectedUnits.length > 1) {
+      // 기존 그룹 선택 모드로 선택된 경우
+      moveSelectedUnits(targetPos);
+    } else if (selectedUnitData) {
+      // 개별 이동
+      moveUnit(selectedUnitData.id, targetPos);
     }
   };
 
-  // 주변 8칸에 적대적인 유닛이 있는지 확인
+  // 주변 4칸에 적대적인 유닛이 있는지 확인 (상하좌우)
   const hasHostileNearby = (position: Position): boolean => {
     const directions = [
-      { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
-      { x: -1, y: 0 },                   { x: 1, y: 0 },
-      { x: -1, y: 1 },  { x: 0, y: 1 },  { x: 1, y: 1 },
+      { x: 0, y: -1 },  // 상
+      { x: -1, y: 0 },  // 좌
+      { x: 1, y: 0 },   // 우
+      { x: 0, y: 1 },   // 하
     ];
 
     for (const dir of directions) {
@@ -161,7 +171,7 @@ export function UnitPanel() {
         const dx = Math.abs(city.position.x - position.x);
         const dy = Math.abs(city.position.y - position.y);
         // 체비셰프 거리로 2칸 미만이면 너무 가까움
-        if (Math.max(dx, dy) < 2) {
+        if (Math.max(dx, dy) < 3) {
           return true;
         }
       }
@@ -191,7 +201,7 @@ export function UnitPanel() {
     }
 
     if (isTooCloseToOtherCity(pos)) {
-      return '다른 도시와 최소 2칸 이상 떨어져야 합니다.';
+      return '다른 도시와 최소 3칸 이상 떨어져야 합니다.';
     }
 
     return null;
@@ -323,7 +333,7 @@ export function UnitPanel() {
                       위치: ({unit.position.x}, {unit.position.y}) | 이동력: {unit.movement}/{unit.maxMovement}
                     </div>
                   </div>
-                  {unit.hasMoved && (
+                  {unit.movement <= 0 && (
                     <span className="text-xs bg-slate-600 px-2 py-1 rounded">이동완료</span>
                   )}
                 </div>
@@ -368,7 +378,7 @@ export function UnitPanel() {
             <div className="flex flex-wrap gap-1">
               {selectedUnitsData.map((unit) => (
                 <span key={unit.id} className="text-xs bg-slate-600 px-2 py-1 rounded">
-                  {UNIT_ICONS[unit.type]} {unit.movement > 0 && !unit.hasMoved ? '✓' : '✗'}
+                  {UNIT_ICONS[unit.type]} {unit.movement > 0 ? '✓' : '✗'}
                 </span>
               ))}
             </div>
@@ -376,14 +386,66 @@ export function UnitPanel() {
 
           {currentPhase === 'movement' && (
             <>
+              {/* 같은 타일에 여러 유닛: 개별/함께 이동 선택 */}
+              {unitsOnSameTile.length > 1 && selectedUnits.length <= 1 && (
+                <div className="bg-slate-600 rounded-lg p-3">
+                  <p className="text-xs text-slate-300 mb-2">
+                    이 타일에 {unitsOnSameTile.length}개 유닛이 있습니다. 이동 방식을 선택하세요:
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setMovementMode('single')}
+                      className={clsx(
+                        'flex-1 py-2 text-xs rounded-lg transition-colors font-medium',
+                        movementMode === 'single'
+                          ? 'bg-amber-600 text-white'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-500'
+                      )}
+                    >
+                      개별 이동
+                    </button>
+                    <button
+                      onClick={() => setMovementMode('group')}
+                      className={clsx(
+                        'flex-1 py-2 text-xs rounded-lg transition-colors font-medium',
+                        movementMode === 'group'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-700 text-slate-300 hover:bg-slate-500'
+                      )}
+                    >
+                      함께 이동 ({unitsOnSameTile.filter(u => u.movement > 0).length}개)
+                    </button>
+                  </div>
+                  {movementMode === 'group' && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {unitsOnSameTile.map(u => (
+                        <span key={u.id} className={clsx(
+                          'text-xs px-2 py-1 rounded',
+                          u.movement > 0
+                            ? 'bg-blue-900/50 text-blue-300'
+                            : 'bg-slate-700 text-slate-500 line-through'
+                        )}>
+                          {UNIT_ICONS[u.type]} {UNIT_DEFINITIONS[u.type].name}
+                          {u.movement <= 0 ? ' (이동불가)' : ''}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 이동 방향 버튼 */}
               {(selectedUnits.length > 1
-                ? selectedUnitsData.some((u) => u.movement > 0 && !u.hasMoved)
-                : selectedUnitData.movement > 0 && !selectedUnitData.hasMoved) ? (
+                ? selectedUnitsData.some((u) => u.movement > 0)
+                : selectedUnitData.movement > 0) ||
+               (movementMode === 'group' && unitsOnSameTile.some(u => u.movement > 0)) ? (
                 <div>
                   <p className="text-sm text-slate-400 mb-2">
-                    {selectedUnits.length > 1
-                      ? `그룹 이동 (배치 제한: ${stackingLimit}):`
-                      : `이동 가능한 위치 (배치 제한: ${stackingLimit}):`}
+                    {movementMode === 'group' && unitsOnSameTile.length > 1
+                      ? `함께 이동 (배치 제한: ${stackingLimit}):`
+                      : selectedUnits.length > 1
+                        ? `그룹 이동 (배치 제한: ${stackingLimit}):`
+                        : `이동 가능한 위치 (배치 제한: ${stackingLimit}):`}
                   </p>
                   <div className="grid grid-cols-3 gap-1">
                     {getValidMoves(selectedUnitData).map((move) => (
@@ -395,7 +457,9 @@ export function UnitPanel() {
                           'py-1 text-xs rounded transition-colors',
                           move.isFull
                             ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
-                            : 'bg-green-600 hover:bg-green-500 text-white'
+                            : movementMode === 'group' && unitsOnSameTile.length > 1
+                              ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                              : 'bg-green-600 hover:bg-green-500 text-white'
                         )}
                         title={move.isFull ? '배치 제한 초과' : ''}
                       >
@@ -406,7 +470,7 @@ export function UnitPanel() {
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-slate-400">이동력이 없거나 이미 이동했습니다.</p>
+                <p className="text-sm text-slate-400">이동력이 없습니다.</p>
               )}
             </>
           )}
