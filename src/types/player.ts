@@ -28,6 +28,7 @@ export interface Player {
   isEliminated: boolean;
   stackingLimitBonus: number;   // 기술로 얻은 추가 배치 제한
   hasCollectedTrade: boolean;   // 이번 턴에 교역 수령 여부
+  hasResearchedThisTurn: boolean; // 이번 턴 연구 여부
 }
 
 export type PlayerColor = 'red' | 'blue' | 'green' | 'yellow';
