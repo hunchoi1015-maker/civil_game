@@ -242,6 +242,7 @@ export const useGameStore = create<GameStore>()(
           isEliminated: false,
           stackingLimitBonus: 0,
           hasCollectedTrade: false,
+          hasResearchedThisTurn: false, //초기화
         });
       }
       const capitalOptions: Position[][] = [];
@@ -434,6 +435,7 @@ export const useGameStore = create<GameStore>()(
         state.currentPhase = 'start';
         state.phaseComplete = new Array(state.players.length).fill(false);
         state.players.forEach((player) => {
+          player.hasResearchedThisTurn = false; // 연구 기회 초기화
           player.cities.forEach((city) => {
             city.hasActedThisTurn = false;
           });
@@ -860,6 +862,8 @@ export const useGameStore = create<GameStore>()(
       }
       const player = get().players.find((p) => p.id === playerId);
       if (!player) return false;
+      // 이번 턴에 이미 연구했는지 확인
+      if (player.hasResearchedThisTurn) return false;
       const tech = TECHNOLOGIES.find((t) => t.id === techId);
       if (!tech) return false;
       if (player.resources.trade < tech.cost) return false;
@@ -877,6 +881,7 @@ export const useGameStore = create<GameStore>()(
         if (p) {
           p.resources.trade -= tech.cost;
           p.technologies.push({ ...tech, isResearched: true });
+          p.hasResearchedThisTurn = true;
         }
       });
       get().recordResearch(playerId, techId, tech.name);
