@@ -1,6 +1,6 @@
 import { Position } from './map';
 
-export type ArmyCardType = 'infantry' | 'artillery' | 'cavalry' | 'airforce';
+export type ArmyCardType = 'infantry' | 'artillery' | 'cavalry' | 'airforce'| 'settler';
 export type ArmyTier = 1 | 2 | 3 | 4;
 
 // 공격력/체력 분리된 부대 카드
@@ -54,6 +54,13 @@ export const ARMY_CARD_DEFINITIONS: Record<ArmyCardType, ArmyCardDefinition> = {
     description: '무상성, 강력한 전투력',
     strongAgainst: null,
     weakAgainst: null,
+  },
+  settler: {
+    type: 'settler',
+    name: '개척자',
+    description: '공격할 줄 모름',
+    strongAgainst: null,
+    weakAgainst: null
   },
 };
 
@@ -152,6 +159,7 @@ export interface CombatState {
   attackerCombatBonus: number;
   defenderCombatBonus: number;
   defenderCityDefenseBonus: number;
+  attackerCityDefenseBonus: number; //역할 변환 고려 
 
   // 점수 (해결 후 계산)
   attackerFinalScore: number;

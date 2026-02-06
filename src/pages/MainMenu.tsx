@@ -42,6 +42,14 @@ export function MainMenu() {
           >
             게임 규칙
           </motion.button>
+          <div className="pt-4 border-t border-slate-700 mt-4">
+            <button 
+              onClick={() => navigate('/dev/combat')}
+              className="w-full bg-yellow-600 hover:bg-yellow-700 py-2 rounded-lg font-bold text-sm text-black transition-colors flex items-center justify-center gap-2"
+            >
+              <span>⚔️</span> 전투 시뮬레이터 (Dev)
+            </button>
+          </div>
         </div>
 
         <div className="mt-12 text-slate-500 text-sm">

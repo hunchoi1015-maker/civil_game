@@ -3,6 +3,7 @@ import { MainMenu } from './pages/MainMenu';
 import { GameSetup } from './pages/GameSetup';
 import { GameScreen } from './pages/GameScreen';
 import { RulesPage } from './pages/RulesPage';
+import DevCombatSim from './pages/DevCombatSim';
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
         <Route path="/setup" element={<GameSetup />} />
         <Route path="/game" element={<GameScreen />} />
         <Route path="/rules" element={<RulesPage />} />
+        <Route path="/dev/combat" element={<DevCombatSim />} />
       </Routes>
     </BrowserRouter>
   );
