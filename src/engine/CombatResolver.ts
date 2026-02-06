@@ -11,6 +11,7 @@ export interface CombatResolutionSetup {
   battlefields: Battlefield[];
   attackerCombatBonus: number;
   defenderCombatBonus: number;
+  attackerCityDefenseBonus: number; 
   defenderCityDefenseBonus: number;
   originalMoverId: string;
   attackerRoleId: string;
@@ -29,13 +30,27 @@ export interface CombatResolutionResult {
   log: CombatLogEntry[];
 }
 
-// 개별 전장 전투 해결
-function resolvePairedFight(
+// [변경] export 추가: 스토어에서 즉시 전투 시 호출하기 위함
+export function resolvePairedFight(
   attackerCard: ArmyCard,
   defenderCard: ArmyCard
 ): BattlefieldResult {
   const attCard = { ...attackerCard };
   const defCard = { ...defenderCard };
+  
+  // 개척자 공격 참여시 
+  const isAttackerSettler = attCard.type === 'settler';
+  const isDefenderSettler = defCard.type === 'settler';
+
+  if (isAttackerSettler || isDefenderSettler) {
+    return {
+      attackerSurvived: !isAttackerSettler, // 개척자면 false (사망)
+      defenderSurvived: !isDefenderSettler,
+      attackerDamageDealt: isAttackerSettler ? 0 : 99, // 일방적 학살
+      defenderDamageDealt: isDefenderSettler ? 0 : 99,
+      firstStriker: isAttackerSettler ? 'defender' : 'attacker',
+    };
+  }
 
   const attackerHasFirstStrike = hasFirstStrike(attCard.type, defCard.type);
   const defenderHasFirstStrike = hasFirstStrike(defCard.type, attCard.type);
@@ -64,10 +79,9 @@ function resolvePairedFight(
     defCard.health -= attCard.attack;
   }
 
-  // 원본 카드에 체력 반영
-  attackerCard.health = attCard.health;
-  defenderCard.health = defCard.health;
-
+  // 원본 카드에 체력 반영 (참조를 끊고 복사본을 썼으므로 결과 객체 반환용 값만 계산됨)
+  // 주의: 실제 원본 객체 수정은 호출부(store)에서 처리하거나, 여기서 반환된 값을 토대로 처리해야 함
+  
   return {
     attackerSurvived: attCard.health > 0,
     defenderSurvived: defCard.health > 0,
@@ -77,7 +91,7 @@ function resolvePairedFight(
   };
 }
 
-// 모든 전장 해결
+// 모든 전장 해결 (최종 점수 계산 및 로그 생성)
 export function resolveBattlefields(
   setup: CombatResolutionSetup
 ): CombatResolutionResult {
@@ -86,14 +100,18 @@ export function resolveBattlefields(
   const log: CombatLogEntry[] = [];
 
   for (const bf of battlefields) {
-    if (bf.attackerCard && bf.defenderCard) {
-      // 양측 카드가 있는 전장: 전투 해결
+    // [변경] 이미 해결된 전장(즉시 전투)은 건너뛰고, 미해결 전장만 처리
+    if (!bf.resolved && bf.attackerCard && bf.defenderCard) {
       const result = resolvePairedFight(bf.attackerCard, bf.defenderCard);
       bf.result = result;
       bf.resolved = true;
+    }
 
+    // 결과 처리 (로그 생성 및 묘지행 판단)
+    if (bf.result && bf.attackerCard && bf.defenderCard) {
       const attackerName = bf.attackerCard.name;
       const defenderName = bf.defenderCard.name;
+      const result = bf.result;
 
       if (!result.attackerSurvived) {
         graveyard.push(bf.attackerCard);
@@ -128,15 +146,17 @@ export function resolveBattlefields(
         defenderCard: defenderName,
       });
     } else {
-      // 짝 없는 카드: 자동 생존
-      bf.resolved = true;
-      bf.result = {
-        attackerSurvived: !!bf.attackerCard,
-        defenderSurvived: !!bf.defenderCard,
-        attackerDamageDealt: 0,
-        defenderDamageDealt: 0,
-        firstStriker: 'simultaneous',
-      };
+      // 짝 없는 카드: 자동 생존 처리
+      if (!bf.resolved) {
+        bf.resolved = true;
+        bf.result = {
+          attackerSurvived: !!bf.attackerCard,
+          defenderSurvived: !!bf.defenderCard,
+          attackerDamageDealt: 0,
+          defenderDamageDealt: 0,
+          firstStriker: 'simultaneous',
+        };
+      }
     }
   }
 
@@ -157,15 +177,17 @@ export function resolveBattlefields(
   const attackerFinalScore = calculateBattleScore(
     survivingAttackerCards,
     setup.attackerCombatBonus,
-    0
+    setup.attackerCityDefenseBonus,
+    
   );
+  // [변경] 방어 측은 cityDefenseBonus 합산 (이전 단계 요청 반영)
   const defenderFinalScore = calculateBattleScore(
     survivingDefenderCards,
     setup.defenderCombatBonus,
     setup.defenderCityDefenseBonus
   );
 
-  // 승자 결정: 동점 시 원래 이동자(mover)가 패배 (6.19)
+  // 승자 결정: 동점 시 원래 이동자(mover)가 패배 (규칙 6.19)
   let winner: 'attacker' | 'defender';
   if (attackerFinalScore > defenderFinalScore) {
     winner = 'attacker';
@@ -174,17 +196,6 @@ export function resolveBattlefields(
     winner = 'defender';
   }
 
-  // 실제 플레이어 ID로 변환
-  const winnerPlayerId = winner === 'attacker'
-    ? setup.attackerRoleId
-    : (setup.originalMoverId === setup.attackerRoleId
-      ? setup.originalMoverId  // not swapped: defender wins, but we need defenderRoleId
-      : setup.originalMoverId);
-
-  // 간단하게 재계산: winner role → player ID
-  // attackerRoleId가 승리하면 attackerRoleId가 winner
-  // defenderRoleId가 승리하면 defenderRoleId가 winner
-  // 실제 winnerPlayerId/loserPlayerId는 store에서 결정하는 것이 더 정확
   log.push({
     message: `최종 점수: 공격 ${attackerFinalScore} vs 방어 ${defenderFinalScore}`,
   });
