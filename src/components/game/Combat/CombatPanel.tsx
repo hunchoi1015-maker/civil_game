@@ -14,7 +14,6 @@ const CARD_ICONS: Record<string, string> = {
   artillery: '💣',
   cavalry: '🐴',
   airforce: '✈️',
-  
 };
 
 function CardDisplay({ card, selected, onClick, disabled, size = 'normal' }: {
