@@ -49,6 +49,13 @@ export function TechTree() {
           </p>
         </div>
       )}
+      {canResearch && currentPlayer.hasResearchedThisTurn && (
+        <div className="p-3 bg-blue-900/50 border border-blue-600 rounded-lg">
+          <p className="text-blue-300 text-sm">
+            💡 이번 턴의 기술 연구를 이미 완료했습니다. 다음 턴에 다시 연구할 수 있습니다.
+          </p>
+        </div>
+      )}
 
       {/* 플레이어 자원 정보 */}
       <div className="bg-slate-800 rounded-lg p-4 flex items-center justify-between">
@@ -148,6 +155,7 @@ export function TechTree() {
               onClick={() => handleResearch(selectedTech)}
               disabled={
                 !canResearch ||
+                currentPlayer.hasResearchedThisTurn ||
                 !validateTechResearch(
                   selectedTech.id,
                   currentPlayer.technologies,
@@ -156,7 +164,7 @@ export function TechTree() {
               }
               className="flex-1 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg text-sm transition-colors"
             >
-              {canResearch ? '연구하기' : '연구 단계가 아님'}
+              {!canResearch ? '연구 단계가 아님' : currentPlayer.hasResearchedThisTurn ? '이번 턴 연구 완료' : '연구하기'}
             </button>
             <button
               onClick={() => setSelectedTech(null)}
