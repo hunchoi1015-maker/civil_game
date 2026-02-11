@@ -1,0 +1,369 @@
+/**
+ * 기술 관련 헬퍼 함수
+ * 재사용 가능한 유틸리티 모음
+ */
+
+import { Player, Technology, ArmyCardType, ArmyTier } from '../../types';
+import { TECHNOLOGIES } from '../../constants/technologies';
+
+// ============================================================================
+// 교역 자원 계산 (7.2)
+// ============================================================================
+
+/**
+ * 사용 가능한 교역 자원 계산
+ * 전체 교역 - 화폐 (화폐만큼은 남김)
+ */
+export function getAvailableTrade(player: Player): number {
+  return Math.max(0, player.resources.trade - player.resources.currency);
+}
+
+/**
+ * 기술 연구 가능 여부 (교역 자원)
+ */
+export function canAffordTech(player: Player, tech: Technology): boolean {
+  const available = getAvailableTrade(player);
+  return available >= tech.cost;
+}
+
+/**
+ * 연구 후 남을 교역 자원
+ */
+export function getTradeAfterResearch(player: Player, tech: Technology): number {
+  return player.resources.currency; // 화폐만큼 남음
+}
+
+// ============================================================================
+// 피라미드 제약 (기존 유지)
+// ============================================================================
+
+/**
+ * 레벨별 연구된 기술 개수
+ */
+export function getTechCountsByLevel(player: Player): Record<number, number> {
+  const counts: Record<number, number> = {
+    1: 0,
+    2: 0,
+    3: 0,
+    4: 0,
+    5: 0,
+  };
+
+  player.technologies.forEach((tech) => {
+    if (tech.level >= 1 && tech.level <= 5) {
+      counts[tech.level]++;
+    }
+  });
+
+  return counts;
+}
+
+/**
+ * 피라미드 제약 확인
+ */
+export function checkPyramidConstraint(player: Player, tech: Technology): boolean {
+  if (tech.level === 1) return true;
+
+  const counts = getTechCountsByLevel(player);
+  const previousLevel = tech.level - 1;
+  const requiredCount = tech.level - 1;
+
+  return counts[previousLevel] >= requiredCount;
+}
+
+// ============================================================================
+// 티어 관리 (7.4)
+// ============================================================================
+
+/**
+ * 플레이어가 연구한 특정 타입의 최고 티어
+ */
+export function getMaxResearchedTier(player: Player, type: ArmyCardType): ArmyTier {
+  let maxTier: ArmyTier = 1;
+
+  for (const tech of player.technologies) {
+    const armyTierUnlocks = tech.unlocks?.filter((u) => u.type === 'armyTier') || [];
+
+    for (const unlock of armyTierUnlocks) {
+      const parts = unlock.id.split('_');
+      if (parts.length === 2 && parts[0] === type) {
+        const tier = parseInt(parts[1]) as ArmyTier;
+        if (tier > maxTier) {
+          maxTier = tier;
+        }
+      }
+    }
+  }
+
+  return maxTier;
+}
+
+/**
+ * 특정 티어 생산 가능 여부
+ */
+export function canProduceTier(
+  player: Player,
+  type: ArmyCardType,
+  tier: ArmyTier
+): boolean {
+  const maxTier = getMaxResearchedTier(player, type);
+  return tier >= maxTier;
+}
+
+/**
+ * 생산 가능한 티어 목록 (현재는 최고 티어만)
+ */
+export function getProducibleTiers(player: Player, type: ArmyCardType): ArmyTier[] {
+  const maxTier = getMaxResearchedTier(player, type);
+  return [maxTier];
+}
+
+/**
+ * 특정 타입의 진급 가능한 유닛 수
+ */
+export function getUpgradableUnitCount(
+  player: Player,
+  type: ArmyCardType,
+  targetTier: ArmyTier
+): number {
+  return player.armyCards.filter(
+    (card) => card.type === type && card.tier < targetTier
+  ).length;
+}
+
+// ============================================================================
+// 기술 정보
+// ============================================================================
+
+/**
+ * 기술 ID로 기술 찾기
+ */
+export function getTechById(techId: string): Technology | undefined {
+  return TECHNOLOGIES.find((t) => t.id === techId);
+}
+
+/**
+ * 레벨별 기술 목록
+ */
+export function getTechsByLevel(level: number): Technology[] {
+  return TECHNOLOGIES.filter((t) => t.level === level);
+}
+
+/**
+ * 플레이어가 연구한 기술 ID 목록
+ */
+export function getResearchedTechIds(player: Player): string[] {
+  return player.technologies.map((t) => t.id);
+}
+
+/**
+ * 특정 기술을 연구했는지 확인
+ */
+export function hasTechnology(player: Player, techId: string): boolean {
+  return player.technologies.some((t) => t.id === techId);
+}
+
+/**
+ * 연구 가능한 기술 목록
+ */
+export function getResearchableTechs(player: Player): Technology[] {
+  return TECHNOLOGIES.filter(
+    (tech) =>
+      !hasTechnology(player, tech.id) &&
+      checkPyramidConstraint(player, tech) &&
+      canAffordTech(player, tech)
+  );
+}
+
+// ============================================================================
+// 기술 효과 정보 (7.5 UI용)
+// ============================================================================
+
+/**
+ * 기술이 유닛 진급을 일으키는지
+ */
+export function hasUnitUpgrade(tech: Technology): boolean {
+  return tech.unlocks?.some((u) => u.type === 'armyTier') || false;
+}
+
+/**
+ * 기술이 해금하는 건물 목록
+ */
+export function getUnlockedBuildings(tech: Technology): string[] {
+  return (
+    tech.unlocks
+      ?.filter((u) => u.type === 'building')
+      .map((u) => u.name) || []
+  );
+}
+
+/**
+ * 기술이 해금하는 정치체제 목록
+ */
+export function getUnlockedGovernments(tech: Technology): string[] {
+  return (
+    tech.unlocks
+      ?.filter((u) => u.type === 'government')
+      .map((u) => u.name) || []
+  );
+}
+
+/**
+ * 기술이 해금하는 부대 목록
+ */
+export function getUnlockedArmyTiers(tech: Technology): Array<{
+  type: ArmyCardType;
+  tier: ArmyTier;
+  name: string;
+}> {
+  const armyTiers = tech.unlocks?.filter((u) => u.type === 'armyTier') || [];
+
+  return armyTiers.map((unlock) => {
+    const parts = unlock.id.split('_');
+    return {
+      type: parts[0] as ArmyCardType,
+      tier: parseInt(parts[1]) as ArmyTier,
+      name: unlock.name,
+    };
+  });
+}
+
+/**
+ * 기술 효과 요약
+ */
+export interface TechEffectSummary {
+  hasTradeBonus: boolean;
+  hasProductionBonus: boolean;
+  hasCultureBonus: boolean;
+  hasMilitaryBonus: boolean;
+  hasSpecialEffect: boolean;
+  unlocksBuildings: boolean;
+  unlocksGovernments: boolean;
+  unlocksArmyTiers: boolean;
+  upgradesUnits: boolean;
+}
+
+export function getTechEffectSummary(tech: Technology): TechEffectSummary {
+  const effects = tech.effects || [];
+  const unlocks = tech.unlocks || [];
+
+  return {
+    hasTradeBonus: effects.some((e) => e.type === 'trade'),
+    hasProductionBonus: effects.some((e) => e.type === 'production'),
+    hasCultureBonus: effects.some((e) => e.type === 'culture'),
+    hasMilitaryBonus: effects.some((e) => e.type === 'military'),
+    hasSpecialEffect: effects.some((e) => e.type === 'special'),
+    unlocksBuildings: unlocks.some((u) => u.type === 'building'),
+    unlocksGovernments: unlocks.some((u) => u.type === 'government'),
+    unlocksArmyTiers: unlocks.some((u) => u.type === 'armyTier'),
+    upgradesUnits: hasUnitUpgrade(tech),
+  };
+}
+
+// ============================================================================
+// 티어 전투력 계산
+// ============================================================================
+
+/**
+ * 티어별 총 전투력
+ */
+export function getTierTotalPower(tier: ArmyTier): number {
+  const powers: Record<ArmyTier, number> = {
+    1: 4,
+    2: 6,
+    3: 8,
+    4: 10,
+  };
+  return powers[tier];
+}
+
+/**
+ * 진급 후 전투력 계산 (비율 유지)
+ */
+export function calculateUpgradedStats(
+  currentAttack: number,
+  currentHealth: number,
+  fromTier: ArmyTier,
+  toTier: ArmyTier
+): { attack: number; health: number } {
+  const oldTotal = getTierTotalPower(fromTier);
+  const newTotal = getTierTotalPower(toTier);
+
+  const attackRatio = currentAttack / oldTotal;
+  const healthRatio = currentHealth / oldTotal;
+
+  let attack = Math.round(attackRatio * newTotal);
+  let health = Math.round(healthRatio * newTotal);
+
+  // 반올림 오차 보정
+  const diff = newTotal - (attack + health);
+  if (diff !== 0) {
+    health += diff;
+  }
+
+  return { attack, health };
+}
+
+// ============================================================================
+// 통계 및 진행도
+// ============================================================================
+
+/**
+ * 전체 연구 진행률
+ */
+export function getResearchProgress(player: Player): {
+  total: number;
+  researched: number;
+  percentage: number;
+} {
+  const total = TECHNOLOGIES.length;
+  const researched = player.technologies.length;
+  const percentage = Math.round((researched / total) * 100);
+
+  return { total, researched, percentage };
+}
+
+/**
+ * 레벨별 연구 진행률
+ */
+export function getResearchProgressByLevel(player: Player): Record<
+  number,
+  {
+    total: number;
+    researched: number;
+    percentage: number;
+  }
+> {
+  const result: any = {};
+
+  for (let level = 1; level <= 5; level++) {
+    const techsAtLevel = getTechsByLevel(level);
+    const researchedAtLevel = techsAtLevel.filter((tech) =>
+      hasTechnology(player, tech.id)
+    );
+
+    result[level] = {
+      total: techsAtLevel.length,
+      researched: researchedAtLevel.length,
+      percentage: Math.round((researchedAtLevel.length / techsAtLevel.length) * 100),
+    };
+  }
+
+  return result;
+}
+
+/**
+ * 다음 추천 기술
+ */
+export function getRecommendedTechs(player: Player, count: number = 3): Technology[] {
+  const available = getResearchableTechs(player);
+
+  // 우선순위: 레벨이 낮고, 많은 것을 해금하는 기술
+  return available
+    .sort((a, b) => {
+      const scoreA = (a.unlocks?.length || 0) * 10 - a.level;
+      const scoreB = (b.unlocks?.length || 0) * 10 - b.level;
+      return scoreB - scoreA;
+    })
+    .slice(0, count);
+}
