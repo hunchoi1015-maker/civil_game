@@ -90,18 +90,15 @@ function generateTerrain(
 }
 
 function generateResource(terrain: TerrainType, density: number): ResourceType {
-  if (terrain === 'water' || terrain === 'mountain') {
-    return Math.random() < density * 0.5 ? 'gold' : 'none';
-  }
 
   if (Math.random() > density) return 'none';
 
   const resourcesByTerrain: Record<TerrainType, ResourceType[]> = {
-    grassland: ['wheat', 'wheat', 'silk'],
-    forest: ['wheat', 'iron', 'spice'],
-    mountain: ['iron', 'gold'],
-    desert: ['gold', 'incense'],
-    water: ['gold'],
+    grassland: ['spice' , 'wheat' , 'silk' , 'iron'],
+    forest: ['spice' , 'wheat' , 'silk' , 'iron'],
+    mountain: ['spice' , 'wheat' , 'silk' , 'iron'],
+    desert:['spice' , 'wheat' , 'silk' , 'iron'] ,
+    water: ['spice' , 'wheat' , 'silk' , 'iron'],
   };
 
   const options = resourcesByTerrain[terrain];

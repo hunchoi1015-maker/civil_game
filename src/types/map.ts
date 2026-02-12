@@ -1,4 +1,3 @@
-import { CityPanel } from "@/components/game/City/CityPanel";
 import {BuildingType} from "./city";
 
 export interface Position {
@@ -13,15 +12,7 @@ export type TerrainType =
   | 'desert'
   | 'water';
 
-export type ResourceType =
-  | 'wheat'
-  | 'iron'
-  | 'gold'
-  | 'silk'
-  | 'incense'
-  | 'spice'
-  | 'none';
-
+export type ResourceType = 'spice' | 'wheat' | 'silk' | 'iron' | 'none';
 
 export interface Tile {
   id: string;
@@ -29,7 +20,7 @@ export interface Tile {
   terrain: TerrainType;
   resource: ResourceType;
   cityId: string | null;
-  buildingType: BuildingType | null; // 타일에 건설된 건물
+  buildingType: BuildingType | null;
   unitIds: string[];
   ownerId: string | null;
   isExplored: boolean;
@@ -101,15 +92,7 @@ export interface TerrainProperty {
   requiresTech: string | null;
 }
 
-export const RESOURCE_PROPERTIES: Record<ResourceType, ResourceProperty> = {
-  wheat: { name: '밀', tradeValue: 1, productionValue: 2 },
-  iron: { name: '철', tradeValue: 2, productionValue: 2 },
-  gold: { name: '금', tradeValue: 3, productionValue: 0 },
-  silk: { name: '비단', tradeValue: 3, productionValue: 0 },
-  incense: { name: '향', tradeValue: 2, productionValue: 1 },
-  spice: { name: '향신료', tradeValue: 2, productionValue: 1 },
-  none: { name: '없음', tradeValue: 0, productionValue: 0 },
-};
+
 
 export interface ResourceProperty {
   name: string;

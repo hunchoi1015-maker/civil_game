@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { GameStore, GameSetupState } from '../types/storeTypes';
 import { NationType, Position, Player, createInitialResources, createCity, createUnit, getStartPositionOptions } from '../../types';
 import { generateMap, setAdjacentTilesOwner } from '../helpers/mapHelpers';
+import { createInitialLuxuryResources } from '../../types/player';
 
 export interface GameSetupSlice {
   setupState: GameSetupState;
@@ -46,6 +47,7 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
         stackingLimitBonus: 0,
         hasCollectedTrade: false,
         hasResearchedThisTurn: false,
+        luxuryResources: createInitialLuxuryResources(),
       });
     }
     const capitalOptions: Position[][] = [];

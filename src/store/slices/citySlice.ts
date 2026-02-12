@@ -11,6 +11,7 @@ export interface CitySlice {
   foundCity: (playerId: string, position: Position, name: string) => void;
   buildInCity: (cityId: string, buildingType: string, position?: Position) => void;
   harvestCityCulture: (playerId: string, cityId: string) => void;
+  harvestResource: (playerId: string, cityId: string) => void;
   setProduction: (cityId: string, itemType: string, itemId: string) => void;
 }
 
@@ -112,7 +113,31 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       }
     });
   },
+  harvestResource: (playerId, cityId) => {
+    set((state) => {
+      // 1. 단계 확인
+      if (state.currentPhase !== 'cityManagement') return;
 
+      const player = state.players.find((p) => p.id === playerId);
+      if (!player) return;
+
+      const city = player.cities.find((c) => c.id === cityId);
+      if (!city) return;
+
+      // 2. 행동력 확인 (생산, 건설과 공유)
+      if (city.hasActedThisTurn) return;
+
+      // 3. 타일 자원 확인
+      const tile = state.map.tiles[city.position.y][city.position.x];
+      if (tile.resource === 'none') return;
+
+      // 4. 자원 획득 및 행동력 소모
+      if (player.luxuryResources[tile.resource] !== undefined) {
+        player.luxuryResources[tile.resource] += 1;
+        city.hasActedThisTurn = true; // 다른 행동 불가 처리
+      }
+    });
+  },
   setProduction: (cityId: string, itemType: string, itemId: string) => {
     set((state) => {
       for (const player of state.players) {

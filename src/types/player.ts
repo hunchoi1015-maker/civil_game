@@ -3,6 +3,7 @@ import { Unit } from './unit';
 import { ArmyCard } from './combat';
 import { Technology } from './tech';
 import { NationType } from './nation';
+import {ResourceType} from './map';
 
 export interface Resources {
   trade: number;
@@ -29,6 +30,7 @@ export interface Player {
   stackingLimitBonus: number;   // 기술로 얻은 추가 배치 제한
   hasCollectedTrade: boolean;   // 이번 턴에 교역 수령 여부
   hasResearchedThisTurn: boolean; // 이번 턴 연구 여부
+  luxuryResources: Record<Exclude<ResourceType, 'none'>, number>;
 }
 
 export type PlayerColor = 'red' | 'blue' | 'green' | 'yellow';
@@ -103,3 +105,9 @@ export function createInitialResources(): Resources {
     combatBonus: 0,
   };
 }
+export const createInitialLuxuryResources = (): Record<Exclude<ResourceType, 'none'>, number> => ({
+  spice: 0,
+  wheat: 0,
+  silk: 0,
+  iron: 0,
+});

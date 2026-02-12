@@ -1,7 +1,7 @@
-import { GameMap, Position, Tile, TerrainType } from '../../types';
+import { GameMap, Position, Tile, TerrainType,ResourceType } from '../../types';
 
 export function generateMap(width: number, height: number): GameMap {
-  const resources = ['wheat', 'iron', 'gold', 'silk', 'incense', 'spice', 'none'] as const;
+  const resources: ResourceType[] = ['spice', 'wheat', 'silk', 'iron', 'none'];
   const tiles: Tile[][] = [];
   for (let y = 0; y < height; y++) {
     const row: Tile[] = [];
@@ -17,10 +17,11 @@ export function generateMap(width: number, height: number): GameMap {
         else if (rand < 0.85) terrain = 'desert';
         else terrain = 'water';
       }
-      const hasResource = terrain !== 'water' && Math.random() < 0.25;
-      const resource = hasResource
-        ? resources[Math.floor(Math.random() * (resources.length - 1))]
+      const hasResource = terrain !== 'water' && Math.random() < 0.20; // 확률 조정 가능
+      const resource: ResourceType = hasResource
+        ? resources[Math.floor(Math.random() * (resources.length - 1))] // 'none' 제외하고 랜덤
         : 'none';
+
       row.push({
         id: `${x}-${y}`,
         position: { x, y },

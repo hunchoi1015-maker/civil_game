@@ -2,12 +2,9 @@ import {
   Position,
   GameMap,
   Tile,
-  TerrainType,
-  ResourceType,
   City,
   Player,
   TERRAIN_PROPERTIES,
-  RESOURCE_PROPERTIES,
   getSurroundingPositions,
 } from '../types';
 import { BUILDINGS } from '../constants/buildings';
@@ -34,15 +31,11 @@ export function calculateTileYield(tile: Tile): TileYield {
 
   // 2. 건물이 없으면 기존 로직 (지형 + 자원)
   const terrain = TERRAIN_PROPERTIES[tile.terrain];
-  const resource = RESOURCE_PROPERTIES[tile.resource];
 
-  // 만약 resource가 'none'이거나 정의되지 않았을 경우를 대비한 안전 장치
-  const resourceProduction = resource ? resource.productionValue : 0;
-  const resourceTrade = resource ? resource.tradeValue : 0;
 
   return {
-    production: terrain.productionBonus + resourceProduction,
-    trade: terrain.tradeBonus + resourceTrade,
+    production: terrain.productionBonus, 
+    trade: terrain.tradeBonus,
     culture: terrain.cultureBonus,
   };
 }
@@ -56,21 +49,20 @@ export function getCitySurroundingTiles(city: City, map: GameMap): Tile[] {
 // 도시의 생산량 계산 (주변 8칸 타일 + 도시 중심부 타일)
 export function calculateCityProduction(city: City, map: GameMap): number {
   let production = 0;
+  
+  // 1. 기본 타일 생산력 (지형 기반)
+  const tile = map.tiles[city.position.y][city.position.x];
+  if (tile.terrain === 'forest') production += 2;
+  else if (tile.terrain === 'mountain') production += 3;
+  else production += 1; // 기본
 
-  // 1. 주변 8칸 타일 생산량 합산
-  const surroundingTiles = getCitySurroundingTiles(city, map);
-  for (const tile of surroundingTiles) {
-    if (tile.terrain === 'water') continue;
-    const yield_ = calculateTileYield(tile);
-    production += yield_.production;
-  }
+  // [삭제] 자원에 따른 생산 보너스 로직 제거됨 (철, 금 등)
 
-  // 2. 도시 중심부 타일 자체의 생산량 합산
-  if (city.position.x >= 0 && city.position.x < map.width && city.position.y >= 0 && city.position.y < map.height) {
-     const cityTile = map.tiles[city.position.y][city.position.x];
-     const yield_ = calculateTileYield(cityTile);
-     production += yield_.production;
-  }
+  // 2. 건물 보너스
+  city.buildings.forEach(b => {
+    const def = BUILDINGS[b.type];
+    if (def) production += def.effects.productionBonus;
+  });
 
   return production;
 }

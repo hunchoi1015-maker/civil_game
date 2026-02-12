@@ -6,6 +6,7 @@ import { BUILDINGS, getAvailableBuildings } from '../../../constants/buildings';
 import { getAvailableArmyCards, ArmyCardTemplate } from '../../../constants/armyCards';
 import { calculateCityProduction, calculateCityCulture } from '../../../engine/ResourceCalculator';
 import clsx from 'clsx';
+import { ResourceType } from '../../../types/map'; // [추가] ResourceType import
 
 type ProductionTab = 'buildings' | 'units' | 'armyCards';
 
@@ -14,6 +15,24 @@ interface ArmyCardProductionModalProps {
   onSelect: (attack: number, health: number) => void;
   onClose: () => void;
 }
+
+// [추가] 자원 이름 한글 매핑
+const RESOURCE_NAMES: Record<ResourceType, string> = {
+  spice: '향료',
+  wheat: '밀',
+  silk: '비단',
+  iron: '철',
+  none: '없음',
+};
+
+// [추가] 자원 아이콘 매핑
+const RESOURCE_ICONS: Record<ResourceType, string> = {
+  spice: '🏺',
+  wheat: '🌾',
+  silk: '🧣',
+  iron: '⛏️',
+  none: '',
+};
 
 // 공격력/체력 선택 모달
 function ArmyCardProductionModal({ template, onSelect, onClose }: ArmyCardProductionModalProps) {
@@ -153,8 +172,23 @@ function BuildingLocationModal({ building, city, onSelect, onClose }: BuildingLo
   );
 }
 
+export interface CityPanelProps {
+  city?: City; // optional로 변경하여 내부 로직과 맞춤
+  onClose?: () => void; // optional
+}
 export function CityPanel() {
-  const { players, currentPlayerIndex, currentPhase, buildInCity, createUnit, produceArmyCard, harvestCityCulture, map } = useGameStore();
+  const { 
+    players, 
+    currentPlayerIndex, 
+    currentPhase, 
+    buildInCity, 
+    createUnit, 
+    produceArmyCard, 
+    harvestCityCulture, 
+    harvestResource, // [추가]
+    map 
+  } = useGameStore();
+  
   const currentPlayer = players[currentPlayerIndex];
   const [selectedCityId, setSelectedCityId] = useState<string | null>(
     currentPlayer.cities[0]?.id || null
@@ -182,6 +216,11 @@ export function CityPanel() {
       </div>
     );
   }
+
+  // [추가] 자원 관련 변수
+  const tile = (selectedCity && map) ? map.tiles[selectedCity.position.y][selectedCity.position.x] : null;
+  const hasResource = tile ? tile.resource !== 'none' : false;
+  const isOwner = selectedCity?.ownerId === currentPlayer.id;
 
   const handleBuild = (building: BuildingDefinition) => {
     if (!canManageCity) {
@@ -305,6 +344,15 @@ export function CityPanel() {
     harvestCityCulture(currentPlayer.id, selectedCity.id);
   };
 
+  // [추가] 사치품 수확 핸들러
+  const handleHarvestResource = () => {
+    if (!canManageCity) return;
+    if (!selectedCity) return;
+    if (selectedCity.hasActedThisTurn) return;
+    
+    harvestResource(currentPlayer.id, selectedCity.id);
+  };
+
   return (
     <div className="flex gap-6">
       {/* 공격력/체력 선택 모달 */}
@@ -375,11 +423,49 @@ export function CityPanel() {
                 <span className="text-blue-400">성벽:</span> {selectedCity.hasWalls ? '있음' : '없음'}
               </div>
             </div>
-            {/* [추가] 생산력 출처 설명 */}
+            {/* [추가] 행동 가능 여부 표시 */}
+            <div className="mt-3 pt-3 border-t border-slate-700 flex justify-between items-center text-sm">
+                <span className="text-slate-400">이번 턴 행동:</span>
+                <span className={selectedCity.hasActedThisTurn ? 'text-red-400 font-bold' : 'text-green-400 font-bold'}>
+                    {selectedCity.hasActedThisTurn ? '완료 (행동 불가)' : '가능'}
+                </span>
+            </div>
             <div className="text-xs text-slate-500 mt-2">
               * 생산력은 도시 주변 8칸의 지형/자원과 건물의 합산입니다.
             </div>
           </div>
+
+          {/* [추가] 사치품 수확 섹션 */}
+          {hasResource && tile && (
+            <div className="bg-slate-800 rounded-lg p-4 mb-4 border border-amber-700/50">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h4 className="text-lg font-bold text-amber-400 flex items-center gap-2">
+                            <span>{RESOURCE_ICONS[tile.resource]}</span>
+                            사치품 수확
+                        </h4>
+                        <p className="text-sm text-slate-300 mt-1">
+                            타일 자원: {RESOURCE_NAMES[tile.resource]}
+                        </p>
+                    </div>
+                    <button
+                        onClick={handleHarvestResource}
+                        disabled={!isOwner || selectedCity.hasActedThisTurn || !canManageCity}
+                        className={clsx(
+                            'px-4 py-2 rounded-lg text-sm font-bold transition-colors',
+                            (!isOwner || selectedCity.hasActedThisTurn || !canManageCity)
+                                ? 'bg-slate-700 opacity-50 cursor-not-allowed text-slate-400'
+                                : 'bg-green-600 hover:bg-green-500 text-white'
+                        )}
+                    >
+                        수확하기 (+1)
+                    </button>
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                    * 수확 시 이번 턴의 생산/건설이 불가능합니다.
+                </p>
+            </div>
+          )}
 
           {/* 문화 수확 */}
           {canManageCity && selectedCityCulture > 0 && (
@@ -572,6 +658,7 @@ export function CityPanel() {
                     artillery: '💣',
                     cavalry: '🐴',
                     airforce: '✈️',
+                    settler:'',
                   }[card.type];
                   const canAfford = selectedCityProduction >= card.productionCost;
                   const cityActed = selectedCity?.hasActedThisTurn ?? false;
