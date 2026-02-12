@@ -1,18 +1,19 @@
 import { StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
-import { Position, createCity } from '../../types';
+import { Position, createCity, createInitialLuxuryResources } from '../../types'; // [필수] createInitialLuxuryResources 확인
 import { BUILDINGS } from '../../constants/buildings';
 import { calculateCityProduction, calculateCityCulture } from '../../engine/ResourceCalculator';
 import { findPlayerById } from '../helpers/playerHelpers';
 import { setAdjacentTilesOwner } from '../helpers/mapHelpers';
-import { createInitialLuxuryResources } from '../../types/player';
+import { ResourceType } from '../../types/map'; // ResourceType 추가
 
 export interface CitySlice {
   foundCity: (playerId: string, position: Position, name: string) => void;
   buildInCity: (cityId: string, buildingType: string, position?: Position) => void;
   harvestCityCulture: (playerId: string, cityId: string) => void;
-  harvestResource: (playerId: string, cityId: string) => void;
+  // [수정] 자원 타입을 인자로 받도록 변경
+  harvestResource: (playerId: string, cityId: string, targetResource: ResourceType) => void;
   setProduction: (cityId: string, itemType: string, itemId: string) => void;
 }
 
@@ -114,9 +115,11 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       }
     });
   },
-  harvestResource: (playerId, cityId) => {
+
+  // [수정] 주변 8칸 탐색 및 선택된 자원 수확 로직 적용
+  harvestResource: (playerId, cityId, targetResource) => {
     set((state) => {
-      // 1. 단계 확인
+      if (targetResource === 'none') return;
       if (state.currentPhase !== 'cityManagement') return;
 
       const player = state.players.find((p) => p.id === playerId);
@@ -125,28 +128,46 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       const city = player.cities.find((c) => c.id === cityId);
       if (!city) return;
 
-      // 2. 행동력 확인 (생산, 건설과 공유)
       if (city.hasActedThisTurn) return;
 
-      // 3. 타일 자원 확인
-      const tile = state.map.tiles[city.position.y][city.position.x];
-      if (tile.resource === 'none') return;
+      // 도시 주변 9칸(중심+8방향) 탐색
+      let resourceFound = false;
+      const cx = city.position.x;
+      const cy = city.position.y;
 
-      // [수정] 안전장치: luxuryResources가 없으면 초기화 (구버전 데이터 호환)
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = cx + dx;
+          const ny = cy + dy;
+          // 맵 범위 체크
+          if (nx >= 0 && nx < state.map.width && ny >= 0 && ny < state.map.height) {
+            const tile = state.map.tiles[ny][nx];
+            // 요청한 자원이 있는지 확인
+            if (tile.resource === targetResource) {
+              resourceFound = true;
+              break; 
+            }
+          }
+        }
+        if (resourceFound) break;
+      }
+
+      // 자원이 없으면 중단
+      if (!resourceFound) return;
+
+      // 인벤토리 안전장치
       if (!player.luxuryResources) {
         player.luxuryResources = createInitialLuxuryResources();
       }
 
-      // [수정] 자원 키가 유효한지 확인 후 증가
-      if (player.luxuryResources[tile.resource] !== undefined) {
-        player.luxuryResources[tile.resource] += 1;
+      // 자원 획득
+      if (player.luxuryResources[targetResource] !== undefined) {
+        player.luxuryResources[targetResource] += 1;
         city.hasActedThisTurn = true;
-      } else {
-        console.warn(`Unknown resource type: ${tile.resource}`);
-        // 만약 'gold' 같은 삭제된 자원이라면 여기서 처리 (예: 무시하거나 기본 자원으로 변환)
       }
     });
   },
+
   setProduction: (cityId: string, itemType: string, itemId: string) => {
     set((state) => {
       for (const player of state.players) {
