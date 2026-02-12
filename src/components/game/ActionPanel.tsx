@@ -1,6 +1,6 @@
 import { useGameStore } from '../../store/gameStore';
 import { getPhaseDisplayName, getPhaseDescription, calculateTradeIncome } from '../../engine/GameEngine';
-import { TERRAIN_PROPERTIES, RESOURCE_PROPERTIES } from '../../types';
+import { TERRAIN_PROPERTIES } from '../../types';
 import { GovernmentPanel } from './GovernmentPanel';
 
 export function ActionPanel() {
@@ -58,9 +58,6 @@ export function ActionPanel() {
           <div className="text-sm text-slate-300 space-y-1">
             <p>위치: ({selectedTileData.position.x}, {selectedTileData.position.y})</p>
             <p>지형: {TERRAIN_PROPERTIES[selectedTileData.terrain].name}</p>
-            {selectedTileData.resource !== 'none' && (
-              <p>자원: {RESOURCE_PROPERTIES[selectedTileData.resource].name}</p>
-            )}
             {selectedTileData.cityId && (
               <p className="text-amber-400">🏛️ 도시가 있음</p>
             )}

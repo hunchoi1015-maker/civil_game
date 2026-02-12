@@ -1,5 +1,4 @@
-import { Tile, TERRAIN_PROPERTIES, RESOURCE_PROPERTIES, Unit } from '../../../types';
-import {BuildingType} from "../../../types"; // BuildingType 추가 필요
+import { Tile, TERRAIN_PROPERTIES, Unit } from '../../../types';
 import { useGameStore } from '../../../store/gameStore';
 import { calculateTileYield } from '../../../engine/ResourceCalculator';
 import clsx from 'clsx';
@@ -23,10 +22,8 @@ const TERRAIN_COLORS: Record<string, string> = {
 const RESOURCE_ICONS: Record<string, string> = {
   wheat: '🌾',
   iron: '⛏️',
-  gold: '💰',
-  silk: '🧵',
-  incense: '🪔',
-  spice: '🌶️',
+  silk: '🧣', // 🧵 -> 🧣 (CityPanel과 통일)
+  spice: '🏺', // 🌶️ -> 🏺 (CityPanel과 통일)
   none: '',
 };
 
@@ -102,7 +99,7 @@ export function TileComponent({ tile, isSelected, onClick }: TileComponentProps)
   if (hasBuilding && buildingDef) {
     tooltip += `\n건물: ${buildingDef.name} (대체됨)`;
   } else if (tile.resource !== 'none') {
-    tooltip += `\n자원: ${RESOURCE_PROPERTIES[tile.resource].name}`;
+    tooltip += 0;
   }
   tooltip += `\n생산: ${tileYield.production}, 교역: ${tileYield.trade}, 문화: ${tileYield.culture}`;
 

@@ -82,24 +82,9 @@ export function NationSelectionScreen() {
                 </div>
                 <p className="text-sm text-slate-400 mb-3">{nation.description}</p>
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  {nation.bonus.tradeBonus > 0 && (
-                    <div className="text-yellow-400">교역 +{nation.bonus.tradeBonus}</div>
-                  )}
-                  {nation.bonus.productionBonus > 0 && (
-                    <div className="text-orange-400">생산 +{nation.bonus.productionBonus}</div>
-                  )}
-                  {nation.bonus.cultureBonus > 0 && (
-                    <div className="text-purple-400">문화 +{nation.bonus.cultureBonus}</div>
-                  )}
-                  {nation.bonus.militaryBonus > 0 && (
-                    <div className="text-red-400">군사 +{nation.bonus.militaryBonus}</div>
-                  )}
+      
+
                 </div>
-                {nation.bonus.specialAbility && (
-                  <div className="mt-2 text-xs text-cyan-400 border-t border-slate-600 pt-2">
-                    특수: {nation.bonus.specialAbility}
-                  </div>
-                )}
               </motion.button>
             );
           })}

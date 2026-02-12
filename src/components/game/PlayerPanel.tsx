@@ -8,6 +8,13 @@ const PLAYER_COLORS_BG: Record<string, string> = {
   yellow: 'bg-yellow-500',
 };
 
+const RESOURCE_ICONS: Record<string, string> = {
+  spice: '🏺',
+  wheat: '🌾',
+  silk: '🧣',
+  iron: '⛏️',
+};
+
 export function PlayerPanel() {
   const { players, currentPlayerIndex } = useGameStore();
 
@@ -54,7 +61,24 @@ export function PlayerPanel() {
                 <span className="text-slate-300">생산: {player.resources.production}</span>
               </div>
             </div>
-
+            <div className="mt-2 pt-2 border-t border-slate-600/50">
+              <div className="text-xs text-slate-400 mb-1">보유 사치품</div>
+              <div className="flex gap-2 flex-wrap">
+                {Object.entries(player.luxuryResources).map(([key, count]) => {
+                  if (count <= 0) return null;
+                  return (
+                    <div key={key} className="flex items-center gap-1 text-xs bg-slate-800 px-1.5 py-0.5 rounded text-slate-300 border border-slate-600">
+                      <span>{RESOURCE_ICONS[key]}</span>
+                      <span>{count}</span>
+                    </div>
+                  );
+                })}
+                {Object.values(player.luxuryResources).every(c => c === 0) && (
+                  <span className="text-xs text-slate-600">- 없음 -</span>
+                )}
+              </div>
+            </div>
+            
             {/* 정치체제 */}
             {govEffect && (
               <div className="mt-2 text-xs text-slate-400">

@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useGameStore } from '../../store/gameStore';
-import { Tile, TERRAIN_PROPERTIES, RESOURCE_PROPERTIES } from '../../types';
+import { Tile, TERRAIN_PROPERTIES } from '../../types';
 import { NATIONS } from '../../types/nation';
 import clsx from 'clsx';
 
@@ -15,10 +15,8 @@ const TERRAIN_COLORS: Record<string, string> = {
 const RESOURCE_ICONS: Record<string, string> = {
   wheat: '🌾',
   iron: '⛏️',
-  gold: '💰',
-  silk: '🧵',
-  incense: '🪔',
-  spice: '🌶️',
+  silk: '🧣', // 🧵 -> 🧣 (CityPanel과 통일)
+  spice: '🏺', // 🌶️ -> 🏺 (CityPanel과 통일)
   none: '',
 };
 
@@ -53,7 +51,7 @@ function CapitalTile({ tile, isValidSelection, isSelected, onClick }: CapitalTil
         tile.ownerId && 'ring-1 ring-white/50'
       )}
       title={`${TERRAIN_PROPERTIES[tile.terrain].name}${
-        tile.resource !== 'none' ? ` - ${RESOURCE_PROPERTIES[tile.resource].name}` : ''
+        tile.resource !== 'none' ? `` : ''
       }`}
     >
       {tile.resource !== 'none' && !hasCity && (

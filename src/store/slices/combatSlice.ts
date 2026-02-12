@@ -1,7 +1,7 @@
 import { StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
-import { CombatState, Position, CombatType, ArmyCard, Player, getAttackerMaxCards, CITY_CAPITAL_MAX_CARDS, LOOT_MAX_PER_SELECTION, createInitialResources } from '../../types';
+import { CombatState, Position, CombatType, ArmyCard, Player, getAttackerMaxCards, CITY_CAPITAL_MAX_CARDS, LOOT_MAX_PER_SELECTION, createInitialResources, createInitialLuxuryResources} from '../../types';
 import { resolveBattlefields, resolvePairedFight } from '../../engine/CombatResolver';
 import { shuffleArray } from '../helpers/playerHelpers';
 
@@ -548,14 +548,16 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
             state.players.push({
                 id: devAttackerId, name: 'DEV Attacker', color: 'red', nation: 'rome',
                 resources: createInitialResources(), cities: [], units: [], armyCards: [], technologies: [], 
-                government: 'despotism', cultureTrack: 0, hasCapital: true, isEliminated: false, stackingLimitBonus: 0, hasCollectedTrade: false, hasResearchedThisTurn: false
+                government: 'despotism', cultureTrack: 0, hasCapital: true, isEliminated: false, stackingLimitBonus: 0, hasCollectedTrade: false, hasResearchedThisTurn: false,
+                luxuryResources: createInitialLuxuryResources(),
             });
         }
         if (!state.players.find(p => p.id === devDefenderId)) {
             state.players.push({
                 id: devDefenderId, name: 'DEV Defender', color: 'blue', nation: 'china',
                 resources: createInitialResources(), cities: [], units: [], armyCards: [], technologies: [], 
-                government: 'despotism', cultureTrack: 0, hasCapital: true, isEliminated: false, stackingLimitBonus: 0, hasCollectedTrade: false, hasResearchedThisTurn: false
+                government: 'despotism', cultureTrack: 0, hasCapital: true, isEliminated: false, stackingLimitBonus: 0, hasCollectedTrade: false, hasResearchedThisTurn: false,
+                luxuryResources: createInitialLuxuryResources(),
             });
         }
         state.combatState = {
