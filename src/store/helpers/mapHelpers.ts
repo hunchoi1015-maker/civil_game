@@ -17,7 +17,7 @@ export function generateMap(width: number, height: number): GameMap {
         else if (rand < 0.85) terrain = 'desert';
         else terrain = 'water';
       }
-      const hasResource = terrain !== 'water' && Math.random() < 0.20; // 확률 조정 가능
+      const hasResource = terrain !== 'water' && Math.random() < 0.90; // 확률 조정 가능
       const resource: ResourceType = hasResource
         ? resources[Math.floor(Math.random() * (resources.length - 1))] // 'none' 제외하고 랜덤
         : 'none';

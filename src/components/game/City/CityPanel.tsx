@@ -350,7 +350,7 @@ export function CityPanel() {
     if (!selectedCity) return;
     if (selectedCity.hasActedThisTurn) return;
     
-    harvestResource(currentPlayer.id, selectedCity.id);
+    harvestResource(currentPlayer.id, selectedCity.id,);
   };
 
   return (
@@ -397,6 +397,8 @@ export function CityPanel() {
               </div>
               <div className="text-sm opacity-75 mt-1">
                 생산력: {cityProduction} | 건물: {city.buildings.length}
+
+                
               </div>
             </button>
           );
