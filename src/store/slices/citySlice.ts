@@ -6,6 +6,7 @@ import { BUILDINGS } from '../../constants/buildings';
 import { calculateCityProduction, calculateCityCulture } from '../../engine/ResourceCalculator';
 import { findPlayerById } from '../helpers/playerHelpers';
 import { setAdjacentTilesOwner } from '../helpers/mapHelpers';
+import { createInitialLuxuryResources } from '../../types/player';
 
 export interface CitySlice {
   foundCity: (playerId: string, position: Position, name: string) => void;
@@ -131,10 +132,18 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       const tile = state.map.tiles[city.position.y][city.position.x];
       if (tile.resource === 'none') return;
 
-      // 4. 자원 획득 및 행동력 소모
+      // [수정] 안전장치: luxuryResources가 없으면 초기화 (구버전 데이터 호환)
+      if (!player.luxuryResources) {
+        player.luxuryResources = createInitialLuxuryResources();
+      }
+
+      // [수정] 자원 키가 유효한지 확인 후 증가
       if (player.luxuryResources[tile.resource] !== undefined) {
         player.luxuryResources[tile.resource] += 1;
-        city.hasActedThisTurn = true; // 다른 행동 불가 처리
+        city.hasActedThisTurn = true;
+      } else {
+        console.warn(`Unknown resource type: ${tile.resource}`);
+        // 만약 'gold' 같은 삭제된 자원이라면 여기서 처리 (예: 무시하거나 기본 자원으로 변환)
       }
     });
   },

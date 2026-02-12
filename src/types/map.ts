@@ -94,11 +94,18 @@ export interface TerrainProperty {
 
 
 
+// [수정] 생산량/교역량 속성(value) 삭제, 이름만 유지
 export interface ResourceProperty {
   name: string;
-  tradeValue: number;
-  productionValue: number;
 }
+
+export const RESOURCE_PROPERTIES: Record<ResourceType, ResourceProperty> = {
+  wheat: { name: '밀' },
+  iron: { name: '철' },
+  silk: { name: '비단' },
+  spice: { name: '향료' }, // CityPanel과 통일성을 위해 '향료'로 지정
+  none: { name: '없음' },
+};
 
 // 인접 4칸 (대각선 미포함)
 export function getAdjacentPositions(pos: Position, mapWidth: number, mapHeight: number): Position[] {
