@@ -15,8 +15,8 @@ const TERRAIN_COLORS: Record<string, string> = {
 const RESOURCE_ICONS: Record<string, string> = {
   wheat: '🌾',
   iron: '⛏️',
-  silk: '🧣', // 🧵 -> 🧣 (CityPanel과 통일)
-  spice: '🏺', // 🌶️ -> 🏺 (CityPanel과 통일)
+  silk: '🧣',
+  spice: '🏺',
   none: '',
 };
 
@@ -27,7 +27,6 @@ const PLAYER_COLORS: Record<string, string> = {
   yellow: 'border-yellow-500 bg-yellow-500/20',
 };
 
-
 interface CapitalTileProps {
   tile: Tile;
   isValidSelection: boolean;
@@ -37,6 +36,16 @@ interface CapitalTileProps {
 
 function CapitalTile({ tile, isValidSelection, isSelected, onClick }: CapitalTileProps) {
   const hasCity = tile.cityId !== null;
+
+  // [수정] 미탐험 지역(Fog of War) 처리
+  // isExplored가 false이면 검은색 박스로 표시하고 상호작용 차단
+  if (!tile.isExplored) {
+    return (
+      <div className="w-10 h-10 rounded-sm bg-slate-950 flex items-center justify-center relative border border-slate-900/50">
+        <span className="text-[10px] text-slate-800">?</span>
+      </div>
+    );
+  }
 
   return (
     <button
@@ -51,7 +60,7 @@ function CapitalTile({ tile, isValidSelection, isSelected, onClick }: CapitalTil
         tile.ownerId && 'ring-1 ring-white/50'
       )}
       title={`${TERRAIN_PROPERTIES[tile.terrain].name}${
-        tile.resource !== 'none' ? `` : ''
+        tile.resource !== 'none' ? ` (${RESOURCE_ICONS[tile.resource]})` : ''
       }`}
     >
       {tile.resource !== 'none' && !hasCity && (
@@ -74,7 +83,6 @@ export function CapitalSelectionScreen() {
   const currentPlayerIndex = setupState.currentSetupPlayer;
   const currentPlayer = players[currentPlayerIndex];
 
-  // 모든 수도가 배치되었는지 확인
   const allCapitalsPlaced = players.every(p => p.hasCapital);
 
   if (allCapitalsPlaced) {
@@ -102,24 +110,6 @@ export function CapitalSelectionScreen() {
 
   const nation = NATIONS[currentPlayer.nation];
 
-  const handleTileClick = (x: number, y: number) => {
-    const tile = map.tiles[y][x];
-
-    // 유효한 타일인지 확인
-    if (tile.terrain === 'water' || tile.terrain === 'mountain') {
-      return;
-    }
-    if (tile.cityId !== null || tile.ownerId !== null) {
-      return;
-    }
-    // 다른 도시와 최소 3칸 이상 떨어져야 함
-    if (isTooCloseToCity(x, y)) {
-      return;
-    }
-
-    selectCapitalPosition(currentPlayerIndex, { x, y });
-  };
-
   const isTooCloseToCity = (x: number, y: number): boolean => {
     for (const p of players) {
       for (const city of p.cities) {
@@ -134,11 +124,25 @@ export function CapitalSelectionScreen() {
   };
 
   const isValidTile = (tile: Tile) => {
+    // [수정] 미탐험 지역에는 건설 불가 조건 추가
+    if (!tile.isExplored) return false;
+    
     if (tile.terrain === 'water' || tile.terrain === 'mountain') return false;
     if (tile.cityId !== null) return false;
     if (tile.ownerId !== null) return false;
     if (isTooCloseToCity(tile.position.x, tile.position.y)) return false;
     return true;
+  };
+
+  const handleTileClick = (x: number, y: number) => {
+    const tile = map.tiles[y][x];
+
+    // [수정] 클릭 핸들러에서도 탐험 여부 확인 (isValidTile과 중복되지만 안전장치)
+    if (!tile.isExplored) return;
+
+    if (isValidTile(tile)) {
+      selectCapitalPosition(currentPlayerIndex, { x, y });
+    }
   };
 
   return (
@@ -148,7 +152,7 @@ export function CapitalSelectionScreen() {
         <div className="text-center mb-6">
           <h1 className="text-3xl font-bold text-amber-500 mb-2">수도 위치 선택</h1>
           <p className="text-slate-400">
-            맵에서 수도를 건설할 위치를 클릭하세요
+            밝혀진 구역(코너) 중에서 수도를 건설할 위치를 선택하세요
           </p>
         </div>
 
@@ -204,15 +208,15 @@ export function CapitalSelectionScreen() {
         <div className="mt-4 flex flex-wrap gap-4 justify-center text-sm text-slate-400">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-green-600 rounded" />
-            <span>초원 (건설 가능)</span>
+            <span>초원</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-green-800 rounded" />
-            <span>숲 (건설 가능)</span>
+            <span>숲</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-yellow-600 rounded" />
-            <span>사막 (건설 가능)</span>
+            <span>사막</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-stone-500 rounded opacity-50" />
@@ -221,6 +225,10 @@ export function CapitalSelectionScreen() {
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-blue-500 rounded opacity-50" />
             <span>물 (건설 불가)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-slate-950 rounded border border-slate-700" />
+            <span>미탐험 지역</span>
           </div>
         </div>
       </div>

@@ -20,18 +20,17 @@ export function UnitPanel() {
     setSelectedUnits,
     toggleUnitSelection,
     setSelectedTile,
-    moveUnit,
     moveSelectedUnits,
     removeUnit,
     foundCity,
     currentPhase,
+    exploreChunk,
   } = useGameStore();
 
   const currentPlayer = players[currentPlayerIndex];
   const [showFoundCityModal, setShowFoundCityModal] = useState(false);
   const [newCityName, setNewCityName] = useState('');
   const [isGroupSelectMode, setIsGroupSelectMode] = useState(false);
-  const [movementMode, setMovementMode] = useState<'single' | 'group'>('single');
 
   const militaryUnits = currentPlayer.units.filter((u) => u.type === 'military');
   const settlerUnits = currentPlayer.units.filter((u) => u.type === 'settler');
@@ -58,7 +57,6 @@ export function UnitPanel() {
     } else {
       setSelectedUnit(unit.id);
       setSelectedTile(unit.position);
-      setMovementMode('single');
     }
   };
 
@@ -76,62 +74,6 @@ export function UnitPanel() {
 
   // 현재 플레이어의 스태킹 제한 계산
   const stackingLimit = BASE_STACKING_LIMIT + currentPlayer.stackingLimitBonus;
-
-  // 타일에 있는 내 유닛 수 계산
-  const getMyUnitsOnTile = (position: Position): number => {
-    const tile = map.tiles[position.y][position.x];
-    return tile.unitIds.filter((id) =>
-      currentPlayer.units.some((u) => u.id === id)
-    ).length;
-  };
-
-  const getValidMoves = (unit: Unit): { position: Position; isFull: boolean }[] => {
-    if (unit.movement <= 0) return [];
-
-    const validMoves: { position: Position; isFull: boolean }[] = [];
-    // 상하좌우 4방향만 이동 가능
-    const directions = [
-      { x: 0, y: -1 },  // 상
-      { x: -1, y: 0 },  // 좌
-      { x: 1, y: 0 },   // 우
-      { x: 0, y: 1 },   // 하
-    ];
-
-    for (const dir of directions) {
-      const newX = unit.position.x + dir.x;
-      const newY = unit.position.y + dir.y;
-
-      if (newX >= 0 && newX < map.width && newY >= 0 && newY < map.height) {
-        const tile = map.tiles[newY][newX];
-        if (tile.terrain !== 'water') {
-          const myUnitsOnTile = getMyUnitsOnTile({ x: newX, y: newY });
-          validMoves.push({
-            position: { x: newX, y: newY },
-            isFull: myUnitsOnTile >= stackingLimit,
-          });
-        }
-      }
-    }
-
-    return validMoves;
-  };
-
-  const handleMoveUnit = (targetPos: Position) => {
-    if (currentPhase !== 'movement') return;
-
-    if (movementMode === 'group' && unitsOnSameTile.length > 1) {
-      // 함께 이동: 같은 타일의 이동 가능한 유닛 모두 선택 후 그룹 이동
-      const movableOnTile = unitsOnSameTile.filter(u => u.movement > 0);
-      setSelectedUnits(movableOnTile.map(u => u.id));
-      moveSelectedUnits(targetPos);
-    } else if (selectedUnits.length > 1) {
-      // 기존 그룹 선택 모드로 선택된 경우
-      moveSelectedUnits(targetPos);
-    } else if (selectedUnitData) {
-      // 개별 이동
-      moveUnit(selectedUnitData.id, targetPos);
-    }
-  };
 
   // 주변 4칸에 적대적인 유닛이 있는지 확인 (상하좌우)
   const hasHostileNearby = (position: Position): boolean => {
@@ -222,6 +164,56 @@ export function UnitPanel() {
     setNewCityName('');
     setSelectedUnit(null);
   };
+
+  // 탐험 가능한 인접 청크 찾기
+  const getExplorableChunks = (unit: Unit) => {
+    if (unit.movement < 1) return [];
+
+    const currentChunkX = Math.floor(unit.position.x / 4);
+    const currentChunkY = Math.floor(unit.position.y / 4);
+    
+    const candidates: { direction: string; chunkPos: Position }[] = [];
+    const directions = [
+      { label: '북쪽', dx: 0, dy: -1 },
+      { label: '남쪽', dx: 0, dy: 1 },
+      { label: '서쪽', dx: -1, dy: 0 },
+      { label: '동쪽', dx: 1, dy: 0 },
+    ];
+
+    for (const dir of directions) {
+      const neighborTileX = unit.position.x + dir.dx;
+      const neighborTileY = unit.position.y + dir.dy;
+
+      // 맵 범위 내인지 확인
+      if (neighborTileX >= 0 && neighborTileX < map.width && neighborTileY >= 0 && neighborTileY < map.height) {
+        const targetChunkX = Math.floor(neighborTileX / 4);
+        const targetChunkY = Math.floor(neighborTileY / 4);
+
+        // 다른 청크이고, 아직 탐험되지 않았다면 후보에 추가
+        if ((targetChunkX !== currentChunkX || targetChunkY !== currentChunkY)) {
+           // 해당 청크의 첫 번째 타일(혹은 아무 타일)의 상태를 확인
+           const targetTile = map.tiles[targetChunkY * 4][targetChunkX * 4];
+           if (!targetTile.isExplored) {
+             candidates.push({ 
+               direction: dir.label, 
+               chunkPos: { x: targetChunkX, y: targetChunkY } 
+             });
+           }
+        }
+      }
+    }
+    
+    // 중복 제거
+    const uniqueCandidates = candidates.filter((c, index, self) => 
+      index === self.findIndex((t) => (
+        t.chunkPos.x === c.chunkPos.x && t.chunkPos.y === c.chunkPos.y
+      ))
+    );
+
+    return uniqueCandidates;
+  };
+
+  const explorableChunks = selectedUnitData ? getExplorableChunks(selectedUnitData) : [];
 
   // 이동 단계 여부
   const canMove = currentPhase === 'movement';
@@ -384,96 +376,25 @@ export function UnitPanel() {
             </div>
           )}
 
-          {currentPhase === 'movement' && (
-            <>
-              {/* 같은 타일에 여러 유닛: 개별/함께 이동 선택 */}
-              {unitsOnSameTile.length > 1 && selectedUnits.length <= 1 && (
-                <div className="bg-slate-600 rounded-lg p-3">
-                  <p className="text-xs text-slate-300 mb-2">
-                    이 타일에 {unitsOnSameTile.length}개 유닛이 있습니다. 이동 방식을 선택하세요:
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setMovementMode('single')}
-                      className={clsx(
-                        'flex-1 py-2 text-xs rounded-lg transition-colors font-medium',
-                        movementMode === 'single'
-                          ? 'bg-amber-600 text-white'
-                          : 'bg-slate-700 text-slate-300 hover:bg-slate-500'
-                      )}
-                    >
-                      개별 이동
-                    </button>
-                    <button
-                      onClick={() => setMovementMode('group')}
-                      className={clsx(
-                        'flex-1 py-2 text-xs rounded-lg transition-colors font-medium',
-                        movementMode === 'group'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-slate-700 text-slate-300 hover:bg-slate-500'
-                      )}
-                    >
-                      함께 이동 ({unitsOnSameTile.filter(u => u.movement > 0).length}개)
-                    </button>
-                  </div>
-                  {movementMode === 'group' && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {unitsOnSameTile.map(u => (
-                        <span key={u.id} className={clsx(
-                          'text-xs px-2 py-1 rounded',
-                          u.movement > 0
-                            ? 'bg-blue-900/50 text-blue-300'
-                            : 'bg-slate-700 text-slate-500 line-through'
-                        )}>
-                          {UNIT_ICONS[u.type]} {UNIT_DEFINITIONS[u.type].name}
-                          {u.movement <= 0 ? ' (이동불가)' : ''}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* 이동 방향 버튼 */}
-              {(selectedUnits.length > 1
-                ? selectedUnitsData.some((u) => u.movement > 0)
-                : selectedUnitData.movement > 0) ||
-               (movementMode === 'group' && unitsOnSameTile.some(u => u.movement > 0)) ? (
-                <div>
-                  <p className="text-sm text-slate-400 mb-2">
-                    {movementMode === 'group' && unitsOnSameTile.length > 1
-                      ? `함께 이동 (배치 제한: ${stackingLimit}):`
-                      : selectedUnits.length > 1
-                        ? `그룹 이동 (배치 제한: ${stackingLimit}):`
-                        : `이동 가능한 위치 (배치 제한: ${stackingLimit}):`}
-                  </p>
-                  <div className="grid grid-cols-3 gap-1">
-                    {getValidMoves(selectedUnitData).map((move) => (
-                      <button
-                        key={`${move.position.x}-${move.position.y}`}
-                        onClick={() => !move.isFull && handleMoveUnit(move.position)}
-                        disabled={move.isFull}
-                        className={clsx(
-                          'py-1 text-xs rounded transition-colors',
-                          move.isFull
-                            ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
-                            : movementMode === 'group' && unitsOnSameTile.length > 1
-                              ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                              : 'bg-green-600 hover:bg-green-500 text-white'
-                        )}
-                        title={move.isFull ? '배치 제한 초과' : ''}
-                      >
-                        ({move.position.x}, {move.position.y})
-                        {move.isFull && ' 🚫'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400">이동력이 없습니다.</p>
-              )}
-            </>
+          {/* 탐험 버튼 섹션 */}
+          {explorableChunks.length > 0 && (
+            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600 mt-2">
+              <p className="text-xs text-slate-400 mb-2">🔭 미지의 구역 탐험 (이동력 1 소모):</p>
+              <div className="grid grid-cols-2 gap-2">
+                {explorableChunks.map((chunk, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => exploreChunk(selectedUnitData.id, chunk.chunkPos)}
+                    className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded transition-colors flex items-center justify-center gap-1"
+                  >
+                    <span>🔦</span> {chunk.direction} 구역 개방
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
+
+          {/* 좌표 이동 버튼 삭제됨 */}
 
           {selectedUnitData.type === 'settler' && canFoundCity() && (
             <>

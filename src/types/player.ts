@@ -31,6 +31,9 @@ export interface Player {
   hasCollectedTrade: boolean;   // 이번 턴에 교역 수령 여부
   hasResearchedThisTurn: boolean; // 이번 턴 연구 여부
   luxuryResources: Record<Exclude<ResourceType, 'none'>, number>;
+  spies: number;          // 스파이 (상대에게 안 보임)
+  greatPeople: number;    // 위인 (공개)
+  nuclearMaterial: number;// 핵 자원 (상대에게 안 보임)
 }
 
 export type PlayerColor = 'red' | 'blue' | 'green' | 'yellow';

@@ -16,12 +16,14 @@ export interface TileYield {
   culture: number;
 }
 
-// 타일 기본 수확량 계산
+// 타일 기본 수확량 계산 (단일 타일 기준)
 export function calculateTileYield(tile: Tile): TileYield {
   // 1. 건물 확인: 건물이 있으면 타일/자원 생산량을 무시하고 건물의 효과로 대체
+  // (개발자 주: 건물 효과가 '대체'인지 '추가'인지 기획에 따라 다르나, 현재 코드 맥락상 건물 효과가 우선시되는 것으로 보입니다.
+  //  만약 건물이 추가 보너스라면 로직을 `base + building`으로 변경해야 합니다. 
+  //  기존 로직을 존중하여 '대체' 로직을 유지하되, 필요시 수정 가능합니다.)
   if (tile.buildingType && BUILDINGS[tile.buildingType]) {
     const buildingDef = BUILDINGS[tile.buildingType];
-    // 건물 정의의 effects에서 보너스 수치를 가져와 생산량으로 사용
     return {
       production: buildingDef.effects.productionBonus,
       trade: buildingDef.effects.tradeBonus,
@@ -29,9 +31,8 @@ export function calculateTileYield(tile: Tile): TileYield {
     };
   }
 
-  // 2. 건물이 없으면 기존 로직 (지형 + 자원)
+  // 2. 건물이 없으면 지형(Terrain) 속성만 사용 (자원 보너스 제거됨)
   const terrain = TERRAIN_PROPERTIES[tile.terrain];
-
 
   return {
     production: terrain.productionBonus, 
@@ -46,70 +47,97 @@ export function getCitySurroundingTiles(city: City, map: GameMap): Tile[] {
   return positions.map(pos => map.tiles[pos.y][pos.x]);
 }
 
-// 도시의 생산량 계산 (주변 8칸 타일 + 도시 중심부 타일)
+// [수정] 도시의 총 생산량 계산 (일관성 확보)
 export function calculateCityProduction(city: City, map: GameMap): number {
   let production = 0;
   
-  // 1. 기본 타일 생산력 (지형 기반)
-  const tile = map.tiles[city.position.y][city.position.x];
-  if (tile.terrain === 'forest') production += 2;
-  else if (tile.terrain === 'mountain') production += 3;
-  else production += 1; // 기본
+  // 1. 도시 중심부 타일 수확량
+  if (city.position.x >= 0 && city.position.x < map.width && city.position.y >= 0 && city.position.y < map.height) {
+    const cityTile = map.tiles[city.position.y][city.position.x];
+    production += calculateTileYield(cityTile).production;
+  }
 
-  // [삭제] 자원에 따른 생산 보너스 로직 제거됨 (철, 금 등)
+  // 2. 주변 8칸 타일 수확량
+  const surroundingTiles = getCitySurroundingTiles(city, map);
+  for (const tile of surroundingTiles) {
+    production += calculateTileYield(tile).production;
+  }
 
-  // 2. 건물 보너스
+  // 3. (옵션) 도시 자체의 건물들이 주는 추가 보너스가 있다면 여기서 합산
+  // 주의: 타일에 지어진 건물(농장 등)은 calculateTileYield에서 이미 계산됨.
+  // 여기서는 '도시 내부'에 지어진 건물(성벽, 병영 등)의 효과를 더해야 함.
   city.buildings.forEach(b => {
     const def = BUILDINGS[b.type];
-    if (def) production += def.effects.productionBonus;
+    // 타일에 건설되는 건물이 아닌, 도시 내부에만 존재하는 건물(예: 성벽)의 생산력 보너스가 있다면 추가
+    // 현재 로직상 buildInCity에서 타일에도 buildingType을 박아버리므로 중복 계산되지 않도록 주의해야 함.
+    // 만약 city.buildings에 있는 건물이 타일 위에도 존재한다면, 위 1,2번 단계에서 이미 계산되었을 수 있음.
+    
+    // 안전한 방법: city.buildings는 '보유 목록'이고, 맵 상의 타일이 '실체'라면
+    // 타일 루프(1,2번)만으로 충분할 수 있음. 
+    // 하지만 '성벽' 같이 타일을 차지하지 않는 건물이 있다면 여기서 더해줘야 함.
+    if (def && !def.allowedTerrain) { // 타일 제한이 없는(도시 내부 전용) 건물만 추가
+         production += def.effects.productionBonus;
+    }
   });
 
   return production;
 }
 
-// 도시의 교역량 계산
+// [수정] 도시의 총 교역량 계산 (일관성 확보)
 export function calculateCityTrade(city: City, map: GameMap): number {
   let trade = 0;
 
-  // 1. 주변 8칸
-  const surroundingTiles = getCitySurroundingTiles(city, map);
-  for (const tile of surroundingTiles) {
-    const yield_ = calculateTileYield(tile);
-    trade += yield_.trade;
-  }
-
-  // 2. 도시 중심부
+  // 1. 도시 중심부
   if (city.position.x >= 0 && city.position.x < map.width && city.position.y >= 0 && city.position.y < map.height) {
      const cityTile = map.tiles[city.position.y][city.position.x];
-     const yield_ = calculateTileYield(cityTile);
-     trade += yield_.trade;
+     trade += calculateTileYield(cityTile).trade;
   }
+
+  // 2. 주변 8칸
+  const surroundingTiles = getCitySurroundingTiles(city, map);
+  for (const tile of surroundingTiles) {
+    trade += calculateTileYield(tile).trade;
+  }
+
+  // 3. 도시 내부 건물 보너스 (타일 점유 안하는 건물)
+  city.buildings.forEach(b => {
+    const def = BUILDINGS[b.type];
+    if (def && !def.allowedTerrain) {
+         trade += def.effects.tradeBonus;
+    }
+  });
 
   return trade;
 }
 
-// 도시의 문화량 계산
+// [수정] 도시의 총 문화량 계산 (일관성 확보)
 export function calculateCityCulture(city: City, map: GameMap): number {
   let culture = 0;
 
-  // 1. 주변 8칸
-  const surroundingTiles = getCitySurroundingTiles(city, map);
-  for (const tile of surroundingTiles) {
-    const yield_ = calculateTileYield(tile);
-    culture += yield_.culture;
-  }
-
-  // 2. 도시 중심부
+  // 1. 도시 중심부
   if (city.position.x >= 0 && city.position.x < map.width && city.position.y >= 0 && city.position.y < map.height) {
      const cityTile = map.tiles[city.position.y][city.position.x];
-     const yield_ = calculateTileYield(cityTile);
-     culture += yield_.culture;
+     culture += calculateTileYield(cityTile).culture;
   }
+
+  // 2. 주변 8칸
+  const surroundingTiles = getCitySurroundingTiles(city, map);
+  for (const tile of surroundingTiles) {
+    culture += calculateTileYield(tile).culture;
+  }
+
+  // 3. 도시 내부 건물 보너스
+  city.buildings.forEach(b => {
+    const def = BUILDINGS[b.type];
+    if (def && !def.allowedTerrain) {
+         culture += def.effects.cultureBonus;
+    }
+  });
 
   return culture;
 }
 
-// 플레이어 총 교역량 (정치체제 보너스 포함)
+// 플레이어 총 교역량
 export function calculatePlayerTrade(player: Player, map: GameMap): number {
   let totalTrade = 0;
   for (const city of player.cities) {
@@ -121,7 +149,7 @@ export function calculatePlayerTrade(player: Player, map: GameMap): number {
   return Math.max(0, totalTrade);
 }
 
-// 플레이어 총 생산량 (정치체제 보너스 포함 - 통계용)
+// 플레이어 총 생산량
 export function calculatePlayerProduction(player: Player, map: GameMap): number {
   let totalProduction = 0;
   for (const city of player.cities) {

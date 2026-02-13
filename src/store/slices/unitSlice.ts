@@ -9,6 +9,7 @@ export interface UnitSlice {
   moveUnit: (unitId: string, newPosition: Position) => void;
   removeUnit: (unitId: string) => void;
   moveSelectedUnits: (newPosition: Position) => void;
+  exploreChunk: (unitId: string, targetChunkPos: Position) => void;
 }
 
 export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]], [], UnitSlice> = (set, get) => ({
@@ -41,7 +42,31 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       }
     });
   },
+  exploreChunk: (unitId: string, targetChunkPos: Position) => {
+    set((state) => {
+      const player = state.players.find((p) => p.id === state.players[state.currentPlayerIndex].id);
+      if (!player) return;
 
+      const unit = player.units.find((u) => u.id === unitId);
+      if (!unit || unit.movement < 1) return; // 이동력 1 이상 필요
+
+      // 이동력 소모
+      unit.movement -= 1;
+      if (unit.movement <= 0) unit.hasMoved = true;
+
+      // 청크 개방 (4x4 영역)
+      const startX = targetChunkPos.x * 4;
+      const startY = targetChunkPos.y * 4;
+
+      for (let y = startY; y < startY + 4; y++) {
+        for (let x = startX; x < startX + 4; x++) {
+          if (y >= 0 && y < state.map.height && x >= 0 && x < state.map.width) {
+            state.map.tiles[y][x].isExplored = true;
+          }
+        }
+      }
+    });
+  },
   moveUnit: (unitId: string, newPosition: Position) => {
     const state = get();
     const currentPlayer = state.players[state.currentPlayerIndex];
