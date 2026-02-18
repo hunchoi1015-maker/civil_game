@@ -156,10 +156,16 @@ function PlacementPhase() {
   const attackerPlayer = players.find((p) => p.id === cs.attackerRoleId);
   const defenderPlayer = players.find((p) => p.id === cs.defenderRoleId);
 
-  if (!attackerPlayer || !defenderPlayer) return null;
+  // 공격자(플레이어) 정보가 없으면 렌더링 불가
+  if (!attackerPlayer) return null;
 
   const isAttackerTurn = cs.placement.currentTurn === 'attacker';
-  const currentTurnPlayer = isAttackerTurn ? attackerPlayer : defenderPlayer;
+  
+  // [수정] 현재 턴 플레이어 결정 (마을인 경우 가상의 객체 사용)
+  const currentTurnPlayer = isAttackerTurn 
+      ? attackerPlayer 
+      : (defenderPlayer || { id: 'village', name: '원주민 마을', color: 'gray' } as any);
+
   const currentCards = isAttackerTurn ? cs.attackerAvailableCards : cs.defenderAvailableCards;
   const currentDeployCount = isAttackerTurn ? cs.placement.attackerDeployCount : cs.placement.defenderDeployCount;
   const currentMaxCards = isAttackerTurn ? cs.placement.attackerMaxCards : cs.placement.defenderMaxCards;
@@ -189,7 +195,7 @@ function PlacementPhase() {
             ⚠️ 성벽 도시/수도 방어! 역할이 교환되었습니다.
           </p>
           <p className="text-slate-400 text-xs mt-1">
-            도시 소유자({attackerPlayer.name})가 공격 역할, 이동자({defenderPlayer.name})가 방어 역할
+            도시 소유자({attackerPlayer.name})가 공격 역할, 이동자({defenderPlayer?.name})가 방어 역할
           </p>
         </div>
       )}
@@ -318,9 +324,8 @@ function ResolutionPhase() {
 
   const cs = combatState;
   const attackerPlayer = players.find((p) => p.id === cs.attackerRoleId);
-  const defenderPlayer = players.find((p) => p.id === cs.defenderRoleId);
-
-  if (!attackerPlayer || !defenderPlayer) return null;
+  
+  if (!attackerPlayer) return null;
 
   return (
     <div className="space-y-6">
@@ -380,7 +385,6 @@ function CombatScoreTooltip({
         <span>+ 전역 보너스:</span>
         <span className="font-mono">+{combatBonus}</span>
       </div>
-      {/* 도시 방어 보너스가 있을 때만 표시 */}
       {defenseBonus > 0 && (
         <div className="flex justify-between mb-1 text-green-400">
           <span>+ 도시 방어:</span>
@@ -404,7 +408,10 @@ function ScoringPhase() {
   const defenderPlayer = players.find((p) => p.id === cs.defenderRoleId);
   const winnerPlayer = players.find((p) => p.id === cs.winnerPlayerId);
 
-  if (!attackerPlayer || !defenderPlayer) return null;
+  // [수정] 방어자 이름 안전하게 가져오기
+  const defenderName = defenderPlayer ? defenderPlayer.name : '원주민 마을';
+  
+  if (!attackerPlayer) return null;
 
   return (
     <motion.div
@@ -413,21 +420,24 @@ function ScoringPhase() {
       className="space-y-6"
     >
       <h2 className="text-3xl font-bold text-center">
-        {winnerPlayer && (
+        {winnerPlayer ? (
           <span className={cs.winnerPlayerId === cs.attackerRoleId ? 'text-red-400' : 'text-blue-400'}>
             🏆 {winnerPlayer.name} 승리!
           </span>
+        ) : (
+          <span className="text-blue-400">🏆 {defenderName} 승리!</span>
         )}
       </h2>
-      // 전장 최종 모습
+      
+      {/* 전장 최종 모습 */}
       <div className="w-full bg-slate-800/50 rounded-lg p-4 mb-4">
         <h3 className="text-sm font-semibold text-slate-400 mb-3 text-center">최종 전장 상황</h3>
         <div className="flex gap-2 overflow-x-auto pb-2 justify-center min-h-[120px] items-center">
           {cs.battlefields.map((bf) => (
-            <div key={bf.id} className="relative scale-90"> {/* 크기를 약간 줄여서 점수판과 어울리게 */}
+            <div key={bf.id} className="relative scale-90">
                <BattlefieldSlot
                   bf={bf}
-                  isAttackerTurn={false} // 전투가 끝났으므로 턴 무관
+                  isAttackerTurn={false}
                   onFaceCard={() => {}}
                 />
             </div>
@@ -441,7 +451,6 @@ function ScoringPhase() {
       </div>
 
       <div className="grid grid-cols-2 gap-8">
-
         <div className="bg-slate-800 rounded-lg p-4 text-center relative group cursor-help">
           <h3 className="text-lg font-semibold text-red-400 mb-2">
             ⚔️ {attackerPlayer.name} (공격)
@@ -453,7 +462,7 @@ function ScoringPhase() {
             <CombatScoreTooltip 
               baseScore={cs.attackerFinalScore - cs.attackerCombatBonus - cs.attackerCityDefenseBonus}
               combatBonus={cs.attackerCombatBonus}
-              defenseBonus={cs.attackerCityDefenseBonus} // 전달
+              defenseBonus={cs.attackerCityDefenseBonus}
               label="공격자"
             />
           </div>
@@ -461,7 +470,7 @@ function ScoringPhase() {
 
         <div className="bg-slate-800 rounded-lg p-4 text-center">
           <h3 className="text-lg font-semibold text-blue-400 mb-2">
-            🛡️ {defenderPlayer.name} (방어)
+            🛡️ {defenderName} (방어)
           </h3>
           <div className="text-3xl font-bold text-white mb-2">{cs.defenderFinalScore}</div>
           <div className="text-xs text-slate-400 space-y-1">
@@ -500,6 +509,7 @@ function LootPhase() {
   const winnerPlayer = players.find((p) => p.id === cs.winnerPlayerId);
   const loserPlayer = players.find((p) => p.id === cs.loserPlayerId);
 
+  // [수정] 마을 승패 시 전리품 단계가 없어야 하지만, 혹시 진입하더라도 에러 방지
   if (!winnerPlayer || !loserPlayer) return null;
 
   const remaining = cs.maxLootSelections - cs.lootSelections.length;
@@ -576,7 +586,6 @@ function LootPhase() {
           </button>
           </div>
         </div>
-        
       )}
     </motion.div>
   );
@@ -649,7 +658,8 @@ export function CombatPanel() {
   const originalMover = players.find((p) => p.id === cs.originalMoverId);
   const originalDefender = players.find((p) => p.id === cs.originalDefenderId);
 
-  if (!attackerPlayer || !defenderPlayer) {
+  // [수정] 방어자가 없어도 렌더링되도록 attackerPlayer만 체크
+  if (!attackerPlayer) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <p className="text-white">전투 정보를 불러올 수 없습니다.</p>
@@ -659,6 +669,10 @@ export function CombatPanel() {
       </div>
     );
   }
+  
+  // [수정] 이름 안전하게 가져오기
+  const originalMoverName = originalMover ? originalMover.name : '알 수 없음';
+  const originalDefenderName = originalDefender ? originalDefender.name : '원주민 마을';
 
   const combatTypeLabel =
     cs.combatType === 'capital' ? '수도 전투' :
@@ -671,7 +685,7 @@ export function CombatPanel() {
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-amber-500 mb-2">전투!</h1>
           <p className="text-slate-400">
-            {originalMover?.name} vs {originalDefender?.name}
+            {originalMoverName} vs {originalDefenderName}
           </p>
           <span className={clsx(
             'inline-block mt-2 px-3 py-1 rounded text-sm font-semibold',

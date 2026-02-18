@@ -48,6 +48,9 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
         hasCollectedTrade: false,
         hasResearchedThisTurn: false,
         luxuryResources: createInitialLuxuryResources(),
+        spies: 0,
+        greatPeople: 0,
+        nuclearMaterial: 0,
       });
     }
     const capitalOptions: Position[][] = [];

@@ -24,6 +24,7 @@ export function PlayerPanel() {
 
       {players.map((player, index) => {
         const isCurrentPlayer = index === currentPlayerIndex;
+        const isMe = index === currentPlayerIndex;
         const govEffect = player.government ? GOVERNMENT_EFFECTS[player.government] : null;
 
         return (
@@ -61,6 +62,17 @@ export function PlayerPanel() {
                 <span className="text-slate-300">생산: {player.resources.production}</span>
               </div>
             </div>
+            
+            <div className="flex gap-2 mt-2 text-xs bg-black/20 p-1 rounded">
+               <span title="위인" className="text-slate-300">🗿 {player.greatPeople}</span>
+               {isMe && (
+                 <>
+                   <span title="스파이" className="text-slate-300 ml-2">🕵️ {player.spies}</span>
+                   <span title="핵 자원" className="text-slate-300 ml-2">☢️ {player.nuclearMaterial}</span>
+                 </>
+               )}
+            </div>
+
             <div className="mt-2 pt-2 border-t border-slate-600/50">
               <div className="text-xs text-slate-400 mb-1">보유 사치품</div>
               <div className="flex gap-2 flex-wrap">

@@ -166,6 +166,15 @@ export function TileComponent({ tile, isSelected, onClick }: TileComponentProps)
           {tile.unitIds.length}
         </span>
       )}
+      
+      {/* [추가] 오두막/마을 렌더링 */}
+      {tile.object && !tile.cityId && (
+        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+          <span className="text-2xl filter drop-shadow-md animate-pulse">
+            {tile.object.type === 'hut' ? '🛖' : '⛺'}
+          </span>
+        </div>
+      )}
 
       {/* [수정] 건물/자원 미니 아이콘 (도시/유닛에 가려질 때) */}
       {/* 건물이 있으면 건물 아이콘, 없으면 자원 아이콘 */}

@@ -1,8 +1,9 @@
 import { StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
-import { Position, UnitType, createUnit, BASE_STACKING_LIMIT } from '../../types';
+import { Position, UnitType, createUnit, BASE_STACKING_LIMIT, createInitialLuxuryResources, RewardType } from '../../types';
 import { findPlayerById } from '../helpers/playerHelpers';
+import { GameSlice } from '../types/storeTypes';
 
 export interface UnitSlice {
   createUnit: (playerId: string, type: UnitType, position: Position) => void;
@@ -10,6 +11,7 @@ export interface UnitSlice {
   removeUnit: (unitId: string) => void;
   moveSelectedUnits: (newPosition: Position) => void;
   exploreChunk: (unitId: string, targetChunkPos: Position) => void;
+  claimObjectReward: (playerId: string, reward: RewardType) => void;
 }
 
 export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]], [], UnitSlice> = (set, get) => ({
@@ -119,7 +121,64 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       get().startCombat(currentPlayer.id, newPosition);
       return;
     }
-    
+    if (targetTile.object) {
+        const obj = targetTile.object;
+        
+        // 1. 오두막 (Hut)
+        if (obj.type === 'hut') {
+            const isMilitary = unit.type === 'military';
+            const isSettler = unit.type === 'settler';
+            const isRepublic = currentPlayer.government === 'republic';
+
+            if (isMilitary || (isSettler && isRepublic)) {
+                // 획득 성공 -> 이동 및 보상 지급
+                // 여기서 set을 호출하여 상태 업데이트
+                set(s => {
+                    const p = s.players.find(pl => pl.id === currentPlayer.id);
+                    const u = p?.units.find(un => un.id === unitId);
+                    if (p && u) {
+                        // 보상 지급 (claimObjectReward 로직 인라인 또는 호출)
+                        // 여기서는 직접 로직 구현
+                        if (obj.reward.type === 'resource') {
+                            if (!p.luxuryResources) p.luxuryResources = createInitialLuxuryResources();
+                            if (p.luxuryResources[obj.reward.resource] !== undefined) {
+                                p.luxuryResources[obj.reward.resource] += 1;
+                            }
+                        } else if (obj.reward.type === 'spy') p.spies += 1;
+                        else if (obj.reward.type === 'greatPerson') p.greatPeople += 1;
+                        else if (obj.reward.type === 'nuclear') p.nuclearMaterial += 1;
+
+                        // 객체 제거
+                        s.map.tiles[newPosition.y][newPosition.x].object = undefined;
+                        
+                        // 유닛 이동 처리
+                        const oldTile = s.map.tiles[u.position.y][u.position.x];
+                        oldTile.unitIds = oldTile.unitIds.filter(id => id !== unitId);
+                        s.map.tiles[newPosition.y][newPosition.x].unitIds.push(unitId);
+                        
+                        u.position = newPosition;
+                        u.movement = 0; // 즉시 종료
+                        u.hasMoved = true;
+                    }
+                });
+                return;
+            } else {
+                alert("오두막은 군사 유닛 또는 공화제일 때의 개척자만 진입할 수 있습니다.");
+                return; // 진입 불가
+            }
+        }
+
+        // 2. 마을 (Village)
+        if (obj.type === 'village') {
+            if (unit.type !== 'military') {
+                alert("마을은 군사 유닛으로만 진입할 수 있습니다.");
+                return;
+            }
+            // 전투 시작
+            get().startVillageCombat(unitId, newPosition);
+            return; // 이동 중단
+        }
+    }
     set((s) => {
       for (const player of s.players) {
         const u = player.units.find((u) => u.id === unitId);
@@ -243,4 +302,19 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       }
     });
   },
+
+  claimObjectReward: (playerId, reward) => {
+      set(state => {
+          const player = state.players.find(p => p.id === playerId);
+          if (!player) return;
+          if (reward.type === 'resource') {
+              if (!player.luxuryResources) player.luxuryResources = createInitialLuxuryResources();
+              if (player.luxuryResources[reward.resource] !== undefined) {
+                  player.luxuryResources[reward.resource] += 1;
+              }
+          } else if (reward.type === 'spy') player.spies += 1;
+          else if (reward.type === 'greatPerson') player.greatPeople += 1;
+          else if (reward.type === 'nuclear') player.nuclearMaterial += 1;
+      });
+  }
 });

@@ -14,6 +14,17 @@ export type TerrainType =
 
 export type ResourceType = 'spice' | 'wheat' | 'silk' | 'iron' | 'none';
 
+export type RewardType = 
+  | { type: 'resource'; resource: Exclude<ResourceType, 'none'> }
+  | { type: 'spy' }
+  | { type: 'greatPerson' }
+  | { type: 'nuclear' };
+
+export interface TileObject {
+  type: 'hut' | 'village';
+  reward: RewardType;
+}
+
 export interface Tile {
   id: string;
   position: Position;
@@ -25,6 +36,7 @@ export interface Tile {
   ownerId: string | null;
   isExplored: boolean;
   isVisible: boolean;
+  object?: TileObject;
 }
 
 export interface GameMap {
