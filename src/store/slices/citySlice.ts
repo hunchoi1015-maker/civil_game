@@ -7,6 +7,8 @@ import { calculateCityProduction, calculateCityCulture } from '../../engine/Reso
 import { findPlayerById } from '../helpers/playerHelpers';
 import { setAdjacentTilesOwner } from '../helpers/mapHelpers';
 import { ResourceType } from '../../types/map'; // ResourceType 추가
+import { WonderType, WONDERS } from '../../types/wonder';
+
 
 export interface CitySlice {
   foundCity: (playerId: string, position: Position, name: string) => void;
@@ -15,6 +17,7 @@ export interface CitySlice {
   // [수정] 자원 타입을 인자로 받도록 변경
   harvestResource: (playerId: string, cityId: string, targetResource: ResourceType) => void;
   setProduction: (cityId: string, itemType: string, itemId: string) => void;
+  constructWonder: (cityId: string, wonderType: WonderType, tilePos: Position) => void;
 }
 
 export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]], [], CitySlice> = (set) => ({
@@ -110,9 +113,42 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       
       const cityCulture = calculateCityCulture(city, state.map);
       if (cityCulture > 0) {
-        player.cultureTrack += cityCulture;
+        // [수정된 부분] 트랙(cultureTrack)이 아니라 보유 자원(resources.culture)을 증가
+        // 최대 한도인 50까지만 저장되도록 Math.min 적용
+        player.resources.culture = Math.min(player.resources.culture + cityCulture, 50);
         city.hasActedThisTurn = true;
       }
+    });
+  },
+
+  // [신규] 불가사의 건설 (즉시 배치)
+  constructWonder: (cityId: string, wonderType: WonderType, tilePos: Position) => {
+    set((state) => {
+        const player = state.players[state.currentPlayerIndex];
+        const city = player.cities.find(c => c.id === cityId);
+        if (!city) return;
+        
+        const wonderDef = WONDERS[wonderType];
+        if (player.resources.production < wonderDef.cost) return; // 비용 체크
+
+        // 타일 유효성 검사
+        const tile = state.map.tiles[tilePos.y][tilePos.x];
+        
+        // 1. 물 타일 불가
+        if (tile.terrain === 'water') return;
+        
+        // 2. 이미 건물/불가사의/도시가 있는 경우 불가
+        if (tile.buildingType || tile.cityId || tile.wonder) return;
+
+        // 3. 도시 주변 8칸 이내 (거리 1)
+        const dx = Math.abs(city.position.x - tilePos.x);
+        const dy = Math.abs(city.position.y - tilePos.y);
+        if (dx > 1 || dy > 1) return;
+
+        // 건설 실행
+        player.resources.production -= wonderDef.cost;
+        tile.wonder = { type: wonderType };
+        tile.ownerId = player.id; // 불가사의 타일 소유권 확실히
     });
   },
 

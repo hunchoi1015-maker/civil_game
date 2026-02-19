@@ -3,6 +3,7 @@ import { useGameStore } from '../../../store/gameStore';
 import { calculateTileYield } from '../../../engine/ResourceCalculator';
 import clsx from 'clsx';
 import { BUILDINGS } from '../../../constants/buildings'; // 건물 정보 가져오기
+import { WONDERS } from '../../../types/wonder';
 
 interface TileComponentProps {
   tile: Tile;
@@ -185,6 +186,14 @@ export function TileComponent({ tile, isSelected, onClick }: TileComponentProps)
             : (tile.resource !== 'none' ? RESOURCE_ICONS[tile.resource] : '')}
         </span>
       )}
+
+      {tile.wonder && (
+    <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+        <span className="text-3xl filter drop-shadow-lg" title={WONDERS[tile.wonder.type].name}>
+            🗽
+        </span>
+    </div>
+    )}
 
       {/* 적 유닛 경고 */}
       {hasEnemyUnits && (

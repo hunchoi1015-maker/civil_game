@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'; // useMemo 추가
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../../../store/gameStore';
 import { City, UnitType, UNIT_DEFINITIONS, Position, TERRAIN_PROPERTIES, BuildingDefinition, TerrainType } from '../../../types';
@@ -9,8 +9,9 @@ import clsx from 'clsx';
 import { ResourceType } from '../../../types/map';
 import { getNextStepCost, CULTURE_TRACK_MAX } from '../../../constants/culture';
 import { CultureTrackModal } from '../CultureTrackModal';
+import { WONDERS, WonderType, WonderDefinition } from '../../../types/wonder'; 
 
-type ProductionTab = 'buildings' | 'units' | 'armyCards';
+type ProductionTab = 'buildings' | 'units' | 'armyCards' | 'wonders';
 
 interface ArmyCardProductionModalProps {
   template: ArmyCardTemplate;
@@ -34,7 +35,14 @@ const RESOURCE_ICONS: Record<ResourceType, string> = {
   none: '',
 };
 
-// ... (ArmyCardProductionModal, BuildingLocationModal 등 기존 모달 코드는 동일하게 유지)
+const TERRAIN_COLORS: Record<string, string> = {
+  grassland: 'bg-green-600',
+  forest: 'bg-green-800',
+  mountain: 'bg-stone-500',
+  desert: 'bg-yellow-600',
+  water: 'bg-blue-500',
+};
+
 function ArmyCardProductionModal({ template, onSelect, onClose }: ArmyCardProductionModalProps) {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
@@ -56,10 +64,7 @@ function ArmyCardProductionModal({ template, onSelect, onClose }: ArmyCardProduc
             </button>
           ))}
         </div>
-        <button
-          onClick={onClose}
-          className="mt-4 w-full py-2 bg-slate-600 text-slate-300 rounded-lg hover:bg-slate-500"
-        >
+        <button onClick={onClose} className="mt-4 w-full py-2 bg-slate-600 text-slate-300 rounded-lg hover:bg-slate-500">
           취소
         </button>
       </div>
@@ -67,28 +72,20 @@ function ArmyCardProductionModal({ template, onSelect, onClose }: ArmyCardProduc
   );
 }
 
-interface BuildingLocationModalProps {
-  building: BuildingDefinition;
+interface LocationModalProps {
+  name: string;
   city: City;
   onSelect: (position: Position) => void;
   onClose: () => void;
+  isWonder?: boolean;
 }
 
-const TERRAIN_COLORS: Record<string, string> = {
-  grassland: 'bg-green-600',
-  forest: 'bg-green-800',
-  mountain: 'bg-stone-500',
-  desert: 'bg-yellow-600',
-  water: 'bg-blue-500',
-};
-
-function BuildingLocationModal({ building, city, onSelect, onClose }: BuildingLocationModalProps) {
+function LocationModal({ name, city, onSelect, onClose, isWonder = false }: LocationModalProps) {
   const { map } = useGameStore();
 
   const getAdjacentTiles = () => {
     if (!map) return []; 
-
-    const tiles: { position: Position; isValid: boolean; terrain: string; hasBuilding: boolean }[] = [];
+    const tiles: { position: Position; isValid: boolean; terrain: string; hasBuilding: boolean; hasWonder: boolean }[] = [];
     const directions = [
       { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
       { x: -1, y: 0 },  { x: 0, y: 0 },  { x: 1, y: 0 },
@@ -102,20 +99,20 @@ function BuildingLocationModal({ building, city, onSelect, onClose }: BuildingLo
       if (x >= 0 && x < map.width && y >= 0 && y < map.height) {
         const tile = map.tiles[y][x];
         const isCenter = dir.x === 0 && dir.y === 0;
-        const isValid = !tile.buildingType &&
-          tile.terrain !== 'water' &&
-          tile.terrain !== 'mountain' &&
-          tile.ownerId === city.ownerId;
+        
+        let isValid = !tile.buildingType && !tile.wonder && tile.terrain !== 'water' && tile.terrain !== 'mountain' && tile.ownerId === city.ownerId;
+        if (isWonder && isCenter) isValid = false;
+        if (!isWonder && isCenter) isValid = true;
 
         tiles.push({
           position: { x, y },
-          isValid: isCenter || isValid,
+          isValid,
           terrain: tile.terrain,
           hasBuilding: !!tile.buildingType || (isCenter && city.buildings.length > 0),
+          hasWonder: !!tile.wonder,
         });
       }
     }
-
     return tiles;
   };
 
@@ -124,7 +121,7 @@ function BuildingLocationModal({ building, city, onSelect, onClose }: BuildingLo
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-slate-800 rounded-lg p-6" onClick={e => e.stopPropagation()}>
-        <h3 className="text-white text-lg font-semibold mb-2">{building.name} 건설 위치 선택</h3>
+        <h3 className="text-white text-lg font-semibold mb-2">{name} 건설 위치 선택</h3>
         <p className="text-slate-400 text-sm mb-4">도시 주변 타일 중 건설할 위치를 선택하세요</p>
 
         <div className="grid grid-cols-3 gap-1 mb-4">
@@ -136,17 +133,16 @@ function BuildingLocationModal({ building, city, onSelect, onClose }: BuildingLo
                 onClick={() => tile.isValid && onSelect(tile.position)}
                 disabled={!tile.isValid}
                 className={clsx(
-                  'w-16 h-16 rounded flex flex-col items-center justify-center text-xs transition-all',
+                  'w-16 h-16 rounded flex flex-col items-center justify-center text-xs transition-all relative',
                   TERRAIN_COLORS[tile.terrain],
-                  tile.isValid
-                    ? 'hover:ring-2 hover:ring-amber-400 cursor-pointer'
-                    : 'opacity-40 cursor-not-allowed',
+                  tile.isValid ? 'hover:ring-2 hover:ring-amber-400 cursor-pointer' : 'opacity-40 cursor-not-allowed',
                   isCenter && 'ring-2 ring-white'
                 )}
               >
-                {isCenter && <span className="text-lg">🏛️</span>}
-                {tile.hasBuilding && !isCenter && <span className="text-lg">🏗️</span>}
-                <span className="text-[10px] text-white/80">
+                {isCenter && <span className="text-lg z-10">🏛️</span>}
+                {tile.hasBuilding && !isCenter && <span className="text-lg z-10">🏗️</span>}
+                {tile.hasWonder && <span className="text-lg z-10">🗽</span>}
+                <span className="text-[10px] text-white/80 z-10 mt-1">
                   {TERRAIN_PROPERTIES[tile.terrain as TerrainType]?.name || tile.terrain}
                 </span>
               </button>
@@ -154,15 +150,13 @@ function BuildingLocationModal({ building, city, onSelect, onClose }: BuildingLo
           })}
         </div>
 
-        <div className="text-xs text-slate-500 mb-4">
-          <p>🏛️ = 도시 중앙 | 🏗️ = 이미 건물 있음</p>
-          <p>어두운 타일 = 건설 불가 (물/산/소유권 없음)</p>
+        {/* [복구] 아이콘 및 색상 범례 설명 */}
+        <div className="text-xs text-slate-500 mb-4 text-center">
+          <p>🏛️ = 도시 중앙 | 🏗️ = 지어진 건물 | 🗽 = 불가사의</p>
+          <p>어두운 타일 = 건설 불가 (물/산/소유권 없음/이미 지어짐)</p>
         </div>
 
-        <button
-          onClick={onClose}
-          className="w-full py-2 bg-slate-600 text-slate-300 rounded-lg hover:bg-slate-500"
-        >
+        <button onClick={onClose} className="w-full py-2 bg-slate-600 text-slate-300 rounded-lg hover:bg-slate-500">
           취소
         </button>
       </div>
@@ -175,7 +169,7 @@ export interface CityPanelProps {
   onClose?: () => void;
 }
 
-export function CityPanel() {
+export function CityPanel({ city: initialCity }: CityPanelProps) {
   const { 
     players, 
     currentPlayerIndex, 
@@ -185,41 +179,37 @@ export function CityPanel() {
     produceArmyCard, 
     harvestCityCulture, 
     harvestResource, 
+    constructWonder,
     map, 
     advanceCultureTrack
   } = useGameStore();
   
   const currentPlayer = players[currentPlayerIndex];
-  const [selectedCityId, setSelectedCityId] = useState<string | null>(
-    currentPlayer.cities[0]?.id || null
-  );
+  
+  const [selectedCityId, setSelectedCityId] = useState<string | null>(initialCity?.id || currentPlayer.cities[0]?.id || null);
   const selectedCity = currentPlayer.cities.find(c => c.id === selectedCityId) || null;
+  
   const [productionTab, setProductionTab] = useState<ProductionTab>('buildings');
   const [selectedArmyTemplate, setSelectedArmyTemplate] = useState<ArmyCardTemplate | null>(null);
   const [selectedBuildingToBuild, setSelectedBuildingToBuild] = useState<BuildingDefinition | null>(null);
+  const [selectedWonderToBuild, setSelectedWonderToBuild] = useState<WonderDefinition | null>(null);
+  const [showCultureModal, setShowCultureModal] = useState(false);
 
   const canManageCity = currentPhase === 'cityManagement';
   const isOwner = selectedCity?.ownerId === currentPlayer.id;
-  const [showCultureModal, setShowCultureModal] = useState(false);
 
-  // [수정] 주변 자원 스캔 로직 (useMemo로 최적화)
   const availableResources = useMemo(() => {
     if (!selectedCity || !map) return [];
-    
     const resources = new Set<ResourceType>();
     const cx = selectedCity.position.x;
     const cy = selectedCity.position.y;
-
-    // 3x3 범위 탐색
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
         const nx = cx + dx;
         const ny = cy + dy;
         if (nx >= 0 && nx < map.width && ny >= 0 && ny < map.height) {
           const t = map.tiles[ny][nx];
-          if (t.resource !== 'none') {
-            resources.add(t.resource);
-          }
+          if (t.resource !== 'none') resources.add(t.resource);
         }
       }
     }
@@ -228,14 +218,33 @@ export function CityPanel() {
 
   const researchedTechIds = currentPlayer.technologies.map((t) => t.id);
   const existingBuildingTypes = selectedCity?.buildings.map(b => b.type) || [];
-  const availableBuildings = getAvailableBuildings(researchedTechIds, existingBuildingTypes);
+  const availableBuildings = getAvailableBuildings(researchedTechIds, existingBuildingTypes).filter(b => !b.isWonder);
   const availableArmyCards = getAvailableArmyCards(researchedTechIds);
 
   const militaryCount = currentPlayer.units.filter((u) => u.type === 'military').length;
   const settlerCount = currentPlayer.units.filter((u) => u.type === 'settler').length;
 
   const selectedCityProduction = (selectedCity && map) ? calculateCityProduction(selectedCity, map) : 0;
-  const selectedCityCulture = (selectedCity && map) ? calculateCityCulture(selectedCity, map) : 0;
+  
+  // 불가사의 수확량 계산
+  let wonderCulture = 0;
+  if (selectedCity && map) {
+     const cx = selectedCity.position.x;
+     const cy = selectedCity.position.y;
+     for (let dy = -1; dy <= 1; dy++) {
+       for (let dx = -1; dx <= 1; dx++) {
+         const nx = cx + dx;
+         const ny = cy + dy;
+         if (nx >= 0 && nx < map.width && ny >= 0 && ny < map.height) {
+           const t = map.tiles[ny][nx];
+           if (t.ownerId === currentPlayer.id && t.wonder) {
+               wonderCulture += WONDERS[t.wonder.type].cultureProduction;
+           }
+         }
+       }
+     }
+  }
+  const selectedCityCulture = (selectedCity && map) ? calculateCityCulture(selectedCity, map) + wonderCulture : 0;
 
   const nextCultureCost = getNextStepCost(currentPlayer.cultureTrack);
   const canAdvanceCulture = 
@@ -244,23 +253,21 @@ export function CityPanel() {
     currentPlayer.cultureTrack < CULTURE_TRACK_MAX;
 
   const handleBuild = (building: BuildingDefinition) => {
-    if (!canManageCity) {
-      alert('도시 경영 단계에서만 건물을 건설할 수 있습니다.');
+    if (!canManageCity || selectedCity?.hasActedThisTurn) return;
+    if (selectedCityProduction < building.productionCost) {
+      alert(`생산력이 부족합니다. (현재: ${selectedCityProduction}, 필요: ${building.productionCost})`);
       return;
     }
-    if (selectedCity?.hasActedThisTurn) {
-      alert('이 도시는 이번 턴에 이미 행동했습니다.');
-      return;
-    }
+    setSelectedBuildingToBuild(building);
+  };
 
-    if (selectedCity && map) {
-      const currentProduction = calculateCityProduction(selectedCity, map);
-      if (currentProduction < building.productionCost) {
-        alert(`생산력이 부족합니다. (현재: ${currentProduction}, 필요: ${building.productionCost})`);
-        return;
-      }
-      setSelectedBuildingToBuild(building);
+  const handleBuildWonder = (wonder: WonderDefinition) => {
+    if (!canManageCity || selectedCity?.hasActedThisTurn) return;
+    if (selectedCityProduction < wonder.cost) {
+      alert(`생산력이 부족합니다. (현재: ${selectedCityProduction}, 필요: ${wonder.cost})`);
+      return;
     }
+    setSelectedWonderToBuild(wonder);
   };
 
   const handleBuildAtLocation = (position: Position) => {
@@ -270,93 +277,38 @@ export function CityPanel() {
     }
   };
 
+  const handleWonderAtLocation = (position: Position) => {
+    if (selectedCity && selectedWonderToBuild) {
+      constructWonder(selectedCity.id, selectedWonderToBuild.type, position);
+      selectedCity.hasActedThisTurn = true; 
+      setSelectedWonderToBuild(null);
+    }
+  };
+
   const handleProduceUnit = (type: UnitType) => {
-    if (!canManageCity) {
-      alert('도시 경영 단계에서만 유닛을 생산할 수 있습니다.');
-      return;
-    }
-    if (!selectedCity) return;
-    if (selectedCity.hasActedThisTurn) {
-      alert('이 도시는 이번 턴에 이미 행동했습니다.');
-      return;
-    }
-
+    if (!canManageCity || !selectedCity || selectedCity.hasActedThisTurn) return;
     const def = UNIT_DEFINITIONS[type];
-    if (map) {
-      const currentProduction = calculateCityProduction(selectedCity, map);
-      if (currentProduction < def.productionCost) {
-        alert(`생산력이 부족합니다. (현재: ${currentProduction}, 필요: ${def.productionCost})`);
-        return;
-      }
-    }
-
-    if (type === 'military' && militaryCount >= 6) {
-      alert('군사 유닛은 최대 6개까지만 생산할 수 있습니다.');
-      return;
-    }
-    if (type === 'settler' && settlerCount >= 2) {
-      alert('개척자는 최대 2개까지만 생산할 수 있습니다.');
-      return;
-    }
-
+    if (selectedCityProduction < def.productionCost) return alert('생산력이 부족합니다.');
+    if (type === 'military' && militaryCount >= 6) return alert('군사 유닛 한도 도달.');
+    if (type === 'settler' && settlerCount >= 2) return alert('개척자 한도 도달.');
     createUnit(currentPlayer.id, type, selectedCity.position);
   };
 
   const handleProduceArmyCard = (attack: number, health: number) => {
-    if (!canManageCity) {
-      alert('도시 경영 단계에서만 부대 카드를 생산할 수 있습니다.');
-      return;
-    }
-    if (!selectedArmyTemplate) return;
-    if (selectedCity?.hasActedThisTurn) {
-      alert('이 도시는 이번 턴에 이미 행동했습니다.');
-      setSelectedArmyTemplate(null);
-      return;
-    }
-
-    if (selectedCity && map) {
-       const currentProduction = calculateCityProduction(selectedCity, map);
-       if (currentProduction < selectedArmyTemplate.productionCost) {
-         alert(`생산력이 부족합니다. (현재: ${currentProduction}, 필요: ${selectedArmyTemplate.productionCost})`);
-         return;
-       }
-    }
-
-    produceArmyCard(
-      currentPlayer.id,
-      selectedArmyTemplate.type,
-      selectedArmyTemplate.tier,
-      attack,
-      health,
-      selectedArmyTemplate.name,
-      selectedCity?.id
-    );
+    if (!selectedCity) return;
+    if (!canManageCity || !selectedArmyTemplate || selectedCity?.hasActedThisTurn) return;
+    if (selectedCityProduction < selectedArmyTemplate.productionCost) return alert('생산력이 부족합니다.');
+    produceArmyCard(currentPlayer.id, selectedArmyTemplate.type, selectedArmyTemplate.tier, attack, health, selectedArmyTemplate.name, selectedCity.id);
     setSelectedArmyTemplate(null);
   };
 
   const handleHarvestCulture = () => {
-    if (!canManageCity) {
-      alert('도시 경영 단계에서만 문화를 수확할 수 있습니다.');
-      return;
-    }
-    if (!selectedCity) return;
-    if (selectedCity.hasActedThisTurn) {
-      alert('이 도시는 이번 턴에 이미 행동했습니다.');
-      return;
-    }
-    if (selectedCityCulture <= 0) {
-      alert('이 도시에서 수확할 문화가 없습니다.');
-      return;
-    }
+    if (!canManageCity || !selectedCity || selectedCity.hasHarvestedCulture) return;
     harvestCityCulture(currentPlayer.id, selectedCity.id);
   };
 
-  // [수정] 자원 수확 핸들러 (자원 타입을 인자로 받음)
   const handleHarvestResource = (resource: ResourceType) => {
-    if (!canManageCity) return;
-    if (!selectedCity) return;
-    if (selectedCity.hasActedThisTurn) return;
-    
+    if (!canManageCity || !selectedCity || selectedCity.hasActedThisTurn || !isOwner) return;
     harvestResource(currentPlayer.id, selectedCity.id, resource);
   };
 
@@ -366,45 +318,44 @@ export function CityPanel() {
 
   return (
     <div className="flex gap-6">
-      {selectedArmyTemplate && (
-        <ArmyCardProductionModal template={selectedArmyTemplate} onSelect={handleProduceArmyCard} onClose={() => setSelectedArmyTemplate(null)} />
-      )}
+      {selectedArmyTemplate && <ArmyCardProductionModal template={selectedArmyTemplate} onSelect={handleProduceArmyCard} onClose={() => setSelectedArmyTemplate(null)} />}
+      
       {selectedBuildingToBuild && selectedCity && (
-        <BuildingLocationModal building={selectedBuildingToBuild} city={selectedCity} onSelect={handleBuildAtLocation} onClose={() => setSelectedBuildingToBuild(null)} />
+        <LocationModal name={selectedBuildingToBuild.name} city={selectedCity} onSelect={handleBuildAtLocation} onClose={() => setSelectedBuildingToBuild(null)} />
       )}
-      {/* 문화 트랙  */}
+
+      {selectedWonderToBuild && selectedCity && (
+        <LocationModal name={selectedWonderToBuild.name} city={selectedCity} onSelect={handleWonderAtLocation} onClose={() => setSelectedWonderToBuild(null)} isWonder={true} />
+      )}
+      
       {showCultureModal && <CultureTrackModal onClose={() => setShowCultureModal(false)} />}
+      
       {/* 도시 목록 */}
       <div className="w-64 space-y-2">
         <h3 className="text-lg font-semibold text-white mb-3">내 도시</h3>
-        {currentPlayer.cities.map((city) => {
-          const cityProduction = map ? calculateCityProduction(city, map) : 0;
-          return (
-            <button
-              key={city.id}
-              onClick={() => setSelectedCityId(city.id)}
-              className={clsx(
-                'w-full p-3 rounded-lg text-left transition-colors',
-                selectedCity?.id === city.id ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-              )}
-            >
-              <div className="font-medium flex items-center gap-2">
-                {city.isCapital && <span>👑</span>} {city.name}
-              </div>
-              <div className="text-sm opacity-75 mt-1">생산력: {cityProduction} | 건물: {city.buildings.length}</div>
-            </button>
-          );
-        })}
+        {currentPlayer.cities.map((city) => (
+          <button
+            key={city.id}
+            onClick={() => setSelectedCityId(city.id)}
+            className={clsx(
+              'w-full p-3 rounded-lg text-left transition-colors',
+              selectedCity?.id === city.id ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            )}
+          >
+            <div className="font-medium flex items-center gap-2">{city.isCapital && <span>👑</span>} {city.name}</div>
+            <div className="text-sm opacity-75 mt-1">생산력: {map ? calculateCityProduction(city, map) : 0} | 건물: {city.buildings.length}</div>
+          </button>
+        ))}
       </div>
 
       {/* 선택된 도시 상세 */}
       {selectedCity && (
-        <div className="flex-1">
+        <div className="flex-1 max-h-[80vh] overflow-y-auto pr-2">
           <div className="bg-slate-800 rounded-lg p-4 mb-4">
             <h3 className="text-xl font-semibold text-white mb-2">{selectedCity.isCapital && '👑 '}{selectedCity.name}</h3>
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div className="text-slate-300"><span className="text-orange-400">생산력:</span> {selectedCityProduction}</div>
-              <div className="text-slate-300"><span className="text-red-400">전투 보너스:</span> {selectedCity.combatBonus}</div>
+              <div className="text-slate-300"><span className="text-red-400">방어 보너스:</span> +{selectedCity.cityDefenseBonus}</div>
               <div className="text-slate-300"><span className="text-blue-400">성벽:</span> {selectedCity.hasWalls ? '있음' : '없음'}</div>
             </div>
             <div className="mt-3 pt-3 border-t border-slate-700 flex justify-between items-center text-sm">
@@ -414,138 +365,117 @@ export function CityPanel() {
                 </span>
             </div>
           </div>
+
           {/* 문화 트랙 버튼 */}
           {canManageCity && (
             <div className="bg-slate-800 rounded-lg p-4 mb-4 border border-purple-900/50 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-2 opacity-10 text-6xl">🎭</div>
-              
               <div className="flex justify-between items-center mb-3 relative z-10">
-                <h4 className="text-lg font-bold text-purple-400 flex items-center gap-2">
-                  <span>🎭</span> 문명 문화 수준
-                </h4>
-                <button 
-                  onClick={() => setShowCultureModal(true)}
-                  className="text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-300 transition-colors"
-                >
-                  전체 트랙 보기
-                </button>
+                <h4 className="text-lg font-bold text-purple-400 flex items-center gap-2"><span>🎭</span> 문명 문화 증진</h4>
+                <button onClick={() => setShowCultureModal(true)} className="text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-300">전체 트랙 보기</button>
               </div>
-              
               <div className="flex items-center justify-between bg-slate-900/50 p-3 rounded-lg relative z-10">
                 <div>
                   <div className="text-sm text-white mb-1">
-                    현재 트랙: <span className="font-bold text-purple-400 text-lg">{currentPlayer.cultureTrack}</span> 
-                    <span className="text-slate-500 text-xs"> / {CULTURE_TRACK_MAX}</span>
+                    현재 트랙: <span className="font-bold text-purple-400 text-lg">{currentPlayer.cultureTrack}</span> / {CULTURE_TRACK_MAX}
                   </div>
                   <div className="text-xs text-slate-400 flex items-center gap-2">
                     <span>다음 단계 비용:</span>
-                    <span className={clsx("font-bold flex items-center gap-1", currentPlayer.resources.culture >= nextCultureCost.culture ? "text-purple-300" : "text-red-400")}>
-                      <span>🎭</span> {nextCultureCost.culture}
-                    </span>
-                    <span className={clsx("font-bold flex items-center gap-1", currentPlayer.resources.trade >= nextCultureCost.trade ? "text-amber-300" : "text-red-400")}>
-                      <span>📦</span> {nextCultureCost.trade}
-                    </span>
+                    <span className={clsx("font-bold flex items-center gap-1", currentPlayer.resources.culture >= nextCultureCost.culture ? "text-purple-300" : "text-red-400")}>🎭 {nextCultureCost.culture}</span>
+                    <span className={clsx("font-bold flex items-center gap-1", currentPlayer.resources.trade >= nextCultureCost.trade ? "text-amber-300" : "text-red-400")}>📦 {nextCultureCost.trade}</span>
                   </div>
                 </div>
-                
-                <button
-                  onClick={advanceCultureTrack}
-                  disabled={!canAdvanceCulture}
-                  className={clsx(
-                    "px-5 py-2 rounded-lg text-sm font-bold transition-all shadow-lg",
-                    canAdvanceCulture 
-                      ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white transform hover:scale-105" 
-                      : "bg-slate-700 text-slate-500 cursor-not-allowed"
-                  )}
-                >
+                <button onClick={advanceCultureTrack} disabled={!canAdvanceCulture} className={clsx("px-5 py-2 rounded-lg text-sm font-bold shadow-lg", canAdvanceCulture ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white transform hover:scale-105" : "bg-slate-700 text-slate-500 cursor-not-allowed")}>
                   문화 증진
                 </button>
               </div>
             </div>
           )}
-          {/* [수정] 사치품 수확 섹션 (목록형 버튼) */}
+
+          {/* 사치품 수확 */}
           {availableResources.length > 0 && (
             <div className="bg-slate-800 rounded-lg p-4 mb-4 border border-amber-700/50">
-                <h4 className="text-lg font-bold text-amber-400 mb-3 flex items-center gap-2">
-                    <span>🌾</span> 사치품 수확 (주변 8칸)
-                </h4>
-                
+                <h4 className="text-lg font-bold text-amber-400 mb-3 flex items-center gap-2"><span>🌾</span> 사치품 수확 (주변 8칸)</h4>
                 <div className="flex flex-wrap gap-2">
                     {availableResources.map((resource) => (
-                        <button
-                            key={resource}
-                            onClick={() => handleHarvestResource(resource)}
-                            disabled={!isOwner || selectedCity.hasActedThisTurn || !canManageCity}
-                            className={clsx(
-                                'flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-colors border',
-                                (!isOwner || selectedCity.hasActedThisTurn || !canManageCity)
-                                    ? 'bg-slate-700 border-slate-600 opacity-50 cursor-not-allowed text-slate-400'
-                                    : 'bg-slate-700 border-amber-600 hover:bg-amber-900 text-white'
-                            )}
-                        >
+                        <button key={resource} onClick={() => handleHarvestResource(resource)} disabled={!isOwner || selectedCity.hasActedThisTurn || !canManageCity} className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold border', (!isOwner || selectedCity.hasActedThisTurn || !canManageCity) ? 'bg-slate-700 border-slate-600 opacity-50' : 'bg-slate-700 border-amber-600 hover:bg-amber-900 text-white')}>
                             <span className="text-lg">{RESOURCE_ICONS[resource]}</span>
                             <span>{RESOURCE_NAMES[resource]} (+1)</span>
                         </button>
                     ))}
                 </div>
-                <p className="text-xs text-slate-500 mt-2">
-                    * 사치품을 수확하면 이번 턴의 다른 행동(생산/건설)이 불가능합니다.
-                </p>
             </div>
           )}
 
+          {/* 문화 수확 */}
           {canManageCity && selectedCityCulture > 0 && (
-            <div className="bg-slate-800 rounded-lg p-4 mb-4">
-              <div className="flex items-center justify-between">
+            <div className="bg-slate-800 rounded-lg p-4 mb-4 flex justify-between items-center border border-purple-900/30">
                 <div>
-                  <h4 className="text-lg font-medium text-white">문화 수확</h4>
-                  <p className="text-sm text-purple-400 mt-1">
-                    이 도시에서 +{selectedCityCulture} 문화를 수확할 수 있습니다.
-                  </p>
+                  <h4 className="text-md font-bold text-purple-300">📜 문화 생산</h4>
+                  <p className="text-xs text-slate-400">도시와 주변 불가사의에서 문화를 수확합니다.</p>
                 </div>
-                <button
-                  onClick={handleHarvestCulture}
-                  disabled={selectedCity.hasActedThisTurn}
-                  className={clsx(
-                    'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-                    selectedCity.hasActedThisTurn
-                      ? 'bg-slate-700 opacity-40 cursor-not-allowed text-slate-400'
-                      : 'bg-purple-600 hover:bg-purple-500 text-white'
-                  )}
-                >
-                  문화 수확
+                <button onClick={handleHarvestCulture} disabled={selectedCity.hasHarvestedCulture} className={clsx('px-4 py-2 rounded-lg text-sm font-bold', selectedCity.hasHarvestedCulture ? 'bg-slate-700 opacity-50 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-500 text-white')}>
+                  +{selectedCityCulture} 획득
                 </button>
-              </div>
             </div>
           )}
 
+          {/* [복구] 건설된 건물 & 불가사의 목록 */}
           <div className="bg-slate-800 rounded-lg p-4 mb-4">
-            <h4 className="text-lg font-medium text-white mb-3">건설된 건물</h4>
-            {selectedCity.buildings.length === 0 ? (
-              <p className="text-slate-400">건설된 건물이 없습니다.</p>
+            <h4 className="text-lg font-medium text-white mb-3">건설된 건물 & 불가사의</h4>
+            {selectedCity.buildings.length === 0 && wonderCulture === 0 ? (
+              <p className="text-slate-400">건설된 건물이나 불가사의가 없습니다.</p>
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {selectedCity.buildings.map((building) => {
                   const def = BUILDINGS[building.type];
                   return (
-                    <div
-                      key={building.id}
-                      className="p-2 bg-slate-700 rounded text-sm"
-                    >
+                    <div key={building.id} className="p-2 bg-slate-700 rounded text-sm">
                       <div className="text-white font-medium">{def.name}</div>
                       <div className="text-slate-400 text-xs">{def.description}</div>
                     </div>
                   );
                 })}
+                {/* 맵에서 찾은 주변 불가사의 표시 */}
+                {(() => {
+                   const wondersInCity: WonderType[] = [];
+                   if (map) {
+                     const cx = selectedCity.position.x;
+                     const cy = selectedCity.position.y;
+                     for (let dy = -1; dy <= 1; dy++) {
+                       for (let dx = -1; dx <= 1; dx++) {
+                         const nx = cx + dx;
+                         const ny = cy + dy;
+                         if (nx >= 0 && nx < map.width && ny >= 0 && ny < map.height) {
+                           const t = map.tiles[ny][nx];
+                           if (t.ownerId === currentPlayer.id && t.wonder) {
+                               wondersInCity.push(t.wonder.type);
+                           }
+                         }
+                       }
+                     }
+                   }
+                   return wondersInCity.map((wType, idx) => {
+                     const wDef = WONDERS[wType];
+                     return (
+                        <div key={`wonder-${idx}`} className="p-2 bg-indigo-900/40 border border-indigo-700/50 rounded text-sm">
+                          <div className="text-indigo-300 font-bold flex items-center gap-1">🗽 {wDef.name}</div>
+                          <div className="text-slate-400 text-xs">{wDef.description}</div>
+                        </div>
+                     )
+                   });
+                })()}
               </div>
             )}
           </div>
 
+          {/* 생산 패널 */}
           <div className="bg-slate-800 rounded-lg p-4">
+            {/* [복구] 행동 불가 경고 메시지 */}
             {!canManageCity && (
               <div className="mb-4 p-3 bg-yellow-900/50 border border-yellow-600 rounded-lg">
                 <p className="text-yellow-400 text-sm">
-                  ⚠️ 도시 경영 단계에서만 건물 건설, 유닛 생산, 부대 카드 생산이 가능합니다.
+                  ⚠️ 도시 경영 단계에서만 건설 및 생산이 가능합니다.
                 </p>
               </div>
             )}
@@ -556,41 +486,30 @@ export function CityPanel() {
                 </p>
               </div>
             )}
+
             <div className="flex gap-2 mb-4">
-              <button
-                onClick={() => setProductionTab('buildings')}
-                className={clsx(
-                  'px-4 py-2 rounded-lg text-sm transition-colors',
-                  productionTab === 'buildings'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                )}
-              >
-                건물
-              </button>
-              <button
-                onClick={() => setProductionTab('units')}
-                className={clsx(
-                  'px-4 py-2 rounded-lg text-sm transition-colors',
-                  productionTab === 'units'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                )}
-              >
-                유닛
-              </button>
-              <button
-                onClick={() => setProductionTab('armyCards')}
-                className={clsx(
-                  'px-4 py-2 rounded-lg text-sm transition-colors',
-                  productionTab === 'armyCards'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                )}
-              >
-                부대 카드
-              </button>
+              <button onClick={() => setProductionTab('buildings')} className={clsx('px-4 py-2 rounded-lg text-sm', productionTab === 'buildings' ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600')}>건물</button>
+              <button onClick={() => setProductionTab('units')} className={clsx('px-4 py-2 rounded-lg text-sm', productionTab === 'units' ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600')}>유닛</button>
+              <button onClick={() => setProductionTab('armyCards')} className={clsx('px-4 py-2 rounded-lg text-sm', productionTab === 'armyCards' ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600')}>부대 카드</button>
+              <button onClick={() => setProductionTab('wonders')} className={clsx('px-4 py-2 rounded-lg text-sm font-bold', productionTab === 'wonders' ? 'bg-indigo-600 text-white' : 'bg-slate-700 text-indigo-300 hover:bg-slate-600')}>🗽 불가사의</button>
             </div>
+
+            {productionTab === 'wonders' && (
+              <div className="grid grid-cols-2 gap-2">
+                {Object.values(WONDERS).map((wonder) => {
+                  const canAfford = selectedCityProduction >= wonder.cost;
+                  const cityActed = selectedCity?.hasActedThisTurn ?? false;
+                  return (
+                    <motion.button key={wonder.type} whileHover={(canManageCity && canAfford && !cityActed) ? { scale: 1.02 } : {}} onClick={() => handleBuildWonder(wonder)} disabled={!canManageCity || !canAfford || cityActed} className={clsx('p-3 rounded-lg text-left transition-colors border border-indigo-900/50', (canManageCity && canAfford && !cityActed) ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-700 opacity-40 cursor-not-allowed')}>
+                      <div className="text-indigo-300 font-bold text-sm flex items-center gap-1">🗽 {wonder.name}</div>
+                      <div className="text-slate-400 text-xs mt-1">{wonder.description}</div>
+                      <div className="text-xs mt-1 text-purple-300">턴당 문화 +{wonder.cultureProduction}</div>
+                      <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>비용: {wonder.cost} {canAfford ? "" : "(부족)"}</div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            )}
 
             {productionTab === 'buildings' && (
               <div className="grid grid-cols-2 gap-2">
@@ -598,23 +517,10 @@ export function CityPanel() {
                   const canAfford = selectedCityProduction >= building.productionCost;
                   const cityActed = selectedCity?.hasActedThisTurn ?? false;
                   return (
-                    <motion.button
-                      key={building.type}
-                      whileHover={canManageCity && canAfford && !cityActed ? { scale: 1.02 } : {}}
-                      onClick={() => handleBuild(building)}
-                      disabled={!canManageCity || !canAfford || cityActed}
-                      className={clsx(
-                        'p-3 rounded-lg text-left transition-colors',
-                        (canManageCity && canAfford && !cityActed)
-                          ? 'bg-slate-700 hover:bg-slate-600'
-                          : 'bg-slate-700 opacity-40 cursor-not-allowed'
-                      )}
-                    >
+                    <motion.button key={building.type} whileHover={(canManageCity && canAfford && !cityActed) ? { scale: 1.02 } : {}} onClick={() => handleBuild(building)} disabled={!canManageCity || !canAfford || cityActed} className={clsx('p-3 rounded-lg text-left transition-colors', (canManageCity && canAfford && !cityActed) ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-700 opacity-40 cursor-not-allowed')}>
                       <div className="text-white font-medium text-sm">{building.name}</div>
                       <div className="text-slate-400 text-xs mt-1">{building.description}</div>
-                      <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>
-                        비용: {building.productionCost} {canAfford ? "" : "(부족)"}
-                      </div>
+                      <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>비용: {building.productionCost} {canAfford ? "" : "(부족)"}</div>
                     </motion.button>
                   );
                 })}
@@ -629,86 +535,39 @@ export function CityPanel() {
                 {(['military', 'settler'] as UnitType[]).map((unitType) => {
                   const def = UNIT_DEFINITIONS[unitType];
                   const currentCount = unitType === 'military' ? militaryCount : settlerCount;
-                  const maxCount = unitType === 'military' ? 6 : 2;
-                  const isMaxed = currentCount >= maxCount;
+                  const isMaxed = currentCount >= (unitType === 'military' ? 6 : 2);
                   const canAfford = selectedCityProduction >= def.productionCost;
                   const cityActed = selectedCity?.hasActedThisTurn ?? false;
                   const isDisabled = isMaxed || !canManageCity || !canAfford || cityActed;
-
                   return (
-                    <motion.button
-                      key={unitType}
-                      whileHover={!isDisabled ? { scale: 1.02 } : {}}
-                      onClick={() => handleProduceUnit(unitType)}
-                      disabled={isDisabled}
-                      className={clsx(
-                        'p-3 rounded-lg text-left transition-colors',
-                        isDisabled
-                          ? 'bg-slate-700 opacity-40 cursor-not-allowed'
-                          : 'bg-slate-700 hover:bg-slate-600'
-                      )}
-                    >
-                      <div className="text-white font-medium text-sm flex items-center gap-2">
-                        <span>{unitType === 'military' ? '⚔️' : '👷'}</span>
-                        {def.name}
-                      </div>
+                    <button key={unitType} onClick={() => handleProduceUnit(unitType)} disabled={isDisabled} className={clsx('p-3 rounded-lg text-left transition-colors', isDisabled ? 'bg-slate-700 opacity-40 cursor-not-allowed' : 'bg-slate-700 hover:bg-slate-600')}>
+                      <div className="text-white font-medium text-sm flex items-center gap-2"><span>{unitType === 'military' ? '⚔️' : '👷'}</span> {def.name}</div>
                       <div className="text-slate-400 text-xs mt-1">{def.description}</div>
-                      <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>
-                        비용: {def.productionCost} {canAfford ? "" : "(부족)"}
-                      </div>
-                      <div className="text-slate-400 text-xs mt-1">
-                        보유: {currentCount}/{maxCount}
-                      </div>
-                      {isMaxed && (
-                        <div className="text-red-400 text-xs mt-1">최대치 도달</div>
-                      )}
-                    </motion.button>
+                      <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>비용: {def.productionCost}</div>
+                      <div className="text-slate-400 text-xs mt-1">보유: {currentCount}/{(unitType === 'military' ? 6 : 2)}</div>
+                      {isMaxed && <div className="text-red-400 text-xs mt-1">최대치 도달</div>}
+                    </button>
                   );
                 })}
               </div>
             )}
-
+            
             {productionTab === 'armyCards' && (
-              <div className="grid grid-cols-2 gap-2">
-                {availableArmyCards.map((card) => {
-                  const cardIcon = {
-                    infantry: '🗡️',
-                    artillery: '💣',
-                    cavalry: '🐴',
-                    airforce: '✈️',
-                    settler:'',
-                  }[card.type];
-                  const canAfford = selectedCityProduction >= card.productionCost;
-                  const cityActed = selectedCity?.hasActedThisTurn ?? false;
-                  const isDisabled = !canManageCity || !canAfford || cityActed;
-
-                  return (
-                    <motion.button
-                      key={`${card.type}-${card.tier}`}
-                      whileHover={!isDisabled ? { scale: 1.02 } : {}}
-                      onClick={() => !isDisabled && setSelectedArmyTemplate(card)}
-                      disabled={isDisabled}
-                      className={clsx(
-                        'p-3 rounded-lg text-left transition-colors',
-                        isDisabled
-                          ? 'bg-slate-700 opacity-40 cursor-not-allowed'
-                          : 'bg-slate-700 hover:bg-slate-600'
-                      )}
-                    >
-                      <div className="text-white font-medium text-sm flex items-center gap-2">
-                        <span>{cardIcon}</span>
-                        {card.name}
-                      </div>
-                      <div className="text-slate-400 text-xs mt-1">
-                        Tier {card.tier} | 총 전투력: {card.totalCombatPower}
-                      </div>
-                      <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>
-                        비용: {card.productionCost} {canAfford ? "" : "(부족)"}
-                      </div>
-                    </motion.button>
-                  );
-                })}
-              </div>
+               <div className="grid grid-cols-2 gap-2">
+                 {availableArmyCards.map((card) => {
+                   const canAfford = selectedCityProduction >= card.productionCost;
+                   const cityActed = selectedCity?.hasActedThisTurn ?? false;
+                   const isDisabled = !canManageCity || !canAfford || cityActed;
+                   const cardIcon = { infantry: '🗡️', artillery: '💣', cavalry: '🐴', airforce: '✈️', settler: '' }[card.type];
+                   return (
+                     <button key={`${card.type}-${card.tier}`} onClick={() => !isDisabled && setSelectedArmyTemplate(card)} disabled={isDisabled} className={clsx('p-3 rounded-lg text-left', isDisabled ? 'bg-slate-700 opacity-40 cursor-not-allowed' : 'bg-slate-700 hover:bg-slate-600')}>
+                       <div className="text-white font-medium text-sm flex items-center gap-2"><span>{cardIcon}</span> {card.name}</div>
+                       <div className="text-slate-400 text-xs mt-1">Tier {card.tier} | 전투력: {card.totalCombatPower}</div>
+                       <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>비용: {card.productionCost}</div>
+                     </button>
+                   );
+                 })}
+               </div>
             )}
           </div>
         </div>

@@ -1,4 +1,5 @@
 import {BuildingType} from "./city";
+import { WonderType } from './wonder';
 
 export interface Position {
   x: number;
@@ -37,6 +38,7 @@ export interface Tile {
   isExplored: boolean;
   isVisible: boolean;
   object?: TileObject;
+  wonder?: { type: WonderType };
 }
 
 export interface GameMap {

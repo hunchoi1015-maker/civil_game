@@ -737,7 +737,9 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
                 resources: createInitialResources(), cities: [], units: [], armyCards: [], technologies: [], 
                 government: 'despotism', cultureTrack: 0, hasCapital: true, isEliminated: false, stackingLimitBonus: 0, hasCollectedTrade: false, hasResearchedThisTurn: false,
                 luxuryResources: createInitialLuxuryResources(),
-                spies: 0, greatPeople: 0, nuclearMaterial: 0
+                spies: 0, greatPeople: 0, nuclearMaterial: 0,
+                cultureEventCards: [],
+                pendingGreatPerson: false
             });
         }
         if (!state.players.find(p => p.id === devDefenderId)) {
@@ -746,7 +748,10 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
                 resources: createInitialResources(), cities: [], units: [], armyCards: [], technologies: [], 
                 government: 'despotism', cultureTrack: 0, hasCapital: true, isEliminated: false, stackingLimitBonus: 0, hasCollectedTrade: false, hasResearchedThisTurn: false,
                 luxuryResources: createInitialLuxuryResources(),
-                spies: 0, greatPeople: 0, nuclearMaterial: 0
+                spies: 0, greatPeople: 0, nuclearMaterial: 0,
+                cultureEventCards: [],
+                pendingGreatPerson: false
+
             });
         }
         state.combatState = {

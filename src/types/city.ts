@@ -14,6 +14,8 @@ export interface City {
   hasWalls: boolean;          // 성벽 건설 여부
   cityDefenseBonus: number;   // 도시 방어 보너스 (기본 + 성벽, 이 도시가 공격받을 때만 적용)
   hasActedThisTurn: boolean;
+
+  hasHarvestedCulture: boolean;
 }
 
 export interface Building {
@@ -43,6 +45,7 @@ export interface BuildingDefinition {
   requiredBuilding: BuildingType | null;
   allowedTerrain: string[] | null;
   maxPerCity: number;
+  isWonder?: boolean;
 }
 
 export interface BuildingEffect {
@@ -94,5 +97,6 @@ export function createCity(
     // 변경: 수도는 12, 일반 도시는 6으로 초기화
     cityDefenseBonus: isCapital ? CAPITAL_BASE_DEFENSE_BONUS : CITY_BASE_DEFENSE_BONUS, 
     hasActedThisTurn: false,
+    hasHarvestedCulture: false,
   };
 }
