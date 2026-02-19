@@ -43,8 +43,8 @@ export function PlayerPanel() {
               )}
             </div>
 
-            {/* 자원 */}
-            <div className="grid grid-cols-2 gap-1 text-sm">
+            {/* 기본 자원 */}
+            <div className="grid grid-cols-2 gap-1 text-sm mb-2">
               <div className="flex items-center gap-1">
                 <span className="text-amber-400">📦</span>
                 <span className="text-slate-300">교역: {player.resources.trade}/27</span>
@@ -54,16 +54,32 @@ export function PlayerPanel() {
                 <span className="text-slate-300">화폐: {player.resources.currency}/15</span>
               </div>
               <div className="flex items-center gap-1">
-                <span className="text-purple-400">🎭</span>
-                <span className="text-slate-300">문화: {player.cultureTrack}/20</span>
-              </div>
-              <div className="flex items-center gap-1">
                 <span className="text-orange-400">🔨</span>
                 <span className="text-slate-300">생산: {player.resources.production}</span>
               </div>
             </div>
+
+            {/* 🌟 문화 자원 시각화 (진행 게이지 바) 🌟 */}
+            <div className="mt-1 mb-3 bg-slate-800/80 p-2 rounded border border-purple-900/50">
+              <div className="flex justify-between items-center text-xs text-slate-300 mb-1.5">
+                <span className="flex items-center gap-1 font-semibold text-purple-300">
+                  <span>📜</span> 문화 자원
+                </span>
+                <span className="font-mono text-purple-200">
+                  {player.resources.culture || 0} <span className="text-slate-500">/ 50</span>
+                </span>
+              </div>
+              <div className="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden shadow-inner border border-slate-700/50">
+                <div 
+                  className="bg-gradient-to-r from-purple-700 to-purple-400 h-full rounded-full transition-all duration-500 relative" 
+                  style={{ width: `${Math.min(100, ((player.resources.culture || 0) / 50) * 100)}%` }}
+                >
+                  <div className="absolute top-0 right-0 bottom-0 left-0 bg-white/20 animate-pulse"></div>
+                </div>
+              </div>
+            </div>
             
-            <div className="flex gap-2 mt-2 text-xs bg-black/20 p-1 rounded">
+            <div className="flex gap-2 text-xs bg-black/20 p-1 rounded">
                <span title="위인" className="text-slate-300">🗿 {player.greatPeople}</span>
                {isMe && (
                  <>

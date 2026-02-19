@@ -16,6 +16,7 @@ export interface City {
   hasActedThisTurn: boolean;
 
   hasHarvestedCulture: boolean;
+  tempProductionBonus?: number;
 }
 
 export interface Building {

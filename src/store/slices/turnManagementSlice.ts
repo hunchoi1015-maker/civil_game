@@ -24,6 +24,7 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
         if (state.currentPhase === 'trade') {
           state.players.forEach((player) => {
             player.hasCollectedTrade = false;
+            
           });
         }
         if (state.currentPhase === 'movement') {
@@ -86,6 +87,7 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
           if (city.productionProgress >= city.currentProduction.cost) {
             city.productionProgress = 0;
             city.currentProduction = null;
+            city.tempProductionBonus = 0;
           }
         }
       });

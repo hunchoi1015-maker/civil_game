@@ -739,7 +739,8 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
                 luxuryResources: createInitialLuxuryResources(),
                 spies: 0, greatPeople: 0, nuclearMaterial: 0,
                 cultureEventCards: [],
-                pendingGreatPerson: false
+                pendingGreatPerson: false,
+                pendingCardDraw: 0,
             });
         }
         if (!state.players.find(p => p.id === devDefenderId)) {
@@ -750,7 +751,8 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
                 luxuryResources: createInitialLuxuryResources(),
                 spies: 0, greatPeople: 0, nuclearMaterial: 0,
                 cultureEventCards: [],
-                pendingGreatPerson: false
+                pendingGreatPerson: false,
+                pendingCardDraw: 0,
 
             });
         }

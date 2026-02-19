@@ -15,6 +15,8 @@ export function MapGrid() {
     currentPhase,
     players,
     currentPlayerIndex,
+    activeCardTargeting,
+    handleCardMapClick, 
   } = useGameStore();
 
   const currentPlayer = players[currentPlayerIndex];
@@ -24,6 +26,12 @@ export function MapGrid() {
   }
 
   const handleTileClick = (x: number, y: number) => {
+    // 망명 카드 타겟팅 중이면 맵 클릭을 가로채서 처리합니다.
+    if (activeCardTargeting && activeCardTargeting.templateId === 'exile') {
+      handleCardMapClick({ x, y });
+      return; 
+    }
+
     const tile = map.tiles[y][x];
     const selectedUnitData = selectedUnit
       ? currentPlayer.units.find(u => u.id === selectedUnit)

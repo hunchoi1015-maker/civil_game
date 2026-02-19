@@ -17,7 +17,7 @@ import { CapitalSelectionScreen } from '../components/game/CapitalSelectionScree
 import { ArmyCardsWidget } from '../components/game/ArmyCardsWidget';
 import { ResearchResultsModal } from '../components/game/ResearchResultsModal';
 import { useState, useEffect } from 'react';
-// import { TradePanel } from '../components/game/TradePanel'; // [삭제]
+import { CultureCardInventory } from '../components/game/CultureCardInventory';
 
 type PanelView = 'map' | 'tech' | 'city' | 'units';
 
@@ -160,11 +160,21 @@ export function GameScreen() {
         </aside>
       </div>
 
-      {/* [삭제됨] TradePanel 제거 */}
+      <div className="fixed bottom-6 right-6 z-40 flex items-end gap-4 pointer-events-none">
+        
+        {/* pointer-events-auto를 줘서 버튼 클릭이 가능하게 합니다 */}
+        <div className="pointer-events-auto">
+          {/* 부대 카드 위젯 */}
+          <ArmyCardsWidget />
+        </div>
 
-      {/* 부대 카드 위젯 */}
-      <ArmyCardsWidget />
-
+        <div className="pointer-events-auto">
+          {/* 새로 추가한 문화 이벤트 카드 인벤토리 */}
+          <CultureCardInventory />
+        </div>
+        
+      </div>
+              
       {/* 연구 결과 모달 */}
       <ResearchResultsModal />
 

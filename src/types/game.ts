@@ -32,12 +32,22 @@ export interface TurnAction {
   timestamp: number;
 }
 
+export type CultureCardTargetType = 'enemy_unit' | 'my_city' | 'none';
+
 export interface CultureEventCard {
   id: string;
+  templateId: string; // [추가] 카드 종류 식별자 (예: 'exile')
   level: 1 | 2 | 3;
   name: string;
   description: string;
-  effect: (playerId: string) => void; // 실제 효과 로직은 나중에 구현
+  targetType: CultureCardTargetType; // [추가] 타겟 방식
+}
+
+// 위인 타입 (기존 유지)
+export interface GreatPerson {
+  id: string;
+  name: string;
+  type: 'artist' | 'scientist' | 'general';
 }
 
 // [추가] 위인 타입 (간단히 정의)

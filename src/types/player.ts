@@ -37,7 +37,7 @@ export interface Player {
   nuclearMaterial: number;// 핵 자원 (상대에게 안 보임)
   cultureEventCards: CultureEventCard[]; 
   pendingGreatPerson: boolean; // 위인을 획득하여 배치 대기 중인지 여부
-
+  pendingCardDraw: number | null;
 }
 
 export type PlayerColor = 'red' | 'blue' | 'green' | 'yellow';

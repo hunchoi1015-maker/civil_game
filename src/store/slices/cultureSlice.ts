@@ -1,57 +1,68 @@
 import { StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
-import { getNextStepCost, GREAT_PERSON_SPOTS, CULTURE_TRACK_MAX } from '../../constants/culture';
-import { getSurroundingPositions } from '../helpers/mapHelpers';
+import { getNextStepCost, GREAT_PERSON_SPOTS, CULTURE_TRACK_MAX, getCultureLevel } from '../../constants/culture';
+import { CULTURE_CARD_TEMPLATES } from '../../constants/cultureCards';
+import { TECHNOLOGIES } from '../../constants/technologies';
+import { Position } from '../../types/map';
+
+export interface CardTargetingState {
+  cardId: string;
+  templateId: string;
+  step: number;
+  data?: any;
+}
 
 export interface CultureSlice {
   advanceCultureTrack: () => void;
-  placeGreatPerson: (tilePos: { x: number, y: number }) => void;
+  drawCultureCard: (level: 1|2|3) => void;
+  discardCultureCard: (cardId: string) => void;
+  executeCultureCard: (cardId: string, payload: any) => void;
+  
+  // [신규] UI 타겟팅 관리
+  activeCardTargeting: CardTargetingState | null;
+  startCardTargeting: (cardId: string) => void;
+  cancelCardTargeting: () => void;
+  handleCardMapClick: (position: Position) => void;
 }
 
 export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", never]], [], CultureSlice> = (set, get) => ({
+  activeCardTargeting: null,
+
   advanceCultureTrack: () => {
     set((state) => {
       const player = state.players[state.currentPlayerIndex];
       const currentTrack = player.cultureTrack;
-
-      // 1. 최대 레벨 도달 시 (승리 조건은 별도 체크하거나 여기서 처리)
       if (currentTrack >= CULTURE_TRACK_MAX) return;
 
-      // 2. 비용 확인
       const cost = getNextStepCost(currentTrack);
       if (player.resources.culture < cost.culture || player.resources.trade < cost.trade) {
         alert("자원이 부족합니다.");
         return;
       }
 
-      // 3. 자원 소모 및 전진
       player.resources.culture -= cost.culture;
       player.resources.trade -= cost.trade;
       player.cultureTrack += 1;
       const newTrack = player.cultureTrack;
 
-      // 4. 보상 지급
       if (GREAT_PERSON_SPOTS.includes(newTrack)) {
-        // 위인 획득 -> 배치 모드 활성화
-        player.greatPeople += 1; // 수치 증가
-        player.pendingGreatPerson = true; // 배치 대기 상태
-        alert("위인이 탄생했습니다! 도시 주변에 배치하세요.");
+        player.greatPeople += 1;
+        player.pendingGreatPerson = true;
+        alert("위인이 탄생했습니다!");
       } else {
-        // 문화 이벤트 카드 획득 (단순 구현: 메시지만 표시하거나 더미 카드 추가)
-        const level = getNextStepCost(currentTrack).culture === 3 ? 1 : (getNextStepCost(currentTrack).culture === 5 ? 2 : 3);
-        const newCard = {
-            id: uuidv4(),
-            level: level as 1|2|3,
-            name: `문화 이벤트 (Lv.${level})`,
-            description: "추후 구현될 기능입니다.",
-            effect: () => {} 
-        };
-        player.cultureEventCards.push(newCard);
-        // alert(`문화 이벤트 카드(Lv.${level})를 획득했습니다!`);
+        const level = getCultureLevel(newTrack) as 1|2|3;
+        const hasPottery = player.technologies.some(t => t.id === 'pottery');
+        const hasDemocracy = player.government === 'democracy';
+        const cardLimit = 2 + (hasPottery ? 1 : 0) + (hasDemocracy ? 1 : 0);
+
+        if (player.cultureEventCards.length >= cardLimit) {
+            player.pendingCardDraw = level;
+        } else {
+            get().drawCultureCard(level);
+        }
       }
 
-      // 5. 승리 체크
       if (newTrack === CULTURE_TRACK_MAX) {
         state.winner = player.id;
         state.winCondition = 'culture';
@@ -60,54 +71,171 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
     });
   },
 
-  placeGreatPerson: (tilePos) => {
+  drawCultureCard: (level: 1|2|3) => {
     set((state) => {
       const player = state.players[state.currentPlayerIndex];
-      if (!player.pendingGreatPerson) return;
 
-      // 유효성 검사: 본인 도시 주변 8칸, 물 아님, 건물 없음
-      const tile = state.map.tiles[tilePos.y][tilePos.x];
-      
-      // 1. 물 타일 제외
-      if (tile.terrain === 'water') {
-          alert("물 타일에는 배치할 수 없습니다.");
-          return;
+      // cultureEventCards가 null임을 대비하는 안전장치 
+      if (!player.cultureEventCards) {
+          player.cultureEventCards = [];
       }
-      // 2. 건물 존재 여부
-      if (tile.buildingType) {
-          alert("이미 건물이 있는 곳에는 배치할 수 없습니다.");
-          return;
-      }
+
+      const templates = Object.values(CULTURE_CARD_TEMPLATES).filter(t => t.level === level);
+      if (templates.length === 0) return;
       
-      // 3. 내 도시 주변 8칸 확인
-      let nearMyCity = false;
-      for (const city of player.cities) {
-          const surrounding = getSurroundingPositions(city.position, state.map.width, state.map.height);
-          // 도시 중심 포함? (보통 중심에는 이미 건물이 있으니 제외됨)
-          if (surrounding.some(p => p.x === tilePos.x && p.y === tilePos.y)) {
-              nearMyCity = true;
-              break;
+      const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
+      player.cultureEventCards.push({
+          id: uuidv4(),
+          templateId: randomTemplate.id,
+          level: randomTemplate.level,
+          name: randomTemplate.name,
+          description: randomTemplate.description,
+          targetType: randomTemplate.targetType
+      });
+    });
+  },
+
+  discardCultureCard: (cardId: string) => {
+    set((state) => {
+      const player = state.players[state.currentPlayerIndex];
+      const idx = player.cultureEventCards.findIndex(c => c.id === cardId);
+      if (idx !== -1) {
+          player.cultureEventCards.splice(idx, 1);
+          if (player.pendingCardDraw !== null) {
+              const levelToDraw = player.pendingCardDraw as 1|2|3;
+              player.pendingCardDraw = null;
+              get().drawCultureCard(levelToDraw);
+          }
+      }
+    });
+  },
+
+  startCardTargeting: (cardId: string) => {
+    set((state) => {
+      const player = state.players[state.currentPlayerIndex];
+      const card = player.cultureEventCards.find(c => c.id === cardId);
+      if (!card) return;
+      
+      state.activeCardTargeting = {
+          cardId: card.id,
+          templateId: card.templateId,
+          step: 0,
+          data: {}
+      };
+    });
+  },
+
+  cancelCardTargeting: () => {
+    set((state) => { state.activeCardTargeting = null; });
+  },
+
+  handleCardMapClick: (position: Position) => {
+    let executePayload: any = null;
+    let cardToExecute: string | null = null;
+
+    set((state) => {
+      const targeting = state.activeCardTargeting;
+      if (!targeting) return;
+      const player = state.players[state.currentPlayerIndex];
+      const tile = state.map.tiles[position.y][position.x];
+
+      if (targeting.templateId === 'exile') {
+          if (targeting.step === 0) {
+              // 1. 밀어낼 상대 유닛 선택
+              let targetUnitId = null;
+              for (const p of state.players) {
+                  if (p.id === player.id) continue; // 내 유닛 제외
+                  const unit = p.units.find(u => u.position.x === position.x && u.position.y === position.y);
+                  if (unit) { targetUnitId = unit.id; break; }
+              }
+              if (targetUnitId) {
+                  targeting.step = 1;
+                  targeting.data = { unitId: targetUnitId, originalPos: { ...position } };
+              } else {
+                  alert("선택한 타일에 상대방의 유닛이 없습니다.");
+              }
+          } else if (targeting.step === 1) {
+              // 2. 4칸 이내의 목적지 선택
+              const orig = targeting.data.originalPos;
+              const manhattan = Math.abs(position.x - orig.x) + Math.abs(position.y - orig.y); // 상하좌우 이동 칸 수 계산
+              
+              if (manhattan > 4) {
+                  alert("원래 위치에서 4칸 이내의 타일이어야 합니다.");
+                  return;
+              }
+              if (tile.terrain === 'water' || tile.terrain === 'mountain') {
+                  alert("물이나 산으로는 이동시킬 수 없습니다.");
+                  return;
+              }
+              if (tile.cityId || tile.buildingType || tile.unitIds.length > 0) {
+                  alert("완전히 비어있는 타일로만 이동시킬 수 있습니다.");
+                  return;
+              }
+              
+              // 검증 통과
+              cardToExecute = targeting.cardId;
+              executePayload = { unitId: targeting.data.unitId, targetPos: position };
+              state.activeCardTargeting = null;
+          }
+      }
+    });
+
+    if (executePayload && cardToExecute) {
+       get().executeCultureCard(cardToExecute, executePayload);
+    }
+  },
+
+  executeCultureCard: (cardId: string, payload: any) => {
+    set((state) => {
+      const player = state.players[state.currentPlayerIndex];
+      const cardIdx = player.cultureEventCards.findIndex(c => c.id === cardId);
+      if (cardIdx === -1) return;
+      const card = player.cultureEventCards[cardIdx];
+
+      if (card.templateId === 'exile') {
+          const { unitId, targetPos } = payload;
+          let targetUnit;
+          for (const p of state.players) {
+              targetUnit = p.units.find(u => u.id === unitId);
+              if (targetUnit) break;
+          }
+          if (targetUnit) {
+              const oldTile = state.map.tiles[targetUnit.position.y][targetUnit.position.x];
+              oldTile.unitIds = oldTile.unitIds.filter(id => id !== unitId);
+              targetUnit.position = targetPos;
+              state.map.tiles[targetPos.y][targetPos.x].unitIds.push(unitId);
+          }
+      } 
+      else if (card.templateId === 'dictators_day') {
+          const { cityId } = payload;
+          const city = player.cities.find(c => c.id === cityId);
+          if (city) city.tempProductionBonus = (city.tempProductionBonus || 0) + 4;
+      } 
+      else if (card.templateId === 'idea_share') {
+          const { opponentId, techId } = payload;
+          const opponent = state.players.find(p => p.id === opponentId);
+          if (opponent && techId) {
+              const targetTechDef = TECHNOLOGIES.find(t => t.id === techId);
+              if (targetTechDef && !player.technologies.some(t => t.id === techId)) {
+                  player.technologies.push({ ...targetTechDef, isResearched: true });
+                  
+                  // 내 1단계 기술 무작위로 넘겨주기
+                  const myTier1Techs = player.technologies.filter(t => {
+                      const def = TECHNOLOGIES.find(td => td.id === t.id);
+                      return def?.level === 1; // 1단계 기술
+                  });
+                  const validToGive = myTier1Techs.filter(t => !opponent.technologies.some(ot => ot.id === t.id));
+                  
+                  if (validToGive.length > 0) {
+                      const randomTech = validToGive[Math.floor(Math.random() * validToGive.length)];
+                      const rTechDef = TECHNOLOGIES.find(t => t.id === randomTech.id);
+                      if (rTechDef) opponent.technologies.push({ ...rTechDef, isResearched: true });
+                  }
+              }
           }
       }
 
-      if (!nearMyCity) {
-          alert("자신의 도시 주변 8칸 이내에만 배치할 수 있습니다.");
-          return;
-      }
-
-      // 배치 성공: 여기서는 건물을 짓는 대신 '위인 객체'를 타일에 심거나, 
-      // 기획상 '위인'이 건물 취급인지, 유닛 취급인지, 타일 부착물인지에 따라 다름.
-      // "위인을 타일에 배치" -> 보통 문화유산(Great Work) 같은 개념이라면 buildingType을 사용하거나
-      // tile.object (오두막/마을용)를 재활용하거나 새로 필드를 파야 함.
-      // **제안:** tile.buildingType = 'great_work' (건물로 취급) 또는 tile.object에 추가.
-      // 여기서는 타일의 `object` 필드를 활용하겠습니다. (오두막/마을과 같은 레이어)
-      
-      state.map.tiles[tilePos.y][tilePos.x].object = {
-          type: 'great_person_site', // 타입 추가 필요
-          reward: { type: 'greatPerson' } // 더미 데이터
-      } as any; // 타입 임시 우회 (나중에 map.ts 수정 필요)
-
-      player.pendingGreatPerson = false;
+      player.cultureEventCards.splice(cardIdx, 1);
     });
   }
 });

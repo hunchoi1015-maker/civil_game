@@ -80,6 +80,10 @@ export function calculateCityProduction(city: City, map: GameMap): number {
     }
   });
 
+  if (city.tempProductionBonus) {
+      production += city.tempProductionBonus;
+  }
+  
   return production;
 }
 
