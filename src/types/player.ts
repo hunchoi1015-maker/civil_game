@@ -4,6 +4,7 @@ import { ArmyCard } from './combat';
 import { Technology } from './tech';
 import { NationType } from './nation';
 import {ResourceType} from './map';
+import { CultureEventCard } from './game';
 
 export interface Resources {
   trade: number;
@@ -34,6 +35,9 @@ export interface Player {
   spies: number;          // 스파이 (상대에게 안 보임)
   greatPeople: number;    // 위인 (공개)
   nuclearMaterial: number;// 핵 자원 (상대에게 안 보임)
+  cultureEventCards: CultureEventCard[]; 
+  pendingGreatPerson: boolean; // 위인을 획득하여 배치 대기 중인지 여부
+
 }
 
 export type PlayerColor = 'red' | 'blue' | 'green' | 'yellow';

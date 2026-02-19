@@ -7,6 +7,8 @@ import { getAvailableArmyCards, ArmyCardTemplate } from '../../../constants/army
 import { calculateCityProduction, calculateCityCulture } from '../../../engine/ResourceCalculator';
 import clsx from 'clsx';
 import { ResourceType } from '../../../types/map';
+import { getNextStepCost, CULTURE_TRACK_MAX } from '../../../constants/culture';
+import { CultureTrackModal } from '../CultureTrackModal';
 
 type ProductionTab = 'buildings' | 'units' | 'armyCards';
 
@@ -183,7 +185,8 @@ export function CityPanel() {
     produceArmyCard, 
     harvestCityCulture, 
     harvestResource, 
-    map 
+    map, 
+    advanceCultureTrack
   } = useGameStore();
   
   const currentPlayer = players[currentPlayerIndex];
@@ -197,6 +200,7 @@ export function CityPanel() {
 
   const canManageCity = currentPhase === 'cityManagement';
   const isOwner = selectedCity?.ownerId === currentPlayer.id;
+  const [showCultureModal, setShowCultureModal] = useState(false);
 
   // [수정] 주변 자원 스캔 로직 (useMemo로 최적화)
   const availableResources = useMemo(() => {
@@ -232,6 +236,12 @@ export function CityPanel() {
 
   const selectedCityProduction = (selectedCity && map) ? calculateCityProduction(selectedCity, map) : 0;
   const selectedCityCulture = (selectedCity && map) ? calculateCityCulture(selectedCity, map) : 0;
+
+  const nextCultureCost = getNextStepCost(currentPlayer.cultureTrack);
+  const canAdvanceCulture = 
+    currentPlayer.resources.culture >= nextCultureCost.culture && 
+    currentPlayer.resources.trade >= nextCultureCost.trade &&
+    currentPlayer.cultureTrack < CULTURE_TRACK_MAX;
 
   const handleBuild = (building: BuildingDefinition) => {
     if (!canManageCity) {
@@ -362,7 +372,8 @@ export function CityPanel() {
       {selectedBuildingToBuild && selectedCity && (
         <BuildingLocationModal building={selectedBuildingToBuild} city={selectedCity} onSelect={handleBuildAtLocation} onClose={() => setSelectedBuildingToBuild(null)} />
       )}
-
+      {/* 문화 트랙  */}
+      {showCultureModal && <CultureTrackModal onClose={() => setShowCultureModal(false)} />}
       {/* 도시 목록 */}
       <div className="w-64 space-y-2">
         <h3 className="text-lg font-semibold text-white mb-3">내 도시</h3>
@@ -403,7 +414,55 @@ export function CityPanel() {
                 </span>
             </div>
           </div>
-
+          {/* 문화 트랙 버튼 */}
+          {canManageCity && (
+            <div className="bg-slate-800 rounded-lg p-4 mb-4 border border-purple-900/50 relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-2 opacity-10 text-6xl">🎭</div>
+              
+              <div className="flex justify-between items-center mb-3 relative z-10">
+                <h4 className="text-lg font-bold text-purple-400 flex items-center gap-2">
+                  <span>🎭</span> 문명 문화 수준
+                </h4>
+                <button 
+                  onClick={() => setShowCultureModal(true)}
+                  className="text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-300 transition-colors"
+                >
+                  전체 트랙 보기
+                </button>
+              </div>
+              
+              <div className="flex items-center justify-between bg-slate-900/50 p-3 rounded-lg relative z-10">
+                <div>
+                  <div className="text-sm text-white mb-1">
+                    현재 트랙: <span className="font-bold text-purple-400 text-lg">{currentPlayer.cultureTrack}</span> 
+                    <span className="text-slate-500 text-xs"> / {CULTURE_TRACK_MAX}</span>
+                  </div>
+                  <div className="text-xs text-slate-400 flex items-center gap-2">
+                    <span>다음 단계 비용:</span>
+                    <span className={clsx("font-bold flex items-center gap-1", currentPlayer.resources.culture >= nextCultureCost.culture ? "text-purple-300" : "text-red-400")}>
+                      <span>🎭</span> {nextCultureCost.culture}
+                    </span>
+                    <span className={clsx("font-bold flex items-center gap-1", currentPlayer.resources.trade >= nextCultureCost.trade ? "text-amber-300" : "text-red-400")}>
+                      <span>📦</span> {nextCultureCost.trade}
+                    </span>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={advanceCultureTrack}
+                  disabled={!canAdvanceCulture}
+                  className={clsx(
+                    "px-5 py-2 rounded-lg text-sm font-bold transition-all shadow-lg",
+                    canAdvanceCulture 
+                      ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white transform hover:scale-105" 
+                      : "bg-slate-700 text-slate-500 cursor-not-allowed"
+                  )}
+                >
+                  문화 증진
+                </button>
+              </div>
+            </div>
+          )}
           {/* [수정] 사치품 수확 섹션 (목록형 버튼) */}
           {availableResources.length > 0 && (
             <div className="bg-slate-800 rounded-lg p-4 mb-4 border border-amber-700/50">

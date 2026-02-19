@@ -173,3 +173,23 @@ export function getTileSafe(map: GameMap, position: Position): Tile | null {
   }
   return map.tiles[position.y][position.x];
 }
+
+export function getSurroundingPositions(center: Position, width: number, height: number): Position[] {
+    const positions: Position[] = [];
+    // 중심 좌표 기준 상하좌우 및 대각선 (3x3 영역)
+    for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            // 중심 좌표(자기 자신)는 제외
+            if (dx === 0 && dy === 0) continue;
+            
+            const nx = center.x + dx;
+            const ny = center.y + dy;
+            
+            // 맵 경계(width, height)를 벗어나지 않는 유효한 좌표만 추가
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                positions.push({ x: nx, y: ny });
+            }
+        }
+    }
+    return positions;
+}

@@ -31,3 +31,18 @@ export interface TurnAction {
   payload: unknown;
   timestamp: number;
 }
+
+export interface CultureEventCard {
+  id: string;
+  level: 1 | 2 | 3;
+  name: string;
+  description: string;
+  effect: (playerId: string) => void; // 실제 효과 로직은 나중에 구현
+}
+
+// [추가] 위인 타입 (간단히 정의)
+export interface GreatPerson {
+  id: string;
+  name: string;
+  type: 'artist' | 'scientist' | 'general'; // 예시 타입
+}
