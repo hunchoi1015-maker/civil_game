@@ -30,6 +30,11 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
   activeCardTargeting: null,
 
   advanceCultureTrack: () => {
+    // 🌟 1. 밖으로 뺄 변수들을 미리 선언합니다.
+    let levelToDraw: 1 | 2 | 3 | null = null;
+    let limitExceeded = false;
+    let currentLimit = 0;
+
     set((state) => {
       const player = state.players[state.currentPlayerIndex];
       const currentTrack = player.cultureTrack;
@@ -54,12 +59,15 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
         const level = getCultureLevel(newTrack) as 1|2|3;
         const hasPottery = player.technologies.some(t => t.id === 'pottery');
         const hasDemocracy = player.government === 'democracy';
-        const cardLimit = 2 + (hasPottery ? 1 : 0) + (hasDemocracy ? 1 : 0);
+        currentLimit = 2 + (hasPottery ? 1 : 0) + (hasDemocracy ? 1 : 0);
 
-        if (player.cultureEventCards.length >= cardLimit) {
+        if (!player.cultureEventCards) player.cultureEventCards = [];
+
+        if (player.cultureEventCards.length >= currentLimit) {
             player.pendingCardDraw = level;
+            limitExceeded = true; // 밖에서 처리하기 위해 플래그 설정
         } else {
-            get().drawCultureCard(level);
+            levelToDraw = level;  // 밖에서 카드를 뽑기 위해 저장
         }
       }
 
@@ -69,6 +77,13 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
         state.isGameOver = true;
       }
     });
+
+    // 🌟 2. set() 바깥에서 안전하게 카드를 지급하거나 알림을 띄웁니다.
+    if (limitExceeded) {
+        alert(`카드 한도(${currentLimit}장)를 초과했습니다. 기존 카드를 1장 버려야 새 카드를 얻습니다.`);
+    } else if (levelToDraw !== null) {
+        get().drawCultureCard(levelToDraw);
+    }
   },
 
   drawCultureCard: (level: 1|2|3) => {
@@ -96,18 +111,27 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
   },
 
   discardCultureCard: (cardId: string) => {
+    let levelToDraw: 1 | 2 | 3 | null = null;
+
     set((state) => {
       const player = state.players[state.currentPlayerIndex];
+      if (!player.cultureEventCards) return;
+      
       const idx = player.cultureEventCards.findIndex(c => c.id === cardId);
       if (idx !== -1) {
           player.cultureEventCards.splice(idx, 1);
+          // 대기 중인 카드가 있다면 밖에서 뽑도록 levelToDraw에 저장
           if (player.pendingCardDraw !== null) {
-              const levelToDraw = player.pendingCardDraw as 1|2|3;
+              levelToDraw = player.pendingCardDraw as 1|2|3;
               player.pendingCardDraw = null;
-              get().drawCultureCard(levelToDraw);
           }
       }
     });
+
+    // 🌟 set() 바깥에서 카드 지급 (상태 덮어쓰기 방지)
+    if (levelToDraw !== null) {
+        get().drawCultureCard(levelToDraw);
+    }
   },
 
   startCardTargeting: (cardId: string) => {

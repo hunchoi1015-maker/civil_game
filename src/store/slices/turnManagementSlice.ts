@@ -109,6 +109,7 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
         player.hasResearchedThisTurn = false;
         player.cities.forEach((city) => {
           city.hasActedThisTurn = false;
+          city.tempProductionBonus = 0;
         });
       });
     });
