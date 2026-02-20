@@ -22,7 +22,7 @@ export function shuffleArray<T>(array: T[]): T[] {
 }
 
 // ============================================================================
-// 기술 관련 함수 추가 (7.2, 7.4, 7.6 구현용)
+// 기술 관련 함수 (새로운 피라미드 기술 시스템 적용 완료)
 // ============================================================================
 
 /**
@@ -33,23 +33,23 @@ export function hasTechnology(player: Player, techId: string): boolean {
 }
 
 /**
- * 피라미드 제약: 특정 레벨의 기술을 연구할 수 있는지 확인
- * N레벨 연구를 위해 (N-1)레벨 기술을 N-1개 이상 연구해야 함
+ * 피라미드 제약: 특정 레벨의 기술을 연구할 수 있는지 확인 (새로운 공식 적용)
  */
 export function canResearchTechLevel(player: Player, level: number): boolean {
   if (level === 1) return true;
 
   const techCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   player.technologies.forEach((t) => {
-    if (t.level >= 1 && t.level <= 5) {
-      techCounts[t.level]++;
+    // 시작 기술(isStartingTechFor)은 항상 1레벨로 취급
+    const lv = t.isStartingTechFor ? 1 : t.level;
+    if (lv >= 1 && lv <= 5) {
+      techCounts[lv]++;
     }
   });
 
   const previousLevel = level - 1;
-  const requiredCount = level - 1;
-
-  return techCounts[previousLevel] >= requiredCount;
+  // 새로운 피라미드 공식: (N-1)레벨 기술 개수가 N레벨 기술 개수보다 커야 함
+  return techCounts[previousLevel] > (techCounts[level] || 0);
 }
 
 /**
@@ -58,29 +58,41 @@ export function canResearchTechLevel(player: Player, level: number): boolean {
 export function getTechCountsByLevel(player: Player): Record<number, number> {
   const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   player.technologies.forEach((tech) => {
-    if (tech.level >= 1 && tech.level <= 5) {
-      counts[tech.level]++;
+    const lv = tech.isStartingTechFor ? 1 : tech.level;
+    if (lv >= 1 && lv <= 5) {
+      counts[lv]++;
     }
   });
   return counts;
 }
 
 /**
- * 7.4: 플레이어가 연구한 특정 타입의 최고 티어 반환
+ * 7.4: 플레이어가 연구한 특정 병과(보병/기병/포병)의 최고 티어 반환
+ * (예전 unlocks 대신 새 기술 ID 매핑으로 직관적이고 안전하게 판별합니다)
  */
 export function getMaxResearchedTier(player: Player, type: ArmyCardType): ArmyTier {
   let maxTier: ArmyTier = 1;
 
-  for (const tech of player.technologies) {
-    const armyTierUnlocks = tech.unlocks?.filter((u) => u.type === 'armyTier') || [];
+  // 기획에 맞춘 병과별 진급 기술 매핑 테이블
+  const upgradeTechs: Record<string, { type: string, tier: number }> = {
+    'democracy': { type: 'infantry', tier: 2 }, // 보병 2단계 (검사)
+    'gunpowder': { type: 'infantry', tier: 3 }, // 보병 3단계 (소총병)
+    'replaceable_parts': { type: 'infantry', tier: 4 }, // 보병 4단계 (현대보병)
+    
+    'chivalry': { type: 'cavalry', tier: 2 }, // 기병 2단계 (기사)
+    'railroad': { type: 'cavalry', tier: 3 }, // 기병 3단계 (기갑병)
+    'combustion': { type: 'cavalry', tier: 4 }, // 기병 4단계 (탱크)
+    
+    'mathematics': { type: 'artillery', tier: 2 }, // 포병 2단계 (대포)
+    'metallurgy': { type: 'artillery', tier: 3 }, // 포병 3단계 (야포)
+    'ballistics': { type: 'artillery', tier: 4 }, // 포병 4단계 (로켓포)
+  };
 
-    for (const unlock of armyTierUnlocks) {
-      const parts = unlock.id.split('_');
-      if (parts.length === 2 && parts[0] === type) {
-        const tier = parseInt(parts[1]) as ArmyTier;
-        if (tier > maxTier) {
-          maxTier = tier;
-        }
+  for (const tech of player.technologies) {
+    const upgradeInfo = upgradeTechs[tech.id];
+    if (upgradeInfo && upgradeInfo.type === type) {
+      if (upgradeInfo.tier > maxTier) {
+        maxTier = upgradeInfo.tier as ArmyTier;
       }
     }
   }
@@ -93,7 +105,8 @@ export function getMaxResearchedTier(player: Player, type: ArmyCardType): ArmyTi
  */
 export function canProduceTier(player: Player, type: ArmyCardType, tier: ArmyTier): boolean {
   const maxTier = getMaxResearchedTier(player, type);
-  return tier >= maxTier;
+  // 최고 티어 이상만 생산 가능하도록 (하위 호환 불가)
+  return tier >= maxTier; 
 }
 
 /**

@@ -1,4 +1,4 @@
-import { GameMap, Tile, TerrainType, ResourceType, Position, TileObject, RewardType } from '../../types';
+import { GameMap, Tile, TerrainType, ResourceType, Position, RewardType } from '../../types';
 
 export function generateMap(width: number, height: number): GameMap {
   const resources: ResourceType[] = ['spice', 'wheat', 'silk', 'iron', 'none'];

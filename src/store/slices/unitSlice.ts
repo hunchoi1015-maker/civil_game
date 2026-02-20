@@ -3,7 +3,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
 import { Position, UnitType, createUnit, BASE_STACKING_LIMIT, createInitialLuxuryResources, RewardType } from '../../types';
 import { findPlayerById } from '../helpers/playerHelpers';
-import { GameSlice } from '../types/storeTypes';
 
 export interface UnitSlice {
   createUnit: (playerId: string, type: UnitType, position: Position) => void;

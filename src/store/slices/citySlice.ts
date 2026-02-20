@@ -18,6 +18,7 @@ export interface CitySlice {
   harvestResource: (playerId: string, cityId: string, targetResource: ResourceType) => void;
   setProduction: (cityId: string, itemType: string, itemId: string) => void;
   constructWonder: (cityId: string, wonderType: WonderType, tilePos: Position) => void;
+  produceArmyCard: (playerId: string, ype: string, tier: number, attack: number, health: number, name: string, cityId: string) => void;
 }
 
 export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]], [], CitySlice> = (set) => ({
@@ -102,7 +103,7 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       }
     });
   },
-
+  
   harvestCityCulture: (playerId: string, cityId: string) => {
     set((state) => {
       if (state.currentPhase !== 'cityManagement') return;
@@ -203,7 +204,50 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       }
     });
   },
+  produceArmyCard: (playerId: string, type: string, tier: number, attack: number, health: number, name: string, cityId: string) => {
+    set((state) => {
+      // 1. 플레이어와 도시 찾기
+      const player = state.players.find(p => p.id === playerId);
+      if (!player) return;
+      
+      const city = player.cities.find(c => c.id === cityId);
+      if (!city) return;
 
+      // 2. 방어 코드 (이미 행동했는지 한 번 더 체크)
+      if (city.hasActedThisTurn) {
+        // 이미 UI에서 막았겠지만, 스토어 단에서도 한 번 더 안전하게 막아줍니다.
+        return; 
+      }
+
+      // 3. 새로운 부대 카드 데이터 생성
+      const newArmyCard = {
+        id: crypto.randomUUID(),
+        type: type as any,
+        tier: tier as 1|2|3|4,
+        attack,
+        health,
+        maxHealth: health,     
+        ownerId: playerId,     
+        isDeployed: false,  
+        name,
+        // isUsed: false (만약 타입에 isUsed가 없다고 에러가 나면 이 줄은 지워주세요!)
+      };
+
+      // 4. 플레이어 인벤토리에 카드 추가
+      if (!player.armyCards) {
+          player.armyCards = [];
+      }
+      player.armyCards.push(newArmyCard);
+
+      // 5. 도시 행동 완료 처리
+      city.hasActedThisTurn = true;
+      
+      // (참고) 만약 생산력 수치를 깎아야 한다면 상수 파일(ARMY_CARD_TEMPLATES)을 불러와서
+      // city.currentProduction 등을 깎는 로직을 여기에 한 줄 추가하시면 됩니다.
+      // 현재 UI 코드에서 검증(selectedCityProduction < selectedArmyTemplate.productionCost)을 
+      // 먼저 하고 있으므로, 행동력 소진만으로도 정상 동작할 것입니다.
+    });
+  },
   setProduction: (cityId: string, itemType: string, itemId: string) => {
     set((state) => {
       for (const player of state.players) {

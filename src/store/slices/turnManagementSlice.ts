@@ -80,7 +80,7 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
     set((state) => {
       const currentPlayer = state.players[state.currentPlayerIndex];
       
-      // 생산 진행
+      // 1. 생산 진행
       currentPlayer.cities.forEach((city) => {
         if (city.currentProduction) {
           city.productionProgress += city.production;
@@ -92,27 +92,40 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
         }
       });
 
-      // 자원 및 턴 처리
+      // 2. 자원 및 턴 처리
       currentPlayer.resources.trade = Math.min(27, currentPlayer.resources.trade);
-      currentPlayer.cultureTrack ;
+      // currentPlayer.cultureTrack ; (이 부분은 이전 코드에 의미 없는 줄이 있어서 주석/삭제 처리했습니다)
       currentPlayer.units.forEach((unit) => {
         unit.movement = unit.maxMovement;
         unit.hasMoved = false;
       });
 
+      // 3. 다음 턴 세팅
       state.turn += 1;
       state.firstPlayerIndex = (state.firstPlayerIndex + 1) % state.players.length;
       state.currentPlayerIndex = state.firstPlayerIndex;
       state.currentPhase = 'start';
       state.phaseComplete = new Array(state.players.length).fill(false);
+      
       state.players.forEach((player) => {
         player.hasResearchedThisTurn = false;
+        
+        // 플레이어의 기술 스킬 초기화 (도시에 종속되지 않고 플레이어별로 1번씩만!)
+        if (player.technologies) {
+          player.technologies.forEach(tech => {
+            tech.abilityUsedThisTurn = false;
+          });
+        }
+
+        // 플레이어의 도시 행동 초기화
         player.cities.forEach((city) => {
           city.hasActedThisTurn = false;
           city.tempProductionBonus = 0;
         });
       });
     });
+    
+    // 승리 조건 체크
     get().checkVictory();
   },
 
@@ -127,27 +140,16 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
       if (nextOrderIndex < playerOrder.length) {
         state.currentPlayerIndex = playerOrder[nextOrderIndex];
       } else {
-        // 모든 플레이어가 페이즈 종료
-        if (state.currentPhase === 'research') {
-          state.showResearchResults = true;
-          for (const player of state.players) {
-            const hasResult = state.turnResearchResults.some((r) => r.playerId === player.id);
-            if (!hasResult) {
-              state.turnResearchResults.push({
-                playerId: player.id,
-                playerName: player.name,
-                techId: null,
-                techName: null,
-              });
-            }
-          }
-        }
+        // 모든 플레이어가 현재 페이즈를 종료했을 때 다음 페이즈로 넘어가는 로직
+        
+        // 🌟 [수정된 부분] 에러를 일으키던 옛날 showResearchResults 관련 블록을 완전히 삭제했습니다! 🌟
         
         const currentIndex = phases.indexOf(state.currentPhase);
         if (currentIndex < phases.length - 1) {
           state.currentPhase = phases[currentIndex + 1];
           state.phaseComplete = new Array(state.players.length).fill(false);
           state.currentPlayerIndex = state.firstPlayerIndex;
+          
           if (state.currentPhase === 'trade') {
             state.players.forEach((player) => {
               player.hasCollectedTrade = false;

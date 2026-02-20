@@ -1,62 +1,50 @@
 export type TechLevel = 1 | 2 | 3 | 4 | 5;
 
+// 자원 소모 능력 (1턴 1회)
+export interface TechResourceAbility {
+  description: string;
+  maxTokens?: number; // 최대 수용 가능한 화폐 토큰 등 제한 (예: 4)
+}
+
+// 패시브 및 기타 효과들
+export interface TechPassiveEffects {
+  movementBonus?: number;
+  stackingLimitBonus?: number;
+  cultureCardLimitBonus?: number;
+  waterMovement?: boolean; // 물 이동 가능
+  waterStop?: boolean; // 물에서 이동 마침 가능
+  ignoreTerrain?: boolean; // 비행 (지형, 유닛 무시)
+}
+
+// 부대 및 건물 개량
+export interface TechUpgrade {
+  from: string; // 이전 ID (예: 'militia', 'temple')
+  to: string;   // 바뀔 ID (예: 'swordsman', 'cathedral')
+}
+
 export interface Technology {
   id: string;
   name: string;
   level: TechLevel;
-  cost: number;
   description: string;
-  effects: TechEffect[];
-  unlocks: TechUnlock[];
+  
+  isStartingTechFor?: string; // 고유 시작 국가 (예: 'america')
+  
+  unlocksBuildings?: string[]; // 해금되는 건물 ID 배열
+  upgradesBuilding?: TechUpgrade; // 건물 자동 개량
+  
+  unlocksUnits?: string[]; // 해금되는 부대 ID
+  upgradesUnit?: TechUpgrade; // 부대 자동 개량 (스탯 변화 등은 상수에서 관리)
+  
+  unlocksGovernment?: string; // 해금되는 정치체제 ID
+  
+  resourceAbility?: TechResourceAbility; // 액티브 능력
+  passiveEffects?: TechPassiveEffects; // 패시브 효과
+}
+
+// 플레이어가 실제로 보유하게 될 데이터 형태
+export interface PlayerTechnology extends Technology {
   isResearched: boolean;
-}
-
-export interface TechEffect {
-  type: 'production' | 'trade' | 'military' | 'culture' | 'special';
-  value: number;
-  description: string;
-}
-
-export interface TechUnlock {
-  type: 'building' | 'unit' | 'government' | 'armyTier' | 'ability';
-  id: string;
-  name: string;
-}
-
-export interface TechTreeState {
-  researchedTechs: string[];
-  currentResearch: string | null;
-  researchProgress: number;
-  techCounts: Record<TechLevel, number>;
-}
-
-export const TECH_PYRAMID_REQUIREMENTS: Record<TechLevel, number> = {
-  1: 0,
-  2: 1,
-  3: 2,
-  4: 3,
-  5: 4,
-};
-
-export const SCIENCE_VICTORY_LEVEL: TechLevel = 5;
-export const MAX_TRADE_TOKENS = 27;
-
-export function canResearchTech(
-  tech: Technology,
-  techCounts: Record<TechLevel, number>
-): boolean {
-  if (tech.level === 1) return true;
-  const requiredCount = TECH_PYRAMID_REQUIREMENTS[tech.level];
-  const previousLevel = (tech.level - 1) as TechLevel;
-  return techCounts[previousLevel] >= requiredCount;
-}
-
-export function createInitialTechCounts(): Record<TechLevel, number> {
-  return {
-    1: 0,
-    2: 0,
-    3: 0,
-    4: 0,
-    5: 0,
-  };
+  tokensOnCard: number; // 기술 카드에 올려진 화폐 토큰 수
+  abilityUsedThisTurn: boolean; // 이번 턴 자원 능력 사용 여부
 }

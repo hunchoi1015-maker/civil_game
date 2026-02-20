@@ -52,7 +52,8 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
         greatPeople: 0,
         nuclearMaterial: 0,
         cultureEventCards: [],
-        pendingGreatPerson: false
+        pendingGreatPerson: false,
+        pendingCardDraw: 0,
       });
     }
     const capitalOptions: Position[][] = [];

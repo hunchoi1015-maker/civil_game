@@ -15,9 +15,9 @@ import { PlayerTransition } from '../components/game/PlayerTransition';
 import { NationSelectionScreen } from '../components/game/NationSelectionScreen';
 import { CapitalSelectionScreen } from '../components/game/CapitalSelectionScreen';
 import { ArmyCardsWidget } from '../components/game/ArmyCardsWidget';
-import { ResearchResultsModal } from '../components/game/ResearchResultsModal';
 import { useState, useEffect } from 'react';
 import { CultureCardInventory } from '../components/game/CultureCardInventory';
+import { TechAbilityWidget } from '../components/game/TechAbilityWidget';
 
 type PanelView = 'map' | 'tech' | 'city' | 'units';
 
@@ -173,10 +173,11 @@ export function GameScreen() {
           <CultureCardInventory />
         </div>
         
+        <div className="pointer-events-auto">
+          <TechAbilityWidget />
+        </div>
+
       </div>
-              
-      {/* 연구 결과 모달 */}
-      <ResearchResultsModal />
 
       {/* 승리 모달 */}
       {isGameOver && winner && <VictoryModal />}

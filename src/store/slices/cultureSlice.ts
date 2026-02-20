@@ -241,7 +241,13 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
           if (opponent && techId) {
               const targetTechDef = TECHNOLOGIES.find(t => t.id === techId);
               if (targetTechDef && !player.technologies.some(t => t.id === techId)) {
-                  player.technologies.push({ ...targetTechDef, isResearched: true });
+                  // 🌟 1. 내가 상대 기술을 가져올 때 새 속성 추가
+                  player.technologies.push({ 
+                      ...targetTechDef, 
+                      isResearched: true,
+                      tokensOnCard: 0,
+                      abilityUsedThisTurn: false 
+                  });
                   
                   // 내 1단계 기술 무작위로 넘겨주기
                   const myTier1Techs = player.technologies.filter(t => {
@@ -253,7 +259,15 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
                   if (validToGive.length > 0) {
                       const randomTech = validToGive[Math.floor(Math.random() * validToGive.length)];
                       const rTechDef = TECHNOLOGIES.find(t => t.id === randomTech.id);
-                      if (rTechDef) opponent.technologies.push({ ...rTechDef, isResearched: true });
+                      if (rTechDef) {
+                          // 🌟 2. 상대에게 내 기술을 넘겨줄 때도 새 속성 추가
+                          opponent.technologies.push({ 
+                              ...rTechDef, 
+                              isResearched: true,
+                              tokensOnCard: 0,
+                              abilityUsedThisTurn: false 
+                          });
+                      }
                   }
               }
           }

@@ -1,7 +1,7 @@
 import { City } from './city';
 import { Unit } from './unit';
 import { ArmyCard } from './combat';
-import { Technology } from './tech';
+import { PlayerTechnology } from './tech';
 import { NationType } from './nation';
 import {ResourceType} from './map';
 import { CultureEventCard } from './game';
@@ -23,7 +23,7 @@ export interface Player {
   cities: City[];
   units: Unit[];
   armyCards: ArmyCard[];
-  technologies: Technology[];
+  technologies: PlayerTechnology[];
   government: GovernmentType | null;
   cultureTrack: number;
   hasCapital: boolean;
