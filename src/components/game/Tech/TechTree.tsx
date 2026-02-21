@@ -52,7 +52,7 @@ export function TechTree() {
     // 🌟 3. 충분할 때만 실제 연구를 진행하고 차례를 마칩니다.
     researchTech(techId);
     setSelectedTech(null);
-    endPhaseForCurrentPlayer();
+    //endPhaseForCurrentPlayer();
   };
 
   return (
@@ -101,7 +101,6 @@ export function TechTree() {
               <div className="flex flex-wrap justify-center gap-3">
                 {techs.map((tech) => {
                   const isResearched = researchedIds.has(tech.id);
-                  // 새로 만든 검증 함수 사용 (비용 검증 파라미터 삭제됨)
                   const validation = validateTechResearch(tech.id, currentPlayer.technologies,0);
 
                   return (

@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
 import { Position, UnitType, createUnit, BASE_STACKING_LIMIT, createInitialLuxuryResources, RewardType } from '../../types';
 import { findPlayerById } from '../helpers/playerHelpers';
+import { getPlayerPassives } from '../helpers/playerHelpers';
 
 export interface UnitSlice {
   createUnit: (playerId: string, type: UnitType, position: Position) => void;
@@ -80,6 +81,26 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
     if (!((dx === 1 && dy === 0) || (dx === 0 && dy === 1))) return;
     
     const targetTile = state.map.tiles[newPosition.y][newPosition.x];
+
+    const passives = getPlayerPassives(currentPlayer);
+    if (!passives.ignoreTerrain) { // 비행(flight)이 없을 때만 지형 검사
+      
+      // ❌ 산 타일(mountain) 제약 로직은 완전히 삭제했습니다!
+
+      // 물 타일 검사는 그대로 유지
+      if (targetTile.terrain === 'water') {
+        if (!passives.waterMovement) {
+          alert("물 타일로 이동하려면 '항해술' 기술이 필요합니다.");
+          return;
+        }
+        // 물에서 이동을 마칠 수 없는 경우 (이동력이 1 남았을 때 물로 진입 시도)
+        if (!passives.waterStop && unit.movement === 1) {
+          alert("물 타일에서 이동을 마칠 수 없습니다. ('범선항해술' 기술 필요)");
+          return;
+        }
+      }
+    }
+    
     let enemyPlayerId: string | null = null;
     
     // 적 유닛 체크
@@ -183,7 +204,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
         const u = player.units.find((u) => u.id === unitId);
         if (u) {
           const tile = s.map.tiles[newPosition.y][newPosition.x];
-          const stackingLimit = BASE_STACKING_LIMIT + player.stackingLimitBonus;
+          const stackingLimit = BASE_STACKING_LIMIT + passives.stackingLimitBonus;
           const myUnitsOnTile = tile.unitIds.filter((id) =>
             player.units.some((unit) => unit.id === id)
           ).length;

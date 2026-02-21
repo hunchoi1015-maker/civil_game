@@ -162,6 +162,11 @@ export function calculatePlayerProduction(player: Player, map: GameMap): number 
   if (player.government === 'monarchy') totalProduction += 2;
   if (player.government === 'communism') totalProduction += 3;
   if (player.government === 'republic') totalProduction += 1;
+
+  if (player.technologies.some(t => t.id === 'military_science')) {
+    totalProduction += Math.floor(player.resources.currency / 3);
+  }
+  
   return totalProduction;
 }
 

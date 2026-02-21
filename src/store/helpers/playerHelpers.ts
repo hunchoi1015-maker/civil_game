@@ -115,3 +115,58 @@ export function canProduceTier(player: Player, type: ArmyCardType, tier: ArmyTie
 export function getAvailableTrade(player: Player): number {
   return Math.max(0, player.resources.trade - player.resources.currency);
 }
+
+export function getPlayerPassives(player: Player) {
+  let maxMovement = 2; // 기본 이동력 2
+  let stackingLimitBonus = 0;
+  let cultureCardLimitBonus = 0;
+  let waterMovement = false;
+  let waterStop = false;
+  let ignoreTerrain = false;
+
+  player.technologies.forEach((tech) => {
+    if (tech.passiveEffects) {
+      // 1. 이동력 (가장 높은 보너스를 적용. 승마(+1)=3, 항해(+2)=4, 증기(+3)=5, 비행(+4)=6)
+      if (tech.passiveEffects.movementBonus) {
+        maxMovement = Math.max(maxMovement, 2 + tech.passiveEffects.movementBonus);
+      }
+      // 2. 배치 제한 (스태킹) 누적
+      if (tech.passiveEffects.stackingLimitBonus) {
+        stackingLimitBonus += tech.passiveEffects.stackingLimitBonus;
+      }
+      // 3. 이벤트 카드 보유 한도 누적
+      if (tech.passiveEffects.cultureCardLimitBonus) {
+        cultureCardLimitBonus += tech.passiveEffects.cultureCardLimitBonus;
+      }
+      // 4. 지형 이동 제약 해제
+      if (tech.passiveEffects.waterMovement) waterMovement = true;
+      if (tech.passiveEffects.waterStop) waterStop = true;
+      if (tech.passiveEffects.ignoreTerrain) ignoreTerrain = true;
+    }
+  });
+
+  // 🌟 [특수 패시브] 컴퓨터(Computers): 화폐 5개당 이벤트 카드 한도 +1
+  if (hasTechnology(player, 'computers')) {
+    cultureCardLimitBonus += Math.floor(player.resources.currency / 5);
+  }
+
+  return { 
+    maxMovement, 
+    stackingLimitBonus, 
+    cultureCardLimitBonus, 
+    waterMovement, 
+    waterStop, 
+    ignoreTerrain 
+  };
+}
+
+/**
+ * 플레이어가 해금한 정치체제 목록 반환
+ */
+export function getUnlockedGovernments(player: Player): string[] {
+  const unlocked = ['despotism']; // 전제군주제는 기본
+  player.technologies.forEach((tech) => {
+    if (tech.unlocksGovernment) unlocked.push(tech.unlocksGovernment);
+  });
+  return unlocked;
+}

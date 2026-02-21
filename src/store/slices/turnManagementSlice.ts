@@ -1,7 +1,8 @@
 import { StateCreator } from 'zustand';
 import { GameStore } from '../types/storeTypes';
 import { GamePhase } from '../../types';
-import { getPlayerOrder } from '../helpers/playerHelpers';
+// 🌟 getPlayerPassives 추가
+import { getPlayerOrder, getPlayerPassives } from '../helpers/playerHelpers';
 
 export interface TurnManagementSlice {
   nextPhase: () => void;
@@ -24,13 +25,14 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
         if (state.currentPhase === 'trade') {
           state.players.forEach((player) => {
             player.hasCollectedTrade = false;
-            
           });
         }
         if (state.currentPhase === 'movement') {
           state.players.forEach((player) => {
+            const passives = getPlayerPassives(player); // 🌟 동적 패시브 적용
             player.units.forEach((unit) => {
-              unit.movement = unit.maxMovement;
+              unit.maxMovement = passives.maxMovement;
+              unit.movement = passives.maxMovement;
               unit.hasMoved = false;
             });
           });
@@ -66,8 +68,10 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
         }
         if (state.currentPhase === 'movement') {
           state.players.forEach((player) => {
+            const passives = getPlayerPassives(player); // 🌟 동적 패시브 적용
             player.units.forEach((unit) => {
-              unit.movement = unit.maxMovement;
+              unit.maxMovement = passives.maxMovement;
+              unit.movement = passives.maxMovement;
               unit.hasMoved = false;
             });
           });
@@ -94,9 +98,11 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
 
       // 2. 자원 및 턴 처리
       currentPlayer.resources.trade = Math.min(27, currentPlayer.resources.trade);
-      // currentPlayer.cultureTrack ; (이 부분은 이전 코드에 의미 없는 줄이 있어서 주석/삭제 처리했습니다)
+      
+      const passives = getPlayerPassives(currentPlayer); // 🌟 동적 패시브 적용
       currentPlayer.units.forEach((unit) => {
-        unit.movement = unit.maxMovement;
+        unit.maxMovement = passives.maxMovement;
+        unit.movement = passives.maxMovement;
         unit.hasMoved = false;
       });
 
@@ -160,21 +166,12 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
           }
           if (state.currentPhase === 'movement') {
             state.players.forEach((player) => {
-              const hasFlight = player.technologies.some(t => t.id === 'flight');
-              const hasSteam = player.technologies.some(t => t.id === 'steam_power');
-              const hasNavigation = player.technologies.some(t => t.id === 'navigation');
-              const hasHorseback = player.technologies.some(t => t.id === 'horseback_riding');
-
-              let maxMovement = 2; 
-              if (hasFlight) maxMovement = 6;
-              else if (hasSteam) maxMovement = 5;
-              else if (hasNavigation) maxMovement = 4;
-              else if (hasHorseback) maxMovement = 3;
+              // 🌟 하드코딩 삭제 및 패시브 함수 하나로 통합
+              const passives = getPlayerPassives(player);
 
               player.units.forEach((unit) => {
-                // 🌟 [수정] 이동력 최대치(그릇) 자체를 늘려줍니다!
-                unit.maxMovement = maxMovement; 
-                unit.movement = maxMovement; 
+                unit.maxMovement = passives.maxMovement; 
+                unit.movement = passives.maxMovement; 
                 unit.hasMoved = false;
               });
             });
