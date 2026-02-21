@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useGameStore } from '../../../store/gameStore';
 import { TileComponent } from './TileComponent';
 import { motion } from 'framer-motion';
@@ -16,6 +17,8 @@ export function MapGrid() {
 
   const currentPlayer = players[currentPlayerIndex];
 
+  //비행 상태 
+  const [flightDecision, setFlightDecision] = useState<{unitIds: string[], movementBefore: number} | null>(null);
   if (!map || map.tiles.length === 0) {
     return <div className="text-slate-400">맵을 불러오는 중...</div>;
   }
@@ -58,15 +61,28 @@ export function MapGrid() {
       const dy = Math.abs(y - selectedUnitData.position.y);
       const isAdjacent = (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
 
-      // 🌟 1. 기술 보유 여부 확인 (이동 패시브)
-      const hasNavigation = currentPlayer.technologies.some(t => ['navigation', 'steam_power', 'flight'].includes(t.id));
+      // 🌟 1. 기술 보유 여부 확인 (물 진입 및 비행 통과 패시브)
+      const hasSailing = currentPlayer.technologies.some(t => t.id === 'sailing');
+      const hasNavigation = currentPlayer.technologies.some(t => t.id === 'navigation');
       const hasFlight = currentPlayer.technologies.some(t => t.id === 'flight');
 
-      // 🌟 2. 물 타일 진입 가능 여부 확인
-      const canEnterWater = tile.terrain !== 'water' || hasNavigation;
+      // 🌟 2. 물 타일 진입 가능 여부 검사
+      // 항해술(sailing)이나 범선항해술(navigation), 비행(flight)이 있으면 물에 들어갈 수 있습니다.
+      const canEnterWater = tile.terrain !== 'water' || hasSailing || hasNavigation || hasFlight;
 
       // 상하좌우 1칸이고, 물 타일 진입 조건을 만족했다면 이동 승인!
       if (isAdjacent && canEnterWater) {
+        
+        // 🌟 [추가] 팝업이 떠 있는 동안에는 맵을 클릭할 수 없습니다!
+        if (flightDecision) return; 
+
+        if (tile.terrain === 'water' && !hasNavigation && !hasFlight && selectedUnitData.movement === 1) {
+            alert("항해술(1레벨)만으로는 물 타일에서 턴을 마칠 수 없습니다. 육지로 빠져나가야 합니다.");
+            return;
+        }
+
+        const movementBefore = selectedUnitData.movement;
+
         if (selectedUnits.length > 1) {
           moveSelectedUnits({ x, y });
         } else {
@@ -75,19 +91,39 @@ export function MapGrid() {
         setSelectedTile({ x, y });
 
         // ==========================================
-        // 🌟 3. [비행] 패시브: 적 타일 진입 시 정지(강제 이동력 0) 룰 처리
+        // 🌟 [비행] 패시브: 상공 통과 vs 착륙 공격 분기
         // ==========================================
-        // 이동한 타일에 적 유닛이나 적 도시/건물이 있는지 검사합니다.
         const enemyUnits = players.filter(p => p.id !== currentPlayer.id).flatMap(p => p.units.filter(u => u.position.x === x && u.position.y === y));
         const hasEnemyCity = tile.cityId && !currentPlayer.cities.some(c => c.id === tile.cityId);
         
-        // 적을 만났는데 '비행' 기술이 없다면? => 발이 묶여서 남은 이동력이 전부 소멸(0)됩니다!
-        if ((enemyUnits.length > 0 || hasEnemyCity) && !hasFlight) {
-           useGameStore.setState((state) => {
-              const p = state.players[state.currentPlayerIndex];
-              const u = p.units.find(u => u.id === selectedUnitData.id);
-              if (u) u.movement = 0; // 강제 정지! (전투 발생 등)
-           });
+        if (enemyUnits.length > 0 || hasEnemyCity) {
+           if (!hasFlight) {
+               // 비행이 없으면 무조건 멈춥니다 (기존)
+               useGameStore.setState((state) => {
+                  const p = state.players[state.currentPlayerIndex];
+                  const targetIds = state.selectedUnits.length > 1 ? state.selectedUnits : [selectedUnitData.id];
+                  targetIds.forEach(id => {
+                     const u = p.units.find(u => u.id === id);
+                     if (u) u.movement = 0; 
+                  });
+               });
+           } else {
+               // 🌟 비행이 있고, 이동력이 1보다 많이 남았다면 팝업을 띄웁니다!
+               if (movementBefore > 1) {
+                   const targetIds = selectedUnits.length > 1 ? selectedUnits : [selectedUnitData.id];
+                   setFlightDecision({ unitIds: targetIds, movementBefore });
+               } else {
+                   // 이동력이 1밖에 없었다면 어차피 멈춰야 하므로 바로 0으로 만듭니다.
+                   useGameStore.setState((state) => {
+                      const p = state.players[state.currentPlayerIndex];
+                      const targetIds = state.selectedUnits.length > 1 ? state.selectedUnits : [selectedUnitData.id];
+                      targetIds.forEach(id => {
+                         const u = p.units.find(u => u.id === id);
+                         if (u) u.movement = 0;
+                      });
+                   });
+               }
+           }
         }
         return;
       }
@@ -104,6 +140,52 @@ export function MapGrid() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="inline-block bg-slate-800 p-4 rounded-lg overflow-auto">
+      {/* 🌟 [추가] 비행 유닛 통과 결정 모달창 */}
+      {flightDecision && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded-lg">
+          <div className="bg-slate-800 border-2 border-indigo-500 rounded-xl p-6 shadow-2xl max-w-sm w-full text-center">
+            <h3 className="text-2xl font-bold text-white mb-2">✈️ 상공 통과</h3>
+            <p className="text-slate-300 mb-6 text-sm">
+              적대적 유닛이나 도시에 진입했습니다.<br/>어떻게 하시겠습니까?
+            </p>
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => {
+                  useGameStore.setState((state) => {
+                    const p = state.players[state.currentPlayerIndex];
+                    flightDecision.unitIds.forEach(id => {
+                       const u = p.units.find(u => u.id === id);
+                       // 🌟 통과 선택: 이동력 1만 깎고 남겨줍니다!
+                       if (u) u.movement = flightDecision.movementBefore - 1; 
+                    });
+                  });
+                  setFlightDecision(null);
+                }}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-lg font-bold transition-colors"
+              >
+                상공 통과 (이동 계속하기)
+              </button>
+              
+              <button 
+                onClick={() => {
+                  useGameStore.setState((state) => {
+                    const p = state.players[state.currentPlayerIndex];
+                    flightDecision.unitIds.forEach(id => {
+                       const u = p.units.find(u => u.id === id);
+                       // 🌟 착륙 선택: 이동력을 모두 소모하고 정지합니다!
+                       if (u) u.movement = 0; 
+                    });
+                  });
+                  setFlightDecision(null);
+                }}
+                className="w-full bg-red-600 hover:bg-red-500 text-white py-3 rounded-lg font-bold transition-colors"
+              >
+                착륙 및 공격 (이동 멈춤)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${map.width}, minmax(0, 1fr))` }}>
         {map.tiles.map((row, y) =>
           row.map((tile, x) => (

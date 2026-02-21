@@ -94,6 +94,23 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
       };
       player.technologies.push(newTech);
 
+      const hasFlight = player.technologies.some(t => t.id === 'flight');
+      const hasSteam = player.technologies.some(t => t.id === 'steam_power');
+      const hasNavigation = player.technologies.some(t => t.id === 'navigation');
+      const hasHorseback = player.technologies.some(t => t.id === 'horseback_riding');
+
+      let maxMovement = 2; 
+      if (hasFlight) maxMovement = 6;
+      else if (hasSteam) maxMovement = 5;
+      else if (hasNavigation) maxMovement = 4;
+      else if (hasHorseback) maxMovement = 3;
+
+      player.units.forEach((unit) => {
+          unit.maxMovement = maxMovement;
+          // (선택) 연구 즉시 현재 이동력도 꽉 채워주고 싶다면 아래 주석을 푸세요!
+           unit.movement = maxMovement; 
+      });
+
       state.turnResearchResults.push({
           playerId: player.id,
           techId: techId,

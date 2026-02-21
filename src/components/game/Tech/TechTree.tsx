@@ -32,8 +32,6 @@ export function TechTree() {
   const currentPlayer = players[currentPlayerIndex];
   const [selectedTech, setSelectedTech] = useState<Technology | null>(null);
 
-  // 현재 기획상 "도시 경영"이나 특정 단계에서 자유롭게 연구할 수 있다면 
-  // 이 조건을 true나 적절한 phase로 변경하세요. (예: true 로 두면 언제든 연구창 열람 가능)
   const canResearch = currentPhase === 'research';
 
   const researchedIds = new Set(currentPlayer.technologies.map((t) => t.id));

@@ -160,21 +160,20 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
           }
           if (state.currentPhase === 'movement') {
             state.players.forEach((player) => {
-              // 1. 플레이어가 보유한 최고 단계의 이동 관련 기술을 확인합니다.
               const hasFlight = player.technologies.some(t => t.id === 'flight');
               const hasSteam = player.technologies.some(t => t.id === 'steam_power');
-              const hasNavigation = player.technologies.some(t => t.id === 'navigation'); // (또는 sailing)
+              const hasNavigation = player.technologies.some(t => t.id === 'navigation');
               const hasHorseback = player.technologies.some(t => t.id === 'horseback_riding');
 
-              // 2. 기술에 따른 이번 턴 최대 이동력 계산 (기본 2칸이라고 가정)
               let maxMovement = 2; 
               if (hasFlight) maxMovement = 6;
               else if (hasSteam) maxMovement = 5;
               else if (hasNavigation) maxMovement = 4;
               else if (hasHorseback) maxMovement = 3;
 
-              // 3. 모든 유닛에게 계산된 이동력을 채워줍니다.
               player.units.forEach((unit) => {
+                // 🌟 [수정] 이동력 최대치(그릇) 자체를 늘려줍니다!
+                unit.maxMovement = maxMovement; 
                 unit.movement = maxMovement; 
                 unit.hasMoved = false;
               });
