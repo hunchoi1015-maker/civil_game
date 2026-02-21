@@ -13,53 +13,179 @@ export function TechAbilityWidget() {
     startResourceSelection,
     targetingMode,     
     cancelTargeting     
-
   } = useGameStore();
   
   const player = players[currentPlayerIndex];
   const [isOpen, setIsOpen] = useState(false);
+  
+  // 🌟 [신규] 상대를 지정하는 등 특수한 모달을 띄우기 위한 상태
+  const [customModalMode, setCustomModalMode] = useState<{ type: string, techId: string } | null>(null);
 
   const availableTechs = player.technologies.filter(
     tech => tech.resourceAbility && !tech.abilityUsedThisTurn
   );
 
-  // 🌟 스킬 버튼을 눌렀을 때의 분기 처리 함수
+  // 기술별 허용되는 페이즈 구분
+  const getRequiredPhase = (techId: string) => {
+    if (['horseback_riding'].includes(techId)) return 'trade';
+    // 🌟 금속가공(metal_casting)을 movement(이동/전투) 단계에 추가!
+    if (['communism', 'steam_power', 'biology', 'mathematics', 'ballistics', 'metal_casting'].includes(techId)) return 'movement';
+    return 'cityManagement'; 
+  };
+  
   const handleAbilityUse = (tech: Technology) => {
-    if (currentPhase !== 'cityManagement') {
-        alert("이 능력은 도시 경영 단계에서만 사용할 수 있습니다.");
+    const reqPhase = getRequiredPhase(tech.id);
+    if (currentPhase !== reqPhase) {
+        const phaseNames: Record<string, string> = {
+            trade: '교역',
+            cityManagement: '도시 경영',
+            movement: '이동'
+        };
+        alert(`이 능력은 ${phaseNames[reqPhase]} 단계에서만 사용할 수 있습니다.`);
         return;
     }
 
-    // 도시를 눌러야만 사용 가능한 기술
+    // 🌟 1. 커스텀 모달 타겟팅
+    if (tech.id === 'horseback_riding') {
+        setCustomModalMode({ type: 'player', techId: tech.id });
+        setIsOpen(false);
+        return;
+    }
+    if (tech.id === 'writing') {
+        setCustomModalMode({ type: 'enemy_city', techId: tech.id });
+        setIsOpen(false);
+        return;
+    }
+    if (tech.id === 'metal_casting') {
+        setCustomModalMode({ type: 'my_army_card', techId: tech.id });
+        setIsOpen(false);
+        return;
+    }
+    // 🌟 2. 맵 타일 타겟팅 (내 도시)
     if (['animal_husbandry', 'construction', 'finance'].includes(tech.id)) {
       startTargeting(tech.id, 'my_city'); 
       setIsOpen(false);
       return; 
     }
 
-    // 타일을 눌러야 사용 가능한 기술
+    // 🌟 3. 맵 타일 타겟팅 (임의의 칸)
     if (tech.id === 'communism') {
       startTargeting(tech.id, 'tile');
       setIsOpen(false);
       return; 
     }
 
-    //  도자기 (자원 2개 요구)
+    // 🌟 4. 자원 소모 타겟팅
     if (tech.id === 'pottery') {
       startResourceSelection(tech.id, 2);
       setIsOpen(false);
       return;
     }
-
-    //  철학 (자원 3개 요구)
     if (tech.id === 'philosophy') {
       startResourceSelection(tech.id, 3);
       setIsOpen(false);
       return;
     }
-    // 일반 기술은 즉시 발동
+
+    // 🌟 5. 일반 기술 (페이로드 없이 즉시 발동: 금속가공, 원자론 등)
     useTechResourceAbility(tech.id, {});
     setIsOpen(false);
+  };
+
+  const renderCustomModal = () => {
+      if (!customModalMode) return null;
+
+      // 승마 기술 등: 다른 플레이어 지목
+      if (customModalMode.type === 'player') {
+          return (
+              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[70]">
+                  <div className="bg-slate-800 p-6 rounded-lg border-2 border-emerald-500 w-96 shadow-2xl">
+                      <h3 className="text-xl font-bold text-white mb-4">👥 대상 플레이어 선택</h3>
+                      <p className="text-sm text-slate-300 mb-4">효과를 받을 상대를 선택하세요.</p>
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {players.filter(p => p.id !== player.id && !p.isEliminated).map(p => (
+                              <button
+                                  key={p.id}
+                                  onClick={() => {
+                                      useTechResourceAbility(customModalMode.techId, { targetPlayerId: p.id });
+                                      setCustomModalMode(null);
+                                  }}
+                                  className="w-full p-3 bg-slate-700 hover:bg-emerald-900/50 rounded text-left text-white font-bold transition-colors"
+                              >
+                                  {p.name}
+                              </button>
+                          ))}
+                      </div>
+                      <button onClick={() => setCustomModalMode(null)} className="mt-4 w-full p-3 bg-slate-600 hover:bg-slate-500 text-white rounded font-bold">취소</button>
+                  </div>
+              </div>
+          );
+      }
+
+      // 기록 기술: 적 도시 지목
+      if (customModalMode.type === 'enemy_city') {
+          const enemyCities = players.filter(p => p.id !== player.id && !p.isEliminated).flatMap(p => 
+              p.cities.map(c => ({ city: c, player: p }))
+          );
+
+          return (
+              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[70]">
+                  <div className="bg-slate-800 p-6 rounded-lg border-2 border-emerald-500 w-96 flex flex-col shadow-2xl max-h-[80vh]">
+                      <h3 className="text-xl font-bold text-white mb-4">🎯 적 도시 마비</h3>
+                      <p className="text-sm text-slate-300 mb-4">다음 턴 행동을 봉쇄할 적 도시를 선택하세요.</p>
+                      <div className="space-y-2 overflow-y-auto flex-1 pr-2">
+                          {enemyCities.map(({ city, player: owner }) => (
+                              <button
+                                  key={city.id}
+                                  onClick={() => {
+                                      useTechResourceAbility(customModalMode.techId, { targetPlayerId: owner.id, targetCityId: city.id });
+                                      setCustomModalMode(null);
+                                  }}
+                                  className="w-full p-3 bg-slate-700 hover:bg-red-900/50 rounded text-left text-white font-bold transition-colors border border-slate-600"
+                              >
+                                  <div className="flex justify-between items-center">
+                                      <span>{city.name}</span>
+                                      <span className="text-xs text-slate-400">{owner.name}</span>
+                                  </div>
+                              </button>
+                          ))}
+                          {enemyCities.length === 0 && <p className="text-slate-500 text-center py-4">마비시킬 적 도시가 없습니다.</p>}
+                      </div>
+                      <button onClick={() => setCustomModalMode(null)} className="mt-4 w-full p-3 bg-slate-600 hover:bg-slate-500 text-white rounded font-bold">취소</button>
+                  </div>
+              </div>
+          );
+      }
+      // 부대 카드 선택 랜더링 
+      if (customModalMode.type === 'my_army_card') {
+          return (
+              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[70]">
+                  <div className="bg-slate-800 p-6 rounded-lg border-2 border-emerald-500 w-96 flex flex-col shadow-2xl max-h-[80vh]">
+                      <h3 className="text-xl font-bold text-white mb-4">⚔️ 부대 카드 강화</h3>
+                      <p className="text-sm text-slate-300 mb-4">강화할 내 부대 카드를 선택하세요. (공격력 +3)</p>
+                      <div className="space-y-2 overflow-y-auto flex-1 pr-2">
+                          {player.armyCards.map(card => (
+                              <button
+                                  key={card.id}
+                                  onClick={() => {
+                                      useTechResourceAbility(customModalMode.techId, { targetCardId: card.id });
+                                      setCustomModalMode(null);
+                                  }}
+                                  className="w-full p-3 bg-slate-700 hover:bg-emerald-900/50 rounded text-left text-white transition-colors border border-slate-600 flex justify-between items-center"
+                              >
+                                  <span className="font-bold">{card.name}</span>
+                                  <span className="text-sm text-slate-400">공{card.attack} / 체{card.health}</span>
+                              </button>
+                          ))}
+                          {player.armyCards.length === 0 && <p className="text-slate-500 text-center py-4">보유한 부대 카드가 없습니다.</p>}
+                      </div>
+                      <button onClick={() => setCustomModalMode(null)} className="mt-4 w-full p-3 bg-slate-600 hover:bg-slate-500 text-white rounded font-bold">취소</button>
+                  </div>
+              </div>
+          );
+      }
+
+      return null;
   };
 
   const renderCitySelectionModal = () => {
@@ -76,14 +202,13 @@ export function TechAbilityWidget() {
           <h3 className="text-xl font-bold text-white mb-4">🏛️ 대상 도시 선택</h3>
           <p className="text-sm text-slate-300 mb-4">이번 턴에 {bonusText} 효과를 받을 내 도시를 선택하세요.</p>
           
-          {/* 도시 리스트 렌더링 */}
           <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
             {player.cities.map(city => (
               <button 
                 key={city.id}
                 onClick={() => {
                   useTechResourceAbility(targetingMode.techId!, { targetCityId: city.id });
-                  cancelTargeting(); // 선택 완료 시 창 닫기
+                  cancelTargeting();
                 }}
                 className="w-full p-3 bg-slate-700 hover:bg-emerald-900/50 rounded text-left text-white font-bold transition-colors flex justify-between items-center border border-slate-600 hover:border-emerald-500"
               >
@@ -91,7 +216,6 @@ export function TechAbilityWidget() {
                 <span className="text-xs text-amber-400">{bonusText}</span>
               </button>
             ))}
-            {/* 도시가 없을 때의 예외 처리 */}
             {player.cities.length === 0 && <p className="text-slate-500 py-2 text-center">도시가 없습니다.</p>}
           </div>
           
@@ -106,6 +230,7 @@ export function TechAbilityWidget() {
   return (
     <div className="relative flex flex-col items-end z-30">
       {renderCitySelectionModal()}
+      {renderCustomModal()}
       <AnimatePresence>
         {isOpen && (
           <motion.div 
@@ -128,7 +253,7 @@ export function TechAbilityWidget() {
             {availableTechs.map(tech => (
               <button 
                 key={tech.id}
-                onClick={() => handleAbilityUse(tech)} // 🌟 방금 만든 함수로 교체!
+                onClick={() => handleAbilityUse(tech)}
                 className="p-3 bg-slate-700 hover:bg-emerald-900/40 border border-slate-600 hover:border-emerald-500 rounded text-left transition-all group flex flex-col justify-between"
               >
                 <div className="text-white font-bold mb-1 flex justify-between items-center">

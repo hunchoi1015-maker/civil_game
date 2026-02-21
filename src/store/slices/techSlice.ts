@@ -312,7 +312,41 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
               success = true;
           } else alert("교역 토큰이 부족합니다.");
           break;
+        case 'horseback_riding': // [승마] 비단 1 소모 -> 교역 9 획득, 상대 1명 교역 6 부여
+          if (player.luxuryResources.silk >= 1 && payload?.targetPlayerId) {
+              const targetPlayer = state.players.find(p => p.id === payload.targetPlayerId);
+              if (targetPlayer) {
+                  player.luxuryResources.silk -= 1;
+                  player.resources.trade = Math.min(27, player.resources.trade + 9);
+                  targetPlayer.resources.trade = Math.min(27, targetPlayer.resources.trade + 6);
+                  success = true;
+              }
+          } else alert("비단이 부족하거나 대상을 선택하지 않았습니다.");
+          break;
+
+        case 'metal_casting': // [금속가공] 철 1 소모 -> 특정 부대 카드 1장의 공격력 +3
+          if (player.luxuryResources.iron >= 1 && payload?.targetCardId) {
+              const targetCard = player.armyCards.find(c => c.id === payload.targetCardId);
+              if (targetCard) {
+                  player.luxuryResources.iron -= 1;
+                  targetCard.attack += 3; // 🌟 카드의 공격력 자체를 영구 증가
+                  success = true;
+                  alert(`[${targetCard.name}]의 공격력이 3 증가했습니다!`);
+              }
+          } else alert("철이 부족하거나 카드를 선택하지 않았습니다.");
+          break;
           
+        case 'atomic_theory': // [원자론] 우라늄 1 소모 -> 모든 도시 행동 1번 추가
+          if (player.nuclearMaterial >= 1) {
+              player.nuclearMaterial -= 1;
+              player.cities.forEach(city => {
+                  city.hasActedThisTurn = false; // 행동 기회를 리셋하여 다시 행동 가능하게 함
+              });
+              success = true;
+              alert("모든 도시가 이번 턴에 한 번 더 행동할 수 있습니다!");
+          } else alert("우라늄(핵 자원)이 부족합니다.");
+          break;
+
         default:
           alert("구현 준비 중인 능력입니다.");
           break;
