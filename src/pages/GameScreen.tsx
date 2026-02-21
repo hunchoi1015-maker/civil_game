@@ -18,6 +18,8 @@ import { ArmyCardsWidget } from '../components/game/ArmyCardsWidget';
 import { useState, useEffect } from 'react';
 import { CultureCardInventory } from '../components/game/CultureCardInventory';
 import { TechAbilityWidget } from '../components/game/TechAbilityWidget';
+import { ResearchResultsModal } from '../components/game/ResearchResultsModal';
+import { ResourceSelectionModal } from '../components/game/ResourceSelectionModal';
 
 type PanelView = 'map' | 'tech' | 'city' | 'units';
 
@@ -181,6 +183,12 @@ export function GameScreen() {
 
       {/* 승리 모달 */}
       {isGameOver && winner && <VictoryModal />}
+      
+      {/*자원 선택 모달 */}
+      <ResourceSelectionModal />
+
+      {/* 연구 결과 모달 */}
+      <ResearchResultsModal />
     </div>
   );
 }

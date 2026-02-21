@@ -1,4 +1,12 @@
 export type TechLevel = 1 | 2 | 3 | 4 | 5;
+export const TECH_COSTS: Record<number, number> = {
+          1: 6,
+          2: 11,
+          3: 16,
+          4: 21,
+          5: 26
+      };
+
 
 // 자원 소모 능력 (1턴 1회)
 export interface TechResourceAbility {

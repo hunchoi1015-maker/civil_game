@@ -17,6 +17,7 @@ export interface City {
 
   hasHarvestedCulture: boolean;
   tempProductionBonus?: number;
+  isParalyzed?: boolean;
 }
 
 export interface Building {

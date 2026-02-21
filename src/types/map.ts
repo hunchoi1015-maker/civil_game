@@ -39,6 +39,7 @@ export interface Tile {
   isVisible: boolean;
   object?: TileObject;
   wonder?: { type: WonderType };
+  isParalyzed?: boolean;
 }
 
 export interface GameMap {

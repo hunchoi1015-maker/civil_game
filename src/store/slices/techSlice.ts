@@ -3,6 +3,7 @@ import { GameStore } from '../types/storeTypes';
 import { TECHNOLOGIES } from '../../constants/technologies';
 import { Player } from '../../types/player';
 import { PlayerTechnology } from '../../types/tech';
+import {TECH_COSTS} from '../../types'
 
 // 🌟 [피라미드 검증 헬퍼 함수]
 export function canResearchPyramid(player: Player, targetTechId: string): { canResearch: boolean, reason?: string } {
@@ -51,24 +52,38 @@ export function canResearchPyramid(player: Player, targetTechId: string): { canR
 export interface TechSlice {
   researchTech: (techId: string) => void;
   useTechResourceAbility: (techId: string, payload?: any) => void; // 다음 단계에서 만들 1턴 1회 스킬
+  turnResearchResults: { playerId: string; techId: string; techName: string }[];
+  showResearchResults: boolean;
+  setShowResearchResults: (show: boolean) => void;
+  clearResearchResults: () => void;
 }
 
 export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]], [], TechSlice> = (set, get) => ({
+  turnResearchResults: [],
+  showResearchResults: false,
+  setShowResearchResults: (show) => set((state) => { state.showResearchResults = show; }),
+  clearResearchResults: () => set((state) => { state.turnResearchResults = []; }),
+
   researchTech: (techId: string) => {
     set((state) => {
       const player = state.players[state.currentPlayerIndex];
       const techDef = TECHNOLOGIES.find(t => t.id === techId);
       if (!techDef) return;
 
-      // 1. 피라미드 연구 가능 여부 검사
+      // 1. 기술 피라미드 연구 가능 여부 검사
       const check = canResearchPyramid(player, techId);
       if (!check.canResearch) {
           alert(check.reason);
           return;
       }
-
-      // [비용 지불 로직 자리] 
-      // 만약 기술 연구에 턴 행동력이나 자원이 소모된다면 이곳에 작성합니다.
+      const availableTrade = player.resources.trade - player.resources.currency;
+      const cost = TECH_COSTS[techDef.level] || 0; 
+      
+      if (availableTrade < cost) {
+          alert(`사용 가능한 교역 토큰이 부족합니다. (비용: ${cost}, 사용 가능: ${availableTrade})`);
+          return;
+      }
+      player.resources.trade -= cost; // 교역 토큰 차감!
 
       // 2. 플레이어 기술 인벤토리에 새 구조체로 추가
       const newTech: PlayerTechnology = {
@@ -78,6 +93,12 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
           abilityUsedThisTurn: false
       };
       player.technologies.push(newTech);
+
+      state.turnResearchResults.push({
+          playerId: player.id,
+          techId: techId,
+          techName: techDef.name
+      });
 
       // 3. 🚀 건물 자동 개량 (예: 신전 -> 대성당) 🚀
       if (techDef.upgradesBuilding) {
@@ -130,43 +151,151 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
       let success = false; // 스킬 사용 성공 여부 (성공 시에만 자원 차감 & 플래그 true)
 
       switch (techId) {
-        case 'currency': // [통화] 향료 1개 소모 -> 문화 3 획득
-          if (player.luxuryResources.spice >= 1) {
-              player.luxuryResources.spice -= 1;
-              player.resources.culture = Math.min(player.resources.culture + 3, 50);
-              success = true;
-          } else {
-              alert("향료가 부족합니다.");
-          }
-          break;
-
-        case 'pottery': // [도자기] 임의 자원 2개 소모 -> 화폐 토큰 1개 (최대 4)
-          // 임의 자원 2개를 소모하는 로직은 UI에서 어떤 자원을 낼지 payload로 받아와야 합니다.
-          // 예: payload = { resource1: 'wheat', resource2: 'iron' }
+        case 'pottery': // [도자기] 임의 자원 2개 소모 -> 화폐 토큰 1개 획득 (최대 4)
           if (tech.tokensOnCard >= (tech.resourceAbility.maxTokens || 4)) {
               alert("이 기술 카드에 더 이상 화폐 토큰을 올릴 수 없습니다.");
               return;
           }
-          if (payload && payload.resource1 && payload.resource2) {
-              // 실제 자원 차감 로직 (생략 - UI 연동 시 구체화)
+          if (payload?.consumedResources) {
+              // 1. 선택한 자원들을 창고에서 차감
+              Object.entries(payload.consumedResources).forEach(([res, amount]) => {
+                  player.luxuryResources[res as keyof typeof player.luxuryResources] -= (amount as number);
+              });
+              
+              // 2. 화폐 증가 (카드 위 토큰 + 내 실제 화폐 모두 증가)
               tech.tokensOnCard += 1;
+              player.resources.currency = Math.min(player.resources.currency + 1, 4); // 최대 4개 제한
               success = true;
-          } else {
-              alert("소모할 자원 2개를 선택해야 합니다.");
           }
           break;
 
-        case 'writing': // [기록] 스파이 1개 소모 -> 다음 턴 상대 도시 1곳 마비
-          if (player.spies >= 1 && payload?.targetCityId) {
-              player.spies -= 1;
-              // 상대 도시 마비 로직 적용 (도시 상태에 paralyzed 플래그 등 추가 필요)
+        case 'philosophy': // [철학] 임의 자원 3개 소모 -> 위인 마커 1개 획득
+          if (payload?.consumedResources) {
+              // 1. 선택한 자원들을 창고에서 차감
+              Object.entries(payload.consumedResources).forEach(([res, amount]) => {
+                  player.luxuryResources[res as keyof typeof player.luxuryResources] -= (amount as number);
+              });
+              
+              // 2. 위인 마커 1개 추가!
+              player.greatPeople += 1;
               success = true;
+          }
+          break;
+
+        case 'writing': // [기록] 스파이 1개 소모 -> 상대 도시 마비
+          if (player.spies >= 1 && payload?.targetCityId && payload?.targetPlayerId) {
+              const targetPlayer = state.players.find(p => p.id === payload.targetPlayerId);
+              if (targetPlayer) {
+                  const targetCity = targetPlayer.cities.find(c => c.id === payload.targetCityId);
+                  if (targetCity) {
+                      player.spies -= 1; // 스파이 소모
+                      targetCity.isParalyzed = true; // 🌟 도시 마비!
+                      success = true;
+                  }
+              }
           } else {
               alert("스파이가 부족하거나 대상을 선택하지 않았습니다.");
           }
           break;
 
-        // ... 다른 기술들도 이런 식으로 쭉쭉 추가됩니다! ...
+        case 'communism': // [공산주의] 스파이 1개 소모 -> 타일 마비
+          if (player.spies >= 1 && payload?.x !== undefined && payload?.y !== undefined) {
+             const tile = state.map.tiles[payload.y][payload.x];
+             player.spies -= 1; // 스파이 소모
+             tile.isParalyzed = true; // 🌟 타일 마비!
+             success = true;
+          } else {
+              alert("스파이가 부족하거나 대상을 선택하지 않았습니다.");
+          }
+          break;
+
+        case 'currency': // [통화] 향료 1개 소모 -> 문화 3 획득
+          if (player.luxuryResources.spice >= 1) {
+              player.luxuryResources.spice -= 1;
+              player.resources.culture += 3;
+              success = true;
+          } else alert("향료가 부족합니다.");
+          break;
+
+        case 'animal_husbandry': // [축산] 밀 1개 소모 -> 내 도시 하나에 생산력 +3
+          if (player.luxuryResources.wheat >= 1 && payload?.targetCityId) {
+              const targetCity = player.cities.find(c => c.id === payload.targetCityId);
+              if (targetCity) {
+                  player.luxuryResources.wheat -= 1;
+                  // 🌟 해당 도시의 이번 턴 임시 생산력에 +3 추가!
+                  targetCity.tempProductionBonus = (targetCity.tempProductionBonus || 0) + 3;
+                  success = true;
+              }
+          } else alert("밀이 부족하거나 도시를 선택하지 않았습니다.");
+          break;
+
+        case 'construction': // [건설] 밀 1개 소모 -> 내 도시 하나에 생산력 +5
+          if (player.luxuryResources.wheat >= 1 && payload?.targetCityId) {
+              const targetCity = player.cities.find(c => c.id === payload.targetCityId);
+              if (targetCity) {
+                  player.luxuryResources.wheat -= 1;
+                  targetCity.tempProductionBonus = (targetCity.tempProductionBonus || 0) + 5;
+                  success = true;
+              }
+          } else alert("밀이 부족하거나 도시를 선택하지 않았습니다.");
+          break;
+
+        case 'finance': // [금융] 밀 1개 소모 -> 내 도시 하나에 생산력 +7
+          if (player.luxuryResources.wheat >= 1 && payload?.targetCityId) {
+              const targetCity = player.cities.find(c => c.id === payload.targetCityId);
+              if (targetCity) {
+                  player.luxuryResources.wheat -= 1;
+                  targetCity.tempProductionBonus = (targetCity.tempProductionBonus || 0) + 7;
+                  success = true;
+              }
+          } else alert("밀이 부족하거나 도시를 선택하지 않았습니다.");
+          break;
+
+        case 'chivalry': // [기사도] 향료 1개 소모 -> 문화 5 획득
+          if (player.luxuryResources.spice >= 1) {
+              player.luxuryResources.spice -= 1;
+              player.resources.culture += 5;
+              success = true;
+          } else alert("향료가 부족합니다.");
+          break;
+
+        case 'metallurgy': // [금속주조] 향료 1개 소모 -> 문화 7 획득
+          if (player.luxuryResources.spice >= 1) {
+              player.luxuryResources.spice -= 1;
+              player.resources.culture += 7;
+              success = true;
+          } else alert("향료가 부족합니다.");
+          break;
+
+        // ==========================================
+        // 🌟 토큰 쌓기 기술들 (화폐 최대 4개 제한)
+        // ==========================================
+        case 'printing_press': // [인쇄기] 문화 5 소모 -> 화폐 토큰 1개 획득
+          if (tech.tokensOnCard >= (tech.resourceAbility.maxTokens || 4)) {
+              alert("이 기술 카드에 더 이상 화폐 토큰을 올릴 수 없습니다.");
+              return;
+          }
+          if (player.resources.culture >= 5) {
+              player.resources.culture -= 5;
+              tech.tokensOnCard += 1;
+              player.resources.currency = Math.min(player.resources.currency + 1, 4);
+              success = true;
+          } else alert("문화 토큰이 부족합니다.");
+          break;
+
+        case 'democracy': // [민주주의] 교역 6 소모 -> 화폐 토큰 1개 획득
+          if (tech.tokensOnCard >= (tech.resourceAbility.maxTokens || 4)) {
+              alert("이 기술 카드에 더 이상 화폐 토큰을 올릴 수 없습니다.");
+              return;
+          }
+          if (player.resources.trade >= 6) {
+              player.resources.trade -= 6; // 교역 차감
+              tech.tokensOnCard += 1;      // 카드 위 토큰 증가
+              player.resources.currency = Math.min(player.resources.currency + 1, 4); // 전체 화폐 증가
+              success = true;
+          } else alert("교역 토큰이 부족합니다.");
+          break;
+          
         default:
           alert("구현 준비 중인 능력입니다.");
           break;

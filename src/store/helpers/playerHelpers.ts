@@ -40,16 +40,15 @@ export function canResearchTechLevel(player: Player, level: number): boolean {
 
   const techCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   player.technologies.forEach((t) => {
-    // 시작 기술(isStartingTechFor)은 항상 1레벨로 취급
-    const lv = t.isStartingTechFor ? 1 : t.level;
+    const lv = (t.isStartingTechFor === player.nation) ? 1 : t.level;
     if (lv >= 1 && lv <= 5) {
       techCounts[lv]++;
     }
   });
 
   const previousLevel = level - 1;
-  // 새로운 피라미드 공식: (N-1)레벨 기술 개수가 N레벨 기술 개수보다 커야 함
-  return techCounts[previousLevel] > (techCounts[level] || 0);
+  // 🌟 수정: 하위 레벨 개수가 (상위 레벨 개수 + 2) 이상이어야 함!
+  return techCounts[previousLevel] >= (techCounts[level] || 0) + 2;
 }
 
 /**
@@ -58,7 +57,8 @@ export function canResearchTechLevel(player: Player, level: number): boolean {
 export function getTechCountsByLevel(player: Player): Record<number, number> {
   const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   player.technologies.forEach((tech) => {
-    const lv = tech.isStartingTechFor ? 1 : tech.level;
+    // 🌟 변경점: 내 국가일 때만 1레벨로 취급!
+    const lv = (tech.isStartingTechFor === player.nation) ? 1 : tech.level;
     if (lv >= 1 && lv <= 5) {
       counts[lv]++;
     }

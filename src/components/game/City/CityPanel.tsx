@@ -471,7 +471,17 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
 
           {/* 생산 패널 */}
           <div className="bg-slate-800 rounded-lg p-4">
-            {/* [복구] 행동 불가 경고 메시지 */}
+
+            {/* 마비 상태 경고창! */}
+            {selectedCity?.isParalyzed && (
+              <div className="mb-4 p-3 bg-red-900/80 border-2 border-red-500 rounded-lg animate-pulse shadow-lg">
+                <p className="text-white text-sm font-bold flex items-center gap-2">
+                  <span className="text-xl">⛓️</span> 상대 스파이에 의해 도시가 마비되었습니다! (행동 불가)
+                </p>
+              </div>
+            )}
+
+            {/* 행동 불가 경고 메시지 */}
             {!canManageCity && (
               <div className="mb-4 p-3 bg-yellow-900/50 border border-yellow-600 rounded-lg">
                 <p className="text-yellow-400 text-sm">
@@ -498,7 +508,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
               <div className="grid grid-cols-2 gap-2">
                 {Object.values(WONDERS).map((wonder) => {
                   const canAfford = selectedCityProduction >= wonder.cost;
-                  const cityActed = selectedCity?.hasActedThisTurn ?? false;
+                  const cityActed = (selectedCity?.hasActedThisTurn || selectedCity?.isParalyzed) ?? false;
                   return (
                     <motion.button key={wonder.type} whileHover={(canManageCity && canAfford && !cityActed) ? { scale: 1.02 } : {}} onClick={() => handleBuildWonder(wonder)} disabled={!canManageCity || !canAfford || cityActed} className={clsx('p-3 rounded-lg text-left transition-colors border border-indigo-900/50', (canManageCity && canAfford && !cityActed) ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-700 opacity-40 cursor-not-allowed')}>
                       <div className="text-indigo-300 font-bold text-sm flex items-center gap-1">🗽 {wonder.name}</div>
@@ -515,7 +525,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
               <div className="grid grid-cols-2 gap-2">
                 {availableBuildings.map((building) => {
                   const canAfford = selectedCityProduction >= building.productionCost;
-                  const cityActed = selectedCity?.hasActedThisTurn ?? false;
+                  const cityActed = (selectedCity?.hasActedThisTurn || selectedCity?.isParalyzed) ?? false;
                   return (
                     <motion.button key={building.type} whileHover={(canManageCity && canAfford && !cityActed) ? { scale: 1.02 } : {}} onClick={() => handleBuild(building)} disabled={!canManageCity || !canAfford || cityActed} className={clsx('p-3 rounded-lg text-left transition-colors', (canManageCity && canAfford && !cityActed) ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-700 opacity-40 cursor-not-allowed')}>
                       <div className="text-white font-medium text-sm">{building.name}</div>
@@ -537,7 +547,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
                   const currentCount = unitType === 'military' ? militaryCount : settlerCount;
                   const isMaxed = currentCount >= (unitType === 'military' ? 6 : 2);
                   const canAfford = selectedCityProduction >= def.productionCost;
-                  const cityActed = selectedCity?.hasActedThisTurn ?? false;
+                  const cityActed = (selectedCity?.hasActedThisTurn || selectedCity?.isParalyzed) ?? false;
                   const isDisabled = isMaxed || !canManageCity || !canAfford || cityActed;
                   return (
                     <button key={unitType} onClick={() => handleProduceUnit(unitType)} disabled={isDisabled} className={clsx('p-3 rounded-lg text-left transition-colors', isDisabled ? 'bg-slate-700 opacity-40 cursor-not-allowed' : 'bg-slate-700 hover:bg-slate-600')}>
@@ -556,7 +566,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
                <div className="grid grid-cols-2 gap-2">
                  {availableArmyCards.map((card) => {
                    const canAfford = selectedCityProduction >= card.productionCost;
-                   const cityActed = selectedCity?.hasActedThisTurn ?? false;
+                   const cityActed = (selectedCity?.hasActedThisTurn || selectedCity?.isParalyzed) ?? false;
                    const isDisabled = !canManageCity || !canAfford || cityActed;
                    const cardIcon = { infantry: '🗡️', artillery: '💣', cavalry: '🐴', airforce: '✈️', settler: '' }[card.type];
                    return (

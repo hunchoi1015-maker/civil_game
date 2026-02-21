@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../../../store/gameStore';
 import { TECHNOLOGIES } from '../../../constants/technologies';
 import { validateTechResearch } from '../../../engine/TechValidator';
-import { Technology, TechLevel } from '../../../types/tech'; // 경로 확인 필수!
+import { Technology, TechLevel } from '../../../types/tech'; 
 import clsx from 'clsx';
+import { getTechCountsByLevel } from '../../../store/helpers/playerHelpers';
+import {TECH_COSTS} from '../../../types'
 
 const LEVEL_COLORS: Record<TechLevel, string> = {
   1: 'border-emerald-500 bg-emerald-900/30 text-emerald-100',
@@ -26,23 +28,37 @@ const LEVEL_NAMES: Record<TechLevel, string> = {
 const getTechsByLevel = (level: TechLevel) => TECHNOLOGIES.filter(t => t.level === level);
 
 export function TechTree() {
-  const { players, currentPlayerIndex, currentPhase, researchTech } = useGameStore();
+  const { players, currentPlayerIndex, currentPhase, researchTech,endPhaseForCurrentPlayer } = useGameStore();
   const currentPlayer = players[currentPlayerIndex];
   const [selectedTech, setSelectedTech] = useState<Technology | null>(null);
 
   // 현재 기획상 "도시 경영"이나 특정 단계에서 자유롭게 연구할 수 있다면 
   // 이 조건을 true나 적절한 phase로 변경하세요. (예: true 로 두면 언제든 연구창 열람 가능)
-  const canResearch = currentPhase === 'research' || currentPhase === 'cityManagement'; 
+  const canResearch = currentPhase === 'research';
 
   const researchedIds = new Set(currentPlayer.technologies.map((t) => t.id));
 
   const handleResearch = (techId: string) => {
+    if (!selectedTech) return;
+
+    // 🌟 1. UI에서 먼저 교역 토큰이 충분한지 계산합니다.
+    const cost = TECH_COSTS[selectedTech.level] || 0;
+    const availableTrade = Math.max(0, currentPlayer.resources.trade - currentPlayer.resources.currency);
+
+    // 🌟 2. 모자라다면 경고창을 띄우고 함수를 그 자리에서 종료(return)합니다!
+    if (availableTrade < cost) {
+      alert(`사용 가능한 교역 토큰이 부족합니다. (비용: ${cost}, 사용 가능: ${availableTrade})`);
+      return; // ⛔ 여기서 멈추기 때문에 다음 사람 턴으로 넘어가지 않습니다!
+    }
+
+    // 🌟 3. 충분할 때만 실제 연구를 진행하고 차례를 마칩니다.
     researchTech(techId);
     setSelectedTech(null);
+    endPhaseForCurrentPlayer();
   };
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6 pb-32 max-h-[80vh] overflow-y-auto overflow-x-hidden pr-2">
       {/* 상단 안내 바 */}
       <div className="bg-slate-800 rounded-lg p-4 flex justify-between items-center shadow-lg border border-slate-700">
         <div>
@@ -55,23 +71,34 @@ export function TechTree() {
           <div className="text-xs text-slate-400">현재 보유 기술</div>
           <div className="text-2xl font-bold text-amber-400">{currentPlayer.technologies.length}개</div>
         </div>
+        {/* 연구 건너뛰기 버튼 */}
+          {canResearch && (
+            <button 
+              onClick={() => endPhaseForCurrentPlayer()}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 border border-slate-500 rounded-lg text-white text-sm font-bold transition-colors"
+            >
+              연구 건너뛰기 ⏩
+            </button>
+          )}
       </div>
 
       {/* 기술 트리 피라미드 렌더링 (5단계부터 1단계 순으로 역순 렌더링 하면 피라미드 모양이 됩니다) */}
       <div className="space-y-6 flex flex-col items-center">
         {([5, 4, 3, 2, 1] as TechLevel[]).map((level) => {
           const techs = getTechsByLevel(level);
+          const techCounts = getTechCountsByLevel(currentPlayer);
 
-          return (
-            <div key={level} className="w-full max-w-5xl bg-slate-800/50 rounded-xl p-4 border border-slate-700">
-              <h3 className="text-lg font-bold text-slate-300 mb-3 text-center">
-                {LEVEL_NAMES[level]}
-                {level > 1 && (
-                  <span className="text-xs font-normal text-slate-500 ml-2">
-                    (조건: {level - 1}단계 기술 {currentPlayer.technologies.filter(t => t.level === level).length + 1}개 필요)
-                  </span>
-                )}
-              </h3>
+              return (
+                <div key={level} className="w-full max-w-5xl bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+                  <h3 className="text-lg font-bold text-slate-300 mb-3 text-center">
+                    {LEVEL_NAMES[level]}
+                    {level > 1 && (
+                      <span className="text-xs font-normal text-slate-500 ml-2">
+                        {/* 🌟 수정: 조건 텍스트를 정확한 개수(+2)로 표시합니다. */}
+                        (조건: {level - 1}단계 기술 {techCounts[level] + 2}개 이상 필요)
+                      </span>
+                    )}
+                  </h3>
 
               <div className="flex flex-wrap justify-center gap-3">
                 {techs.map((tech) => {

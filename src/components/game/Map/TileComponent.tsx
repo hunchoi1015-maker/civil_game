@@ -91,6 +91,13 @@ export function TileComponent({ tile, isSelected, onClick }: TileComponentProps)
   const myUnitsOnTile = unitsOnTile.filter(u => u.ownerId === currentPlayer.id);
   const hasEnemyUnits = unitsOnTile.length > myUnitsOnTile.length;
 
+  let isCityParalyzed = false;
+  if (hasCity && owner) {
+      const city = owner.cities.find(c => c.id === tile.cityId);
+      if (city?.isParalyzed) isCityParalyzed = true;
+  }
+  const isParalyzed = tile.isParalyzed || isCityParalyzed;
+
   const selectedUnitData = selectedUnit
     ? currentPlayer.units.find(u => u.id === selectedUnit)
     : null;
@@ -114,6 +121,7 @@ export function TileComponent({ tile, isSelected, onClick }: TileComponentProps)
   tooltip += `\n생산: ${tileYield.production}, 교역: ${tileYield.trade}, 문화: ${tileYield.culture}`;
 
 
+  
   return (
     <button
       onClick={onClick}
@@ -127,7 +135,14 @@ export function TileComponent({ tile, isSelected, onClick }: TileComponentProps)
       )}
       title={tooltip}
     >
-      {/* 1. 건물 표시 (최우선) */}
+      {/* 0. 마비 상태 표시 (최우선) */}
+      {isParalyzed && (
+        <div className="absolute inset-0 flex items-center justify-center z-40 bg-red-900/40 rounded-sm">
+          <span className="text-2xl drop-shadow-lg">⛓️</span>
+        </div>
+      )}
+
+      {/* 1. 건물 표시 (차선) */}
       {hasBuilding && buildingDef && !hasCity && !hasUnits && (
         <span className="text-[12px] mb-2">{BUILDING_ICONS[buildingType] || '🏗️'}</span>
       )}

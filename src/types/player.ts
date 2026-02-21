@@ -113,8 +113,8 @@ export function createInitialResources(): Resources {
   };
 }
 export const createInitialLuxuryResources = (): Record<Exclude<ResourceType, 'none'>, number> => ({
-  spice: 0,
-  wheat: 0,
-  silk: 0,
-  iron: 0,
+  spice: 3,
+  wheat: 3,
+  silk: 3,
+  iron: 3,
 });

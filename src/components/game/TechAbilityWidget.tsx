@@ -1,19 +1,111 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../../store/gameStore';
+import { Technology } from '../../types/tech';
 
 export function TechAbilityWidget() {
-  const { players, currentPlayerIndex, useTechResourceAbility, currentPhase } = useGameStore();
+  const { 
+    players, 
+    currentPlayerIndex, 
+    useTechResourceAbility, 
+    currentPhase,
+    startTargeting,
+    startResourceSelection,
+    targetingMode,     
+    cancelTargeting     
+
+  } = useGameStore();
+  
   const player = players[currentPlayerIndex];
   const [isOpen, setIsOpen] = useState(false);
 
-  // 현재 플레이어가 가진 기술 중 '자원 능력'이 있고, '이번 턴에 안 쓴' 기술만 필터링
   const availableTechs = player.technologies.filter(
     tech => tech.resourceAbility && !tech.abilityUsedThisTurn
   );
 
+  // 🌟 스킬 버튼을 눌렀을 때의 분기 처리 함수
+  const handleAbilityUse = (tech: Technology) => {
+    if (currentPhase !== 'cityManagement') {
+        alert("이 능력은 도시 경영 단계에서만 사용할 수 있습니다.");
+        return;
+    }
+
+    // 도시를 눌러야만 사용 가능한 기술
+    if (['animal_husbandry', 'construction', 'finance'].includes(tech.id)) {
+      startTargeting(tech.id, 'my_city'); 
+      setIsOpen(false);
+      return; 
+    }
+
+    // 타일을 눌러야 사용 가능한 기술
+    if (tech.id === 'communism') {
+      startTargeting(tech.id, 'tile');
+      setIsOpen(false);
+      return; 
+    }
+
+    //  도자기 (자원 2개 요구)
+    if (tech.id === 'pottery') {
+      startResourceSelection(tech.id, 2);
+      setIsOpen(false);
+      return;
+    }
+
+    //  철학 (자원 3개 요구)
+    if (tech.id === 'philosophy') {
+      startResourceSelection(tech.id, 3);
+      setIsOpen(false);
+      return;
+    }
+    // 일반 기술은 즉시 발동
+    useTechResourceAbility(tech.id, {});
+    setIsOpen(false);
+  };
+
+  const renderCitySelectionModal = () => {
+    if (!targetingMode?.isActive || targetingMode.targetType !== 'my_city') return null;
+    
+    let bonusText = '';
+    if (targetingMode.techId === 'animal_husbandry') bonusText = '생산력 +3';
+    else if (targetingMode.techId === 'construction') bonusText = '생산력 +5';
+    else if (targetingMode.techId === 'finance') bonusText = '생산력 +7';
+
+    return (
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]">
+        <div className="bg-slate-800 p-6 rounded-lg border-2 border-emerald-500 w-96 shadow-2xl">
+          <h3 className="text-xl font-bold text-white mb-4">🏛️ 대상 도시 선택</h3>
+          <p className="text-sm text-slate-300 mb-4">이번 턴에 {bonusText} 효과를 받을 내 도시를 선택하세요.</p>
+          
+          {/* 도시 리스트 렌더링 */}
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+            {player.cities.map(city => (
+              <button 
+                key={city.id}
+                onClick={() => {
+                  useTechResourceAbility(targetingMode.techId!, { targetCityId: city.id });
+                  cancelTargeting(); // 선택 완료 시 창 닫기
+                }}
+                className="w-full p-3 bg-slate-700 hover:bg-emerald-900/50 rounded text-left text-white font-bold transition-colors flex justify-between items-center border border-slate-600 hover:border-emerald-500"
+              >
+                <span>{city.name}</span>
+                <span className="text-xs text-amber-400">{bonusText}</span>
+              </button>
+            ))}
+            {/* 도시가 없을 때의 예외 처리 */}
+            {player.cities.length === 0 && <p className="text-slate-500 py-2 text-center">도시가 없습니다.</p>}
+          </div>
+          
+          <button onClick={cancelTargeting} className="mt-4 w-full p-3 bg-slate-600 hover:bg-slate-500 text-white rounded font-bold transition-colors">
+            취소
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="relative flex flex-col items-end z-30">
+      {renderCitySelectionModal()}
       <AnimatePresence>
         {isOpen && (
           <motion.div 
@@ -27,29 +119,16 @@ export function TechAbilityWidget() {
               <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
             
-            {/* 사용 가능한 능력이 없을 때 */}
             {availableTechs.length === 0 && (
               <div className="text-sm text-slate-500 text-center py-6">
                 현재 사용 가능한 기술 능력이 없습니다.
               </div>
             )}
 
-            {/* 사용 가능한 능력 리스트 */}
             {availableTechs.map(tech => (
               <button 
                 key={tech.id}
-                onClick={() => {
-                  // 현재 '도시 경영' 단계에서만 쓰게 제한 (기획에 맞게 수정 가능)
-                  if (currentPhase !== 'cityManagement') {
-                      alert("이 능력은 도시 경영 단계에서만 사용할 수 있습니다.");
-                      return;
-                  }
-                  
-                  // 일부 스킬(도자기 등)은 payload(타겟이나 추가 자원)가 필요하므로
-                  // 추후 팝업 연동을 위해 임시로 비워두거나 바로 호출합니다.
-                  useTechResourceAbility(tech.id, {});
-                  setIsOpen(false);
-                }}
+                onClick={() => handleAbilityUse(tech)} // 🌟 방금 만든 함수로 교체!
                 className="p-3 bg-slate-700 hover:bg-emerald-900/40 border border-slate-600 hover:border-emerald-500 rounded text-left transition-all group flex flex-col justify-between"
               >
                 <div className="text-white font-bold mb-1 flex justify-between items-center">
@@ -61,13 +140,6 @@ export function TechAbilityWidget() {
                 <div className="text-xs text-slate-400 group-hover:text-slate-300 leading-relaxed">
                   {tech.resourceAbility?.description}
                 </div>
-                
-                {/* 화폐 토큰 제한이 있는 기술(도자기, 법계 등) 표시 */}
-                {tech.resourceAbility?.maxTokens && (
-                  <div className="mt-2 text-[10px] font-bold text-amber-400 text-right">
-                    🪙 누적 화폐: {tech.tokensOnCard} / {tech.resourceAbility.maxTokens}
-                  </div>
-                )}
               </button>
             ))}
           </motion.div>

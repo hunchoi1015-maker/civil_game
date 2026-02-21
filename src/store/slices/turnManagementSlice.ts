@@ -107,6 +107,13 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
       state.currentPhase = 'start';
       state.phaseComplete = new Array(state.players.length).fill(false);
       
+      // 맵 전체 타일의 마비 상태 해제
+      state.map.tiles.forEach(row => {
+          row.forEach(tile => {
+              tile.isParalyzed = false;
+          });
+      });
+
       state.players.forEach((player) => {
         player.hasResearchedThisTurn = false;
         
@@ -130,7 +137,9 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
   },
 
   endPhaseForCurrentPlayer: () => {
+    let shouldEndTurn = false; // 🌟 턴 종료 플래그 추가
     const phases: GamePhase[] = ['start', 'trade', 'cityManagement', 'movement', 'research'];
+    
     set((state) => {
       state.phaseComplete[state.currentPlayerIndex] = true;
       const playerOrder = getPlayerOrder(state.firstPlayerIndex, state.players.length);
@@ -140,10 +149,6 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
       if (nextOrderIndex < playerOrder.length) {
         state.currentPlayerIndex = playerOrder[nextOrderIndex];
       } else {
-        // 모든 플레이어가 현재 페이즈를 종료했을 때 다음 페이즈로 넘어가는 로직
-        
-        // 🌟 [수정된 부분] 에러를 일으키던 옛날 showResearchResults 관련 블록을 완전히 삭제했습니다! 🌟
-        
         const currentIndex = phases.indexOf(state.currentPhase);
         if (currentIndex < phases.length - 1) {
           state.currentPhase = phases[currentIndex + 1];
@@ -151,21 +156,45 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
           state.currentPlayerIndex = state.firstPlayerIndex;
           
           if (state.currentPhase === 'trade') {
-            state.players.forEach((player) => {
-              player.hasCollectedTrade = false;
-            });
+            state.players.forEach((player) => { player.hasCollectedTrade = false; });
           }
           if (state.currentPhase === 'movement') {
             state.players.forEach((player) => {
+              // 1. 플레이어가 보유한 최고 단계의 이동 관련 기술을 확인합니다.
+              const hasFlight = player.technologies.some(t => t.id === 'flight');
+              const hasSteam = player.technologies.some(t => t.id === 'steam_power');
+              const hasNavigation = player.technologies.some(t => t.id === 'navigation'); // (또는 sailing)
+              const hasHorseback = player.technologies.some(t => t.id === 'horseback_riding');
+
+              // 2. 기술에 따른 이번 턴 최대 이동력 계산 (기본 2칸이라고 가정)
+              let maxMovement = 2; 
+              if (hasFlight) maxMovement = 6;
+              else if (hasSteam) maxMovement = 5;
+              else if (hasNavigation) maxMovement = 4;
+              else if (hasHorseback) maxMovement = 3;
+
+              // 3. 모든 유닛에게 계산된 이동력을 채워줍니다.
               player.units.forEach((unit) => {
-                unit.movement = unit.maxMovement;
+                unit.movement = maxMovement; 
                 unit.hasMoved = false;
               });
             });
           }
+        } else {
+          // 🌟 마지막 단계(research)까지 모두 끝났다면 라운드(Turn)를 넘겨야 합니다!
+          shouldEndTurn = true; 
         }
       }
     });
+
+    // 상태 업데이트(set)가 끝난 후 다음 라운드로 넘깁니다.
+    if (shouldEndTurn) {
+      // 이번 라운드에 연구된 기술이 하나라도 있다면 요약 모달 띄우기!
+      if (get().turnResearchResults.length > 0) {
+        get().setShowResearchResults(true);
+      }
+      get().endTurn();
+    }
   },
 
   getPlayerOrderForCurrentRound: () => {
