@@ -174,6 +174,8 @@ export interface CombatState {
   lootSelections: LootSelection[];
   maxLootSelections: number;
 
+  // 자원 능력  (전투)
+  usedCombatSkills: string[];
   // 로그
   log: CombatLogEntry[];
 }

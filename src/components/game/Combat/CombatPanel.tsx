@@ -148,23 +148,48 @@ function PlacementPhase() {
     players,
     placeCardOnBattlefield,
     passTurn,
+    useTechResourceAbility,
+    applyCombatSkill // 🌟 [추가] 스킬 발동 함수
   } = useGameStore();
 
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [useMetalCastingToggle, setUseMetalCastingToggle] = useState(false);
+  
+  // 🌟 [추가] 포인트 분배 모달 상태 관리
+  const [skillModal, setSkillModal] = useState<{
+    isOpen: boolean;
+    skillId: string;
+    maxPoints: number;
+    type: 'damage' | 'heal';
+  } | null>(null);
+  const [allocations, setAllocations] = useState<Record<string, number>>({});
 
   const cs = combatState;
   const attackerPlayer = players.find((p) => p.id === cs.attackerRoleId);
   const defenderPlayer = players.find((p) => p.id === cs.defenderRoleId);
 
-  // 공격자(플레이어) 정보가 없으면 렌더링 불가
   if (!attackerPlayer) return null;
 
   const isAttackerTurn = cs.placement.currentTurn === 'attacker';
-  
-  // [수정] 현재 턴 플레이어 결정 (마을인 경우 가상의 객체 사용)
   const currentTurnPlayer = isAttackerTurn 
       ? attackerPlayer 
       : (defenderPlayer || { id: 'village', name: '원주민 마을', color: 'gray' } as any);
+
+  const usedSkills = cs.usedCombatSkills || [];
+  const hasTech = (techId: string) => currentTurnPlayer.technologies?.some((t: any) => t.id === techId);
+  const currentRole = isAttackerTurn ? 'attacker' : 'defender'; 
+  const hasUsedInCombat = (techId: string) => usedSkills.includes(`${currentRole}_${techId}`);
+
+  //금속가공 > 전투 중 사용 여부(usedCombatSkills)를 기준으로 검사!
+  const hasMetalCasting = hasTech('metal_casting') && !hasUsedInCombat('metal_casting');
+  const ironCount = currentTurnPlayer.luxuryResources?.iron || 0;
+  const canUseMetalCasting = hasMetalCasting && ironCount >= 1;
+
+  useEffect(() => {
+    if (!canUseMetalCasting && useMetalCastingToggle) {
+      setUseMetalCastingToggle(false);
+    }
+  }, [canUseMetalCasting, useMetalCastingToggle]);
 
   const currentCards = isAttackerTurn ? cs.attackerAvailableCards : cs.defenderAvailableCards;
   const currentDeployCount = isAttackerTurn ? cs.placement.attackerDeployCount : cs.placement.defenderDeployCount;
@@ -172,6 +197,15 @@ function PlacementPhase() {
 
   const handlePlaceCard = (battlefieldId: string | null) => {
     if (!selectedCard) return;
+
+    if (useMetalCastingToggle) {
+      useTechResourceAbility('metal_casting', { 
+          targetCardId: selectedCard, 
+          actingPlayerId: currentTurnPlayer.id 
+      });
+      setUseMetalCastingToggle(false);
+    }
+
     placeCardOnBattlefield(currentTurnPlayer.id, selectedCard, battlefieldId);
     setSelectedCard(null);
   };
@@ -181,26 +215,21 @@ function PlacementPhase() {
     setSelectedCard(null);
   };
 
-  // 상대가 놓은 빈 슬롯이 있는 전장 (맞대기 가능)
   const faceable = cs.battlefields.filter((bf) =>
     isAttackerTurn ? (!bf.attackerCard && !!bf.defenderCard) : (!bf.defenderCard && !!bf.attackerCard)
   );
 
   return (
-    <div className="space-y-6">
-      {/* 역할 교환 알림 */}
+    <div className="space-y-6 relative">
       {cs.rolesSwapped && (
         <div className="bg-amber-900/30 border border-amber-600 rounded-lg p-3 text-center">
-          <p className="text-amber-400 text-sm">
-            ⚠️ 성벽 도시/수도 방어! 역할이 교환되었습니다.
-          </p>
+          <p className="text-amber-400 text-sm">⚠️ 성벽 도시/수도 방어! 역할이 교환되었습니다.</p>
           <p className="text-slate-400 text-xs mt-1">
             도시 소유자({attackerPlayer.name})가 공격 역할, 이동자({defenderPlayer?.name})가 방어 역할
           </p>
         </div>
       )}
 
-      {/* 턴 표시 */}
       <div className="text-center">
         <div className={clsx(
           'inline-block px-4 py-2 rounded-lg font-semibold',
@@ -213,7 +242,6 @@ function PlacementPhase() {
         </p>
       </div>
 
-      {/* 전장 표시 */}
       <div className="bg-slate-800/50 rounded-lg p-4">
         <h3 className="text-sm font-semibold text-slate-300 mb-3">전장</h3>
         <div className="flex gap-2 overflow-x-auto pb-2">
@@ -226,21 +254,14 @@ function PlacementPhase() {
             />
           ))}
           {cs.battlefields.length === 0 && (
-            <div className="text-slate-500 text-sm py-4 text-center w-full">
-              아직 배치된 카드가 없습니다
-            </div>
+            <div className="text-slate-500 text-sm py-4 text-center w-full">아직 배치된 카드가 없습니다</div>
           )}
         </div>
       </div>
 
-      {/* 카드 선택 + 액션 */}
       <div className="grid grid-cols-2 gap-6">
-        {/* 현재 턴 플레이어의 카드 */}
         <div>
-          <h3 className={clsx(
-            'text-lg font-semibold mb-3',
-            isAttackerTurn ? 'text-red-400' : 'text-blue-400',
-          )}>
+          <h3 className={clsx('text-lg font-semibold mb-3', isAttackerTurn ? 'text-red-400' : 'text-blue-400')}>
             {isAttackerTurn ? '⚔️' : '🛡️'} {currentTurnPlayer.name}의 카드
           </h3>
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
@@ -260,9 +281,31 @@ function PlacementPhase() {
           </div>
         </div>
 
-        {/* 액션 패널 */}
         <div className="flex flex-col gap-3">
           <h3 className="text-lg font-semibold text-slate-300">행동 선택</h3>
+
+          {canUseMetalCasting && (
+            <label className={clsx(
+              "flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-colors mb-2",
+              useMetalCastingToggle ? "border-amber-400 bg-amber-900/30 ring-2 ring-amber-500" : "border-slate-600 bg-slate-700/50"
+            )}>
+              <input 
+                type="checkbox" 
+                className="hidden"
+                checked={useMetalCastingToggle}
+                onChange={() => setUseMetalCastingToggle(!useMetalCastingToggle)}
+              />
+              <span className="text-2xl">🔨</span>
+              <div className="flex-1">
+                <div className={clsx("font-bold text-sm", useMetalCastingToggle ? "text-amber-300" : "text-slate-300")}>
+                  금속가공 버프 사용 (철 1 소모)
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  켜두고 카드를 배치하면 해당 카드 공격력이 영구히 +3 됩니다.
+                </div>
+              </div>
+            </label>
+          )}
 
           {selectedCard && (
             <>
@@ -274,17 +317,13 @@ function PlacementPhase() {
               </button>
 
               {faceable.length > 0 && (
-                <p className="text-xs text-slate-400">
-                  또는 위 전장에서 상대 카드를 클릭하여 맞대기
-                </p>
+                <p className="text-xs text-slate-400">또는 위 전장에서 상대 카드를 클릭하여 맞대기</p>
               )}
             </>
           )}
 
           {!selectedCard && currentCards.length > 0 && currentDeployCount < currentMaxCards && (
-            <p className="text-sm text-slate-400">
-              왼쪽에서 카드를 선택하세요
-            </p>
+            <p className="text-sm text-slate-400">왼쪽에서 카드를 선택하세요</p>
           )}
 
           <button
@@ -293,10 +332,58 @@ function PlacementPhase() {
           >
             패스
           </button>
+
+          {/* ========================================================= */}
+          {/* 🌟 [추가] 전투 스킬 분배 버튼 영역 */}
+          {/* ========================================================= */}
+          {currentTurnPlayer.id !== 'village' && (
+            <div className="mt-2 pt-4 border-t border-slate-700">
+              <h4 className="text-sm font-bold text-slate-400 mb-2">전투 스킬 (현재 턴)</h4>
+              <div className="flex flex-col gap-2">
+                
+                {hasTech('mathematics') && !hasUsedInCombat('mathematics') && (
+                  <button 
+                    onClick={() => { setSkillModal({ isOpen: true, skillId: 'mathematics', maxPoints: 3, type: 'damage' }); setAllocations({}); }}
+                    disabled={currentTurnPlayer.luxuryResources?.iron < 1}
+                    className="px-3 py-2 bg-rose-900/50 hover:bg-rose-800 text-rose-200 rounded text-sm text-left disabled:opacity-50 transition-colors border border-rose-700/50"
+                  >
+                    📐 수학 (철 1 소모): 적 부대에 부상 3 분배
+                  </button>
+                )}
+
+                {hasTech('ballistics') && !hasUsedInCombat('ballistics') && (
+                  <button 
+                    onClick={() => { setSkillModal({ isOpen: true, skillId: 'ballistics', maxPoints: 6, type: 'damage' }); setAllocations({}); }}
+                    disabled={currentTurnPlayer.luxuryResources?.iron < 1}
+                    className="px-3 py-2 bg-rose-700/50 hover:bg-rose-600 text-rose-100 rounded text-sm text-left disabled:opacity-50 transition-colors border border-rose-600/50"
+                  >
+                    🚀 탄도학 (철 1 소모): 적 부대에 부상 6 분배
+                  </button>
+                )}
+
+                {hasTech('animal_husbandry') && !hasUsedInCombat('animal_husbandry') && (
+                  <button 
+                    onClick={() => { setSkillModal({ isOpen: true, skillId: 'animal_husbandry', maxPoints: 3, type: 'heal' }); setAllocations({}); }}
+                    className="px-3 py-2 bg-emerald-900/50 hover:bg-emerald-800 text-emerald-200 rounded text-sm text-left transition-colors border border-emerald-700/50"
+                  >
+                    🥩 축산 (무료): 내 부대에 치료 3 분배
+                  </button>
+                )}
+
+                {hasTech('biology') && !hasUsedInCombat('biology') && (
+                  <button 
+                    onClick={() => applyCombatSkill(currentTurnPlayer.id, 'biology')}
+                    className="px-3 py-2 bg-teal-900/50 hover:bg-teal-800 text-teal-200 rounded text-sm text-left font-bold transition-colors border border-teal-600/50"
+                  >
+                    🌿 생물학 (무료): 전장 내 모든 아군 완치!
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 보너스 정보 */}
       <div className="grid grid-cols-2 gap-4 text-xs">
         <div className="bg-slate-800 rounded p-2">
           <span className="text-red-400">공격 전투 보너스: +{cs.attackerCombatBonus}</span>
@@ -308,6 +395,112 @@ function PlacementPhase() {
           )}
         </div>
       </div>
+
+      {/* ========================================================= */}
+      {/* 🌟 [추가] 포인트 분배 모달 UI */}
+      {/* ========================================================= */}
+      {skillModal?.isOpen && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[80]">
+          <div className="bg-slate-800 border-2 border-amber-500 rounded-xl p-6 w-[450px] shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-2">
+              {skillModal.type === 'damage' ? '💥 데미지 분배' : '✨ 회복 분배'}
+            </h3>
+            
+            {(() => {
+              const usedPoints = Object.values(allocations).reduce((a, b) => a + b, 0);
+              const remainingPoints = skillModal.maxPoints - usedPoints;
+
+              return (
+                <>
+                  <p className="text-amber-400 font-bold mb-4 flex justify-between">
+                    <span>남은 포인트: <span className="text-2xl">{remainingPoints}</span> / {skillModal.maxPoints}</span>
+                    <span className="text-sm text-slate-400 mt-1">
+                      {skillModal.type === 'damage' ? '(적 전장 카드 대상)' : '(내 전장 카드 대상)'}
+                    </span>
+                  </p>
+
+                  <div className="space-y-3 max-h-60 overflow-y-auto pr-2 mb-6">
+                    {cs.battlefields.map(bf => {
+                      const targetCard = skillModal.type === 'damage' 
+                        ? (isAttackerTurn ? bf.defenderCard : bf.attackerCard)
+                        : (isAttackerTurn ? bf.attackerCard : bf.defenderCard);
+                      
+                      if (!targetCard) return null;
+
+                      const currentAlloc = allocations[bf.id] || 0;
+                      const maxPossible = skillModal.type === 'damage' 
+                        ? targetCard.health 
+                        : (targetCard.maxHealth - targetCard.health);
+
+                      if (maxPossible <= 0) return null;
+
+                      return (
+                        <div key={bf.id} className="flex justify-between items-center bg-slate-700 p-3 rounded border border-slate-600">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">{CARD_ICONS[targetCard.type]}</span>
+                            <div>
+                              <div className="text-white font-bold text-sm">{targetCard.name}</div>
+                              <div className="text-xs text-slate-400">
+                                체력: {targetCard.health}/{targetCard.maxHealth}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <button 
+                              onClick={() => setAllocations(p => ({ ...p, [bf.id]: Math.max(0, currentAlloc - 1) }))}
+                              disabled={currentAlloc === 0}
+                              className="w-8 h-8 rounded bg-slate-600 hover:bg-slate-500 text-white font-bold disabled:opacity-30"
+                            >-</button>
+                            <span className={clsx("w-6 text-center font-bold text-lg", skillModal.type === 'damage' ? 'text-red-400' : 'text-green-400')}>
+                              {currentAlloc}
+                            </span>
+                            <button 
+                              onClick={() => setAllocations(p => ({ ...p, [bf.id]: currentAlloc + 1 }))}
+                              disabled={remainingPoints === 0 || currentAlloc >= maxPossible}
+                              className="w-8 h-8 rounded bg-slate-600 hover:bg-slate-500 text-white font-bold disabled:opacity-30"
+                            >+</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {cs.battlefields.every(bf => {
+                       const tc = skillModal.type === 'damage' 
+                        ? (isAttackerTurn ? bf.defenderCard : bf.attackerCard)
+                        : (isAttackerTurn ? bf.attackerCard : bf.defenderCard);
+                       if (!tc) return true;
+                       return skillModal.type === 'damage' ? tc.health <= 0 : tc.health >= tc.maxHealth;
+                    }) && (
+                      <p className="text-center text-slate-400 py-4">
+                        대상 카드가 없습니다.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={() => setSkillModal(null)}
+                      className="flex-1 p-3 bg-slate-600 hover:bg-slate-500 text-white font-bold rounded"
+                    >
+                      취소
+                    </button>
+                    <button 
+                      onClick={() => {
+                        applyCombatSkill(currentTurnPlayer.id, skillModal.skillId, allocations);
+                        setSkillModal(null);
+                      }}
+                      disabled={usedPoints === 0}
+                      className="flex-1 p-3 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold rounded"
+                    >
+                      적용하기
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

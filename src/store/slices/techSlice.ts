@@ -329,13 +329,34 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
               const targetCard = player.armyCards.find(c => c.id === payload.targetCardId);
               if (targetCard) {
                   player.luxuryResources.iron -= 1;
-                  targetCard.attack += 3; // 🌟 카드의 공격력 자체를 영구 증가
+                  targetCard.attack += 3; 
+                  (targetCard as any).metalCastingBuff = ((targetCard as any).metalCastingBuff || 0) + 3;
+                  
+                  if (state.combatState.isActive) {
+                      const attCard = state.combatState.attackerAvailableCards.find(c => c.id === payload.targetCardId);
+                      if (attCard) {
+                          attCard.attack += 3;
+                          (attCard as any).metalCastingBuff = ((attCard as any).metalCastingBuff || 0) + 3;
+                      }
+                      const defCard = state.combatState.defenderAvailableCards.find(c => c.id === payload.targetCardId);
+                      if (defCard) {
+                          defCard.attack += 3;
+                          (defCard as any).metalCastingBuff = ((defCard as any).metalCastingBuff || 0) + 3;
+                      }
+                      
+                      // 🌟 [수정] 금속가공도 공격자/방어자 역할 기준으로 기록
+                      const isAttacker = state.combatState.attackerRoleId === player.id;
+                      const currentRole = isAttacker ? 'attacker' : 'defender';
+                      
+                      if (!state.combatState.usedCombatSkills) state.combatState.usedCombatSkills = [];
+                      state.combatState.usedCombatSkills.push(`${currentRole}_metal_casting`);
+                  }
+
                   success = true;
-                  alert(`[${targetCard.name}]의 공격력이 3 증가했습니다!`);
               }
           } else alert("철이 부족하거나 카드를 선택하지 않았습니다.");
           break;
-          
+
         case 'atomic_theory': // [원자론] 우라늄 1 소모 -> 모든 도시 행동 1번 추가
           if (player.nuclearMaterial >= 1) {
               player.nuclearMaterial -= 1;
@@ -351,11 +372,15 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
           alert("구현 준비 중인 능력입니다.");
           break;
       }
+      
 
-      // 🌟 스킬 발동에 성공했다면, 이번 턴 사용 플래그를 true로 변경
       if (success) {
-          tech.abilityUsedThisTurn = true;
-          // (선택 사항) 효과음이나 성공 알림을 띄울 수 있습니다.
+          // 금속가공을 전투 중에 쓴 거라면 턴 제한을 걸지 않음 (매 전투마다 다시 쓰기 위해)
+          if (techId === 'metal_casting' && state.combatState.isActive) {
+              // 아무것도 하지 않음
+          } else {
+              tech.abilityUsedThisTurn = true;
+          }
       }
     });
   }

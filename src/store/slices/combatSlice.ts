@@ -25,6 +25,7 @@ export interface CombatSlice {
   ) => void;
   // [추가] 마을 전투 시작 액션
   startVillageCombat: (unitId: string, villagePos: Position) => void;
+  applyCombatSkill: (playerId: string, skillId: string, allocations?: Record<string, number>) => void;
 }
 
 const initialCombatState: CombatState = {
@@ -63,6 +64,7 @@ const initialCombatState: CombatState = {
   loserPlayerId: null,
   lootSelections: [],
   maxLootSelections: 0,
+  usedCombatSkills: [],
   log: [],
 };
 
@@ -90,7 +92,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       }
     }
     if (!defenderId) return;
-    
+    //usedCombatSkills: [],
     const defender = state.players.find((p) => p.id === defenderId)!;
     let combatType: CombatType = 'field';
     let targetCityId: string | null = null;
@@ -224,6 +226,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         loserPlayerId: isSettlerMassacre ? defenderRoleId : null,
         lootSelections: [],
         maxLootSelections: (isSettlerMassacre || combatType === 'field') ? 1 : (combatType === 'city' ? 2 : 0),
+        usedCombatSkills: [],
         log: [],
       };
     });
@@ -301,6 +304,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
             loserPlayerId: null,
             lootSelections: [],
             maxLootSelections: 1, // 승리 시 보상은 따로 처리되지만 형식상 1
+            usedCombatSkills: [],
             log: [{ message: "원주민 마을과의 전투가 시작되었습니다!" }],
         };
         (s.combatState as any).attackerUnitId = unitId;
@@ -428,6 +432,80 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     });
   },
 
+  // 기술 능력 (전투)
+  applyCombatSkill: (playerId: string, skillId: string, allocations?: Record<string, number>) => {
+    set((state) => {
+      const cs = state.combatState;
+      if (!cs.isActive) return;
+      if (!cs.usedCombatSkills) cs.usedCombatSkills = [];
+
+      const player = state.players.find(p => p.id === playerId);
+      if (!player) return;
+
+      const isAttacker = cs.attackerRoleId === playerId;
+      const currentRole = isAttacker ? 'attacker' : 'defender'; // 🌟 [추가] 역할 판별
+      
+      if (skillId === 'biology') {
+        cs.battlefields.forEach(bf => {
+          const card = isAttacker ? bf.attackerCard : bf.defenderCard;
+          if (card) card.health = card.maxHealth;
+        });
+        cs.usedCombatSkills.push(`${currentRole}_${skillId}`); // 🌟 ID 대신 역할로 저장
+        cs.log.push({ message: `🌿 ${player.name}이(가) '생물학'으로 모든 부대의 체력을 회복했습니다!` });
+        return;
+      }
+
+      if (skillId === 'mathematics' || skillId === 'ballistics') {
+        if (player.luxuryResources.iron >= 1) {
+          player.luxuryResources.iron -= 1; 
+          
+          if (allocations) {
+            Object.entries(allocations).forEach(([bfId, damage]) => {
+              if (damage <= 0) return;
+              const bf = cs.battlefields.find(b => b.id === bfId);
+              if (bf) {
+                const targetCard = isAttacker ? bf.defenderCard : bf.attackerCard;
+                if (targetCard) {
+                  targetCard.health -= damage;
+                  if (targetCard.health <= 0) {
+                     targetCard.health = 0;
+                     cs.graveyard.push(targetCard);
+                     if (isAttacker) bf.defenderCard = null;
+                     else bf.attackerCard = null;
+                     bf.resolved = false;
+                  }
+                }
+              }
+            });
+          }
+          cs.usedCombatSkills.push(`${currentRole}_${skillId}`); // 🌟 ID 대신 역할로 저장
+          const techName = skillId === 'mathematics' ? '수학' : '탄도학';
+          cs.log.push({ message: `💥 ${player.name}이(가) '${techName}'(으)로 적 부대에 데미지를 입혔습니다!` });
+        } else {
+          alert("철이 부족합니다.");
+        }
+        return;
+      }
+
+      if (skillId === 'animal_husbandry') {
+        if (allocations) {
+          Object.entries(allocations).forEach(([bfId, healAmount]) => {
+            if (healAmount <= 0) return;
+            const bf = cs.battlefields.find(b => b.id === bfId);
+            if (bf) {
+              const targetCard = isAttacker ? bf.attackerCard : bf.defenderCard;
+              if (targetCard) {
+                targetCard.health = Math.min(targetCard.maxHealth, targetCard.health + healAmount);
+              }
+            }
+          });
+        }
+        cs.usedCombatSkills.push(`${currentRole}_${skillId}`); // 🌟 ID 대신 역할로 저장
+        cs.log.push({ message: `🥩 ${player.name}이(가) '축산'으로 부대의 체력을 회복했습니다!` });
+      }
+    });
+  },
+
   resolveBattlefieldsAction: () => {
     const cs = get().combatState;
     if (!cs.isActive || cs.phase !== 'resolution') return;
@@ -545,6 +623,24 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         state.combatState = { ...initialCombatState };
         return;
       }
+
+      const allPlayersInCombat = [winner, loser, mover].filter(Boolean) as Player[];
+      allPlayersInCombat.forEach(p => {
+        p.armyCards.forEach(card => {
+          if ((card as any).metalCastingBuff) {
+            card.attack -= (card as any).metalCastingBuff;
+            (card as any).metalCastingBuff = 0; // 초기화
+          }
+        });
+      });
+
+      // 혹시 전사해서 묘지에 간 카드도 스탯을 돌려놓음 (다시 부활할 때를 대비)
+      state.combatState.graveyard.forEach(card => {
+        if ((card as any).metalCastingBuff) {
+          card.attack -= (card as any).metalCastingBuff;
+          (card as any).metalCastingBuff = 0;
+        }
+      });
 
       // 1. 전리품 지급 (PvP인 경우에만 해당, 마을 상대로는 lootSelections가 비어있음)
       if (winner && state.combatState.lootSelections.length > 0) {
@@ -792,6 +888,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
           loserPlayerId: null,
           lootSelections: [],
           maxLootSelections: 1,
+          usedCombatSkills: [],
           log: [],
         };
     });
