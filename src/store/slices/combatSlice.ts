@@ -25,7 +25,7 @@ export interface CombatSlice {
   ) => void;
   // [추가] 마을 전투 시작 액션
   startVillageCombat: (unitId: string, villagePos: Position) => void;
-  applyCombatSkill: (playerId: string, skillId: string, allocations?: Record<string, number>) => void;
+  applyCombatSkill: (playerId: string, skillId: string, allocations?: Record<string, number>, targetCardId?: string) => void;
 }
 
 const initialCombatState: CombatState = {
@@ -433,7 +433,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
   },
 
   // 기술 능력 (전투)
-  applyCombatSkill: (playerId: string, skillId: string, allocations?: Record<string, number>) => {
+  applyCombatSkill: (playerId: string, skillId: string, allocations?: Record<string, number>, targetCardId?: string) => {
     set((state) => {
       const cs = state.combatState;
       if (!cs.isActive) return;
@@ -452,6 +452,35 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         });
         cs.usedCombatSkills.push(`${currentRole}_${skillId}`); // 🌟 ID 대신 역할로 저장
         cs.log.push({ message: `🌿 ${player.name}이(가) '생물학'으로 모든 부대의 체력을 회복했습니다!` });
+        return;
+      }
+
+      if (skillId === 'metal_casting' && targetCardId) {
+        if (player.luxuryResources.iron >= 1) {
+          player.luxuryResources.iron -= 1; 
+          
+          const targetCard = player.armyCards.find(c => c.id === targetCardId);
+          if (targetCard) {
+            targetCard.attack += 3;
+            (targetCard as any).metalCastingBuff = ((targetCard as any).metalCastingBuff || 0) + 3;
+            
+            const attCard = cs.attackerAvailableCards.find(c => c.id === targetCardId);
+            if (attCard) {
+                attCard.attack += 3;
+                (attCard as any).metalCastingBuff = ((attCard as any).metalCastingBuff || 0) + 3;
+            }
+            const defCard = cs.defenderAvailableCards.find(c => c.id === targetCardId);
+            if (defCard) {
+                defCard.attack += 3;
+                (defCard as any).metalCastingBuff = ((defCard as any).metalCastingBuff || 0) + 3;
+            }
+            
+            cs.usedCombatSkills.push(`${currentRole}_${skillId}`);
+            cs.log.push({ message: `🔨 ${player.name}이(가) '금속가공'으로 카드를 강화했습니다!` });
+          }
+        } else {
+          alert("철이 부족합니다.");
+        }
         return;
       }
 

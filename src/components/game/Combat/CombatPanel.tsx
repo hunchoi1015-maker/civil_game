@@ -198,11 +198,9 @@ function PlacementPhase() {
   const handlePlaceCard = (battlefieldId: string | null) => {
     if (!selectedCard) return;
 
+    // 🌟 [수정] 통일된 applyCombatSkill 사용 (selectedCard를 타겟으로 넘김)
     if (useMetalCastingToggle) {
-      useTechResourceAbility('metal_casting', { 
-          targetCardId: selectedCard, 
-          actingPlayerId: currentTurnPlayer.id 
-      });
+      applyCombatSkill(currentTurnPlayer.id, 'metal_casting', undefined, selectedCard);
       setUseMetalCastingToggle(false);
     }
 
