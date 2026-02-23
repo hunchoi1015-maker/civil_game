@@ -175,17 +175,21 @@ function PlacementPhase() {
       ? attackerPlayer 
       : (defenderPlayer || { id: 'village', name: '원주민 마을', color: 'gray' } as any);
 
-  const usedSkills = cs.usedCombatSkills || [];
+  // =====================================================================
+  // 🌟 [핵심] 오직 '현재 턴 플레이어의 ID'로만 장부를 엽니다.
+  const usedSkills = cs.usedCombatSkills?.[currentTurnPlayer.id] || [];
+  
   const hasTech = (techId: string) => currentTurnPlayer.technologies?.some((t: any) => t.id === techId);
-  const currentRole = isAttackerTurn ? 'attacker' : 'defender'; 
-  const hasUsedInCombat = (techId: string) => usedSkills.includes(`${currentRole}_${techId}`);
+  const hasUsedInCombat = (techId: string) => usedSkills.includes(techId); 
 
-  //금속가공 > 전투 중 사용 여부(usedCombatSkills)를 기준으로 검사!
+  // 금속가공 검사 및 자원 확인
   const hasMetalCasting = hasTech('metal_casting') && !hasUsedInCombat('metal_casting');
   const ironCount = currentTurnPlayer.luxuryResources?.iron || 0;
   const canUseMetalCasting = hasMetalCasting && ironCount >= 1;
+  // =====================================================================
 
   useEffect(() => {
+    // 철이 부족하거나 이미 썼는데 토글이 켜져있으면 강제 해제
     if (!canUseMetalCasting && useMetalCastingToggle) {
       setUseMetalCastingToggle(false);
     }
@@ -198,7 +202,7 @@ function PlacementPhase() {
   const handlePlaceCard = (battlefieldId: string | null) => {
     if (!selectedCard) return;
 
-    // 🌟 [수정] 통일된 applyCombatSkill 사용 (selectedCard를 타겟으로 넘김)
+    // 🌟 금속가공: 카드를 전장에 배치하는 '바로 그 순간' 스킬 발동!
     if (useMetalCastingToggle) {
       applyCombatSkill(currentTurnPlayer.id, 'metal_casting', undefined, selectedCard);
       setUseMetalCastingToggle(false);

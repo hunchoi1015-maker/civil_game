@@ -116,5 +116,5 @@ export const createInitialLuxuryResources = (): Record<Exclude<ResourceType, 'no
   spice: 3,
   wheat: 3,
   silk: 3,
-  iron: 3,
+  iron: 30,
 });

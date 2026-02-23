@@ -64,7 +64,7 @@ const initialCombatState: CombatState = {
   loserPlayerId: null,
   lootSelections: [],
   maxLootSelections: 0,
-  usedCombatSkills: [],
+  usedCombatSkills: {},
   log: [],
 };
 
@@ -92,7 +92,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       }
     }
     if (!defenderId) return;
-    //usedCombatSkills: [],
+
     const defender = state.players.find((p) => p.id === defenderId)!;
     let combatType: CombatType = 'field';
     let targetCityId: string | null = null;
@@ -226,7 +226,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         loserPlayerId: isSettlerMassacre ? defenderRoleId : null,
         lootSelections: [],
         maxLootSelections: (isSettlerMassacre || combatType === 'field') ? 1 : (combatType === 'city' ? 2 : 0),
-        usedCombatSkills: [],
+        usedCombatSkills: {},
         log: [],
       };
     });
@@ -304,7 +304,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
             loserPlayerId: null,
             lootSelections: [],
             maxLootSelections: 1, // 승리 시 보상은 따로 처리되지만 형식상 1
-            usedCombatSkills: [],
+            usedCombatSkills: {},
             log: [{ message: "원주민 마을과의 전투가 시작되었습니다!" }],
         };
         (s.combatState as any).attackerUnitId = unitId;
@@ -437,53 +437,32 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     set((state) => {
       const cs = state.combatState;
       if (!cs.isActive) return;
-      if (!cs.usedCombatSkills) cs.usedCombatSkills = [];
+
+      // 🌟 [핵심] 플레이어별 스킬 기록 장부가 없으면 생성하여 완벽히 격리
+      if (!cs.usedCombatSkills) cs.usedCombatSkills = {};
+      if (!cs.usedCombatSkills[playerId]) cs.usedCombatSkills[playerId] = [];
 
       const player = state.players.find(p => p.id === playerId);
       if (!player) return;
 
       const isAttacker = cs.attackerRoleId === playerId;
-      const currentRole = isAttacker ? 'attacker' : 'defender'; // 🌟 [추가] 역할 판별
       
+      // ==========================================
+      // 🌿 생물학 (무료): 내 전장 모든 부대 풀 회복
+      // ==========================================
       if (skillId === 'biology') {
         cs.battlefields.forEach(bf => {
           const card = isAttacker ? bf.attackerCard : bf.defenderCard;
           if (card) card.health = card.maxHealth;
         });
-        cs.usedCombatSkills.push(`${currentRole}_${skillId}`); // 🌟 ID 대신 역할로 저장
+        cs.usedCombatSkills[playerId].push(skillId);
         cs.log.push({ message: `🌿 ${player.name}이(가) '생물학'으로 모든 부대의 체력을 회복했습니다!` });
         return;
       }
 
-      if (skillId === 'metal_casting' && targetCardId) {
-        if (player.luxuryResources.iron >= 1) {
-          player.luxuryResources.iron -= 1; 
-          
-          const targetCard = player.armyCards.find(c => c.id === targetCardId);
-          if (targetCard) {
-            targetCard.attack += 3;
-            (targetCard as any).metalCastingBuff = ((targetCard as any).metalCastingBuff || 0) + 3;
-            
-            const attCard = cs.attackerAvailableCards.find(c => c.id === targetCardId);
-            if (attCard) {
-                attCard.attack += 3;
-                (attCard as any).metalCastingBuff = ((attCard as any).metalCastingBuff || 0) + 3;
-            }
-            const defCard = cs.defenderAvailableCards.find(c => c.id === targetCardId);
-            if (defCard) {
-                defCard.attack += 3;
-                (defCard as any).metalCastingBuff = ((defCard as any).metalCastingBuff || 0) + 3;
-            }
-            
-            cs.usedCombatSkills.push(`${currentRole}_${skillId}`);
-            cs.log.push({ message: `🔨 ${player.name}이(가) '금속가공'으로 카드를 강화했습니다!` });
-          }
-        } else {
-          alert("철이 부족합니다.");
-        }
-        return;
-      }
-
+      // ==========================================
+      // 💥 수학/탄도학 (철 1 소모): 적 전장 부대에 데미지 분배
+      // ==========================================
       if (skillId === 'mathematics' || skillId === 'ballistics') {
         if (player.luxuryResources.iron >= 1) {
           player.luxuryResources.iron -= 1; 
@@ -496,6 +475,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
                 const targetCard = isAttacker ? bf.defenderCard : bf.attackerCard;
                 if (targetCard) {
                   targetCard.health -= damage;
+                  // 💀 즉사 처리 (체력 0 이하 묘지행 & 전장 비우기)
                   if (targetCard.health <= 0) {
                      targetCard.health = 0;
                      cs.graveyard.push(targetCard);
@@ -507,7 +487,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
               }
             });
           }
-          cs.usedCombatSkills.push(`${currentRole}_${skillId}`); // 🌟 ID 대신 역할로 저장
+          cs.usedCombatSkills[playerId].push(skillId);
           const techName = skillId === 'mathematics' ? '수학' : '탄도학';
           cs.log.push({ message: `💥 ${player.name}이(가) '${techName}'(으)로 적 부대에 데미지를 입혔습니다!` });
         } else {
@@ -516,6 +496,9 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         return;
       }
 
+      // ==========================================
+      // 🥩 축산 (무료): 내 전장 부대에 회복 분배
+      // ==========================================
       if (skillId === 'animal_husbandry') {
         if (allocations) {
           Object.entries(allocations).forEach(([bfId, healAmount]) => {
@@ -529,8 +512,39 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
             }
           });
         }
-        cs.usedCombatSkills.push(`${currentRole}_${skillId}`); // 🌟 ID 대신 역할로 저장
+        cs.usedCombatSkills[playerId].push(skillId);
         cs.log.push({ message: `🥩 ${player.name}이(가) '축산'으로 부대의 체력을 회복했습니다!` });
+        return;
+      }
+
+      // ==========================================
+      // 🔨 금속가공 (철 1 소모): 손패 카드를 전장에 낼 때 공격력 영구 버프
+      // ==========================================
+      if (skillId === 'metal_casting' && targetCardId) {
+        if (player.luxuryResources.iron >= 1) {
+          player.luxuryResources.iron -= 1; 
+          
+          // 1. 원본 덱 카드 버프 부여 (전투 종료 시 롤백을 위함)
+          const baseCard = player.armyCards.find(c => c.id === targetCardId);
+          if (baseCard) {
+            baseCard.attack += 3;
+            (baseCard as any).metalCastingBuff = ((baseCard as any).metalCastingBuff || 0) + 3;
+          }
+          
+          // 2. 현재 전투 중인 대기열(손패) 카드 버프 부여
+          const availableCards = isAttacker ? cs.attackerAvailableCards : cs.defenderAvailableCards;
+          const handCard = availableCards.find(c => c.id === targetCardId);
+          if (handCard) {
+            handCard.attack += 3;
+            (handCard as any).metalCastingBuff = ((handCard as any).metalCastingBuff || 0) + 3;
+          }
+          
+          cs.usedCombatSkills[playerId].push(skillId);
+          cs.log.push({ message: `🔨 ${player.name}이(가) '금속가공' 버프를 적용하여 부대를 배치합니다!` });
+        } else {
+          alert("철이 부족합니다.");
+        }
+        return;
       }
     });
   },
@@ -917,7 +931,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
           loserPlayerId: null,
           lootSelections: [],
           maxLootSelections: 1,
-          usedCombatSkills: [],
+          usedCombatSkills: {},
           log: [],
         };
     });
