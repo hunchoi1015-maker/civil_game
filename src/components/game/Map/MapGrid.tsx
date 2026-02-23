@@ -41,8 +41,14 @@ export function MapGrid() {
           alert('도시가 있는 칸을 선택해야 합니다.');
         }
       } 
+      // 공산주의
       else if (targetingMode.techId === 'communism') {
         useTechResourceAbility('communism', { x, y });
+        cancelTargeting();
+      }
+      // 증기력 
+      else if (targetingMode.techId === 'steam_power') {
+        useTechResourceAbility('steam_power', { x, y });
         cancelTargeting();
       }
       return; 

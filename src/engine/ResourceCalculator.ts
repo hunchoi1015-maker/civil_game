@@ -8,6 +8,7 @@ import {
   getSurroundingPositions,
 } from '../types';
 import { BUILDINGS } from '../constants/buildings';
+import { WONDERS, WonderType } from '../types/wonder';
 
 // 타일 수확량 인터페이스
 export interface TileYield {
@@ -18,27 +19,39 @@ export interface TileYield {
 
 // 타일 기본 수확량 계산 (단일 타일 기준)
 export function calculateTileYield(tile: Tile): TileYield {
-  // 1. 건물 확인: 건물이 있으면 타일/자원 생산량을 무시하고 건물의 효과로 대체
-  // (개발자 주: 건물 효과가 '대체'인지 '추가'인지 기획에 따라 다르나, 현재 코드 맥락상 건물 효과가 우선시되는 것으로 보입니다.
-  //  만약 건물이 추가 보너스라면 로직을 `base + building`으로 변경해야 합니다. 
-  //  기존 로직을 존중하여 '대체' 로직을 유지하되, 필요시 수정 가능합니다.)
+  let production = 0;
+  let trade = 0;
+  let culture = 0;
+
+  // 1. 건물 또는 지형 기본 수확량 확인
   if (tile.buildingType && BUILDINGS[tile.buildingType]) {
     const buildingDef = BUILDINGS[tile.buildingType];
-    return {
-      production: buildingDef.effects.productionBonus,
-      trade: buildingDef.effects.tradeBonus,
-      culture: buildingDef.effects.cultureBonus,
-    };
+    production = buildingDef.effects.productionBonus;
+    trade = buildingDef.effects.tradeBonus;
+    culture = buildingDef.effects.cultureBonus;
+  } else {
+    const terrain = TERRAIN_PROPERTIES[tile.terrain];
+    production = terrain.productionBonus;
+    trade = terrain.tradeBonus;
+    culture = terrain.cultureBonus;
   }
 
-  // 2. 건물이 없으면 지형(Terrain) 속성만 사용 (자원 보너스 제거됨)
-  const terrain = TERRAIN_PROPERTIES[tile.terrain];
+  // ==========================================
+  // 🌟 2. 불가사의 수확량 합산!
+  // ==========================================
+  if (tile.wonder) {
+    const wonderDef = WONDERS[tile.wonder.type as WonderType];
+    if (wonderDef) {
+      // 해당 타일에 불가사의가 있다면 문화 생산량을 더해줍니다.
+      culture += wonderDef.cultureProduction;
+      
+      // (나중에 생산력이나 교역량을 주는 불가사의가 생기면 여기에 추가하시면 됩니다!)
+      // production += wonderDef.productionBonus || 0;
+      // trade += wonderDef.tradeBonus || 0;
+    }
+  }
 
-  return {
-    production: terrain.productionBonus, 
-    trade: terrain.tradeBonus,
-    culture: terrain.cultureBonus,
-  };
+  return { production, trade, culture };
 }
 
 // 도시 주변 8칸 타일 가져오기

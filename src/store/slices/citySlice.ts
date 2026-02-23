@@ -16,7 +16,7 @@ export interface CitySlice {
   harvestCityCulture: (playerId: string, cityId: string) => void;
   // [수정] 자원 타입을 인자로 받도록 변경
   harvestResource: (playerId: string, cityId: string, targetResource: ResourceType) => void;
-  setProduction: (cityId: string, itemType: string, itemId: string) => void;
+  //setProduction: (cityId: string, itemType: string, itemId: string) => void;
   constructWonder: (cityId: string, wonderType: WonderType, tilePos: Position) => void;
   produceArmyCard: (playerId: string, ype: string, tier: number, attack: number, health: number, name: string, cityId: string) => void;
 }
@@ -122,34 +122,51 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
     });
   },
 
-  // [신규] 불가사의 건설 (즉시 배치)
   constructWonder: (cityId: string, wonderType: WonderType, tilePos: Position) => {
     set((state) => {
         const player = state.players[state.currentPlayerIndex];
         const city = player.cities.find(c => c.id === cityId);
-        if (!city) return;
         
-        const wonderDef = WONDERS[wonderType];
-        if (player.resources.production < wonderDef.cost) return; // 비용 체크
+        if (!city || city.hasActedThisTurn) return;
 
-        // 타일 유효성 검사
+        const wonderDef = WONDERS[wonderType];
+        if (!wonderDef) return;
+
+        // 1. 기술 할인 적용
+        let actualCost = wonderDef.cost;
+        if (wonderDef.costReductionTech && player.technologies.some(t => t.id === wonderDef.costReductionTech)) {
+            actualCost = Math.max(1, actualCost - wonderDef.costReductionAmount!);
+        }
+
+        // 🌟 2. 글로벌 자원(player.resources.production)이 아니라, 도시의 1턴 생산력을 검사!
+        const cityProduction = calculateCityProduction(city, state.map);
+        if (cityProduction < actualCost) return;
+
+        // 타일 유효성 검사 
         const tile = state.map.tiles[tilePos.y][tilePos.x];
-        
-        // 1. 물 타일 불가
         if (tile.terrain === 'water') return;
-        
-        // 2. 이미 건물/불가사의/도시가 있는 경우 불가
         if (tile.buildingType || tile.cityId || tile.wonder) return;
 
-        // 3. 도시 주변 8칸 이내 (거리 1)
         const dx = Math.abs(city.position.x - tilePos.x);
         const dy = Math.abs(city.position.y - tilePos.y);
         if (dx > 1 || dy > 1) return;
 
-        // 건설 실행
-        player.resources.production -= wonderDef.cost;
+        // 🌟 3. 자원 차감 코드 삭제! 대신 도시 행동력을 소모합니다.
+        // player.resources.production -= actualCost; <-- 이 코드가 있었다면 지워주세요!
+        
         tile.wonder = { type: wonderType };
-        tile.ownerId = player.id; // 불가사의 타일 소유권 확실히
+        tile.ownerId = player.id; 
+        
+        city.hasActedThisTurn = true; // 🌟 턴 소모
+
+        if (!city.builtWonders) city.builtWonders = [];
+        city.builtWonders.push(wonderType);
+
+        if (!player.builtWonders) player.builtWonders = [];
+        player.builtWonders.push(wonderType);
+
+        if (!state.combatState.log) state.combatState.log = [];
+        state.combatState.log.push({ message: `🏛️ ${player.name}이(가) ${city.name} 근처에 [${wonderDef.name}]을(를) 건설했습니다!` });
     });
   },
 
@@ -248,21 +265,5 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       // 먼저 하고 있으므로, 행동력 소진만으로도 정상 동작할 것입니다.
     });
   },
-  setProduction: (cityId: string, itemType: string, itemId: string) => {
-    set((state) => {
-      for (const player of state.players) {
-        const city = player.cities.find((c) => c.id === cityId);
-        if (city) {
-          city.currentProduction = {
-            type: itemType as any,
-            itemId,
-            name: itemId,
-            cost: 5, // 기본값, 실제로는 정의된 비용 필요
-          };
-          city.productionProgress = 0;
-          break;
-        }
-      }
-    });
-  },
+  
 });

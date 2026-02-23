@@ -84,18 +84,6 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
     set((state) => {
       const currentPlayer = state.players[state.currentPlayerIndex];
       
-      // 1. 생산 진행
-      currentPlayer.cities.forEach((city) => {
-        if (city.currentProduction) {
-          city.productionProgress += city.production;
-          if (city.productionProgress >= city.currentProduction.cost) {
-            city.productionProgress = 0;
-            city.currentProduction = null;
-            city.tempProductionBonus = 0;
-          }
-        }
-      });
-
       // 2. 자원 및 턴 처리
       currentPlayer.resources.trade = Math.min(27, currentPlayer.resources.trade);
       

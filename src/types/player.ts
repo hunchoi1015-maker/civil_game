@@ -38,6 +38,8 @@ export interface Player {
   cultureEventCards: CultureEventCard[]; 
   pendingGreatPerson: boolean; // 위인을 획득하여 배치 대기 중인지 여부
   pendingCardDraw: number | null;
+  invalidatedWonders?: string[]; //효과가 무효화된 불가사의 ID 목록
+  builtWonders?: string[];
 }
 
 export type PlayerColor = 'red' | 'blue' | 'green' | 'yellow';

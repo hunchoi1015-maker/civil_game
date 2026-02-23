@@ -11,7 +11,7 @@ export interface ResourceSelectionMode {
 export interface TargetingMode {
   isActive: boolean;
   techId: string | null;
-  targetType: 'city' | 'tile' | 'my_city' | null;
+  targetType: 'city' | 'tile' | 'my_city' | 'wonder_location' | null;
 }
 
 export interface UISlice {
@@ -23,7 +23,7 @@ export interface UISlice {
   setSelectedUnits: (unitIds: string[]) => void;
   toggleUnitSelection: (unitId: string) => void;
   targetingMode: TargetingMode;
-  startTargeting: (techId: string, targetType: 'city' | 'tile'|'my_city' ) => void;
+  startTargeting: (techId: string, targetType: 'city' | 'tile'|'my_city'|'wonder_location'  ) => void;
   cancelTargeting: () => void;
 
   resourceSelectionMode: ResourceSelectionMode;
@@ -69,7 +69,7 @@ export const createUISlice: StateCreator<GameStore, [["zustand/immer", never]], 
   },
   targetingMode: { isActive: false, techId: null, targetType: null },
   
-  startTargeting: (techId: string, targetType: 'city' | 'tile'|'my_city' ) => set((state) => {
+  startTargeting: (techId: string, targetType: 'city' | 'tile'|'my_city' | 'wonder_location') => set((state) => {
     state.targetingMode = { isActive: true, techId, targetType };
     // 타겟팅에 집중할 수 있도록 열려있던 다른 선택창들을 닫아줍니다. 
     state.selectedTile = null;

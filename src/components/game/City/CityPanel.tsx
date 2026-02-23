@@ -226,25 +226,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
 
   const selectedCityProduction = (selectedCity && map) ? calculateCityProduction(selectedCity, map) : 0;
   
-  // 불가사의 수확량 계산
-  let wonderCulture = 0;
-  if (selectedCity && map) {
-     const cx = selectedCity.position.x;
-     const cy = selectedCity.position.y;
-     for (let dy = -1; dy <= 1; dy++) {
-       for (let dx = -1; dx <= 1; dx++) {
-         const nx = cx + dx;
-         const ny = cy + dy;
-         if (nx >= 0 && nx < map.width && ny >= 0 && ny < map.height) {
-           const t = map.tiles[ny][nx];
-           if (t.ownerId === currentPlayer.id && t.wonder) {
-               wonderCulture += WONDERS[t.wonder.type].cultureProduction;
-           }
-         }
-       }
-     }
-  }
-  const selectedCityCulture = (selectedCity && map) ? calculateCityCulture(selectedCity, map) + wonderCulture : 0;
+  const selectedCityCulture = (selectedCity && map) ? calculateCityCulture(selectedCity, map) : 0;
 
   const nextCultureCost = getNextStepCost(currentPlayer.cultureTrack);
   const canAdvanceCulture = 
@@ -263,10 +245,19 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
 
   const handleBuildWonder = (wonder: WonderDefinition) => {
     if (!canManageCity || selectedCity?.hasActedThisTurn) return;
-    if (selectedCityProduction < wonder.cost) {
-      alert(`생산력이 부족합니다. (현재: ${selectedCityProduction}, 필요: ${wonder.cost})`);
+
+    // 🌟 할인 로직이 적용된 실제 비용 계산
+    let actualCost = wonder.cost;
+    if (wonder.costReductionTech && currentPlayer.technologies.some(t => t.id === wonder.costReductionTech)) {
+        actualCost = Math.max(1, actualCost - wonder.costReductionAmount!);
+    }
+
+    if (selectedCityProduction < actualCost) {
+      alert(`생산력이 부족합니다. (현재: ${selectedCityProduction}, 필요: ${actualCost})`);
       return;
     }
+    
+    // 🌟 타겟팅 모드 대신 기존처럼 모달을 띄우기 위해 상태 업데이트!
     setSelectedWonderToBuild(wonder);
   };
 
@@ -280,7 +271,6 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
   const handleWonderAtLocation = (position: Position) => {
     if (selectedCity && selectedWonderToBuild) {
       constructWonder(selectedCity.id, selectedWonderToBuild.type, position);
-      selectedCity.hasActedThisTurn = true; 
       setSelectedWonderToBuild(null);
     }
   };
@@ -423,7 +413,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
           {/* [복구] 건설된 건물 & 불가사의 목록 */}
           <div className="bg-slate-800 rounded-lg p-4 mb-4">
             <h4 className="text-lg font-medium text-white mb-3">건설된 건물 & 불가사의</h4>
-            {selectedCity.buildings.length === 0 && wonderCulture === 0 ? (
+            {selectedCity.buildings.length === 0 && (!selectedCity.builtWonders || selectedCity.builtWonders.length === 0) ? (
               <p className="text-slate-400">건설된 건물이나 불가사의가 없습니다.</p>
             ) : (
               <div className="grid grid-cols-2 gap-2">
@@ -507,14 +497,35 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
             {productionTab === 'wonders' && (
               <div className="grid grid-cols-2 gap-2">
                 {Object.values(WONDERS).map((wonder) => {
-                  const canAfford = selectedCityProduction >= wonder.cost;
+                  
+                  // ==========================================
+                  // 🌟 [추가] 화면에 그릴 때도 할인된 "실제 비용"을 계산합니다!
+                  // ==========================================
+                  let actualCost = wonder.cost;
+                  if (wonder.costReductionTech && currentPlayer.technologies.some(t => t.id === wonder.costReductionTech)) {
+                      actualCost = Math.max(1, actualCost - wonder.costReductionAmount!);
+                  }
+
+                  // 🌟 wonder.cost 대신 actualCost와 비교합니다.
+                  const canAfford = selectedCityProduction >= actualCost; 
                   const cityActed = (selectedCity?.hasActedThisTurn || selectedCity?.isParalyzed) ?? false;
+                  
                   return (
-                    <motion.button key={wonder.type} whileHover={(canManageCity && canAfford && !cityActed) ? { scale: 1.02 } : {}} onClick={() => handleBuildWonder(wonder)} disabled={!canManageCity || !canAfford || cityActed} className={clsx('p-3 rounded-lg text-left transition-colors border border-indigo-900/50', (canManageCity && canAfford && !cityActed) ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-700 opacity-40 cursor-not-allowed')}>
+                    <motion.button 
+                      key={wonder.type} 
+                      whileHover={(canManageCity && canAfford && !cityActed) ? { scale: 1.02 } : {}} 
+                      onClick={() => handleBuildWonder(wonder)} 
+                      disabled={!canManageCity || !canAfford || cityActed} 
+                      className={clsx('p-3 rounded-lg text-left transition-colors border border-indigo-900/50', (canManageCity && canAfford && !cityActed) ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-700 opacity-40 cursor-not-allowed')}
+                    >
                       <div className="text-indigo-300 font-bold text-sm flex items-center gap-1">🗽 {wonder.name}</div>
                       <div className="text-slate-400 text-xs mt-1">{wonder.description}</div>
                       <div className="text-xs mt-1 text-purple-300">턴당 문화 +{wonder.cultureProduction}</div>
-                      <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>비용: {wonder.cost} {canAfford ? "" : "(부족)"}</div>
+                      
+                      {/* 🌟 화면에 보여주는 텍스트도 actualCost로 변경! */}
+                      <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>
+                        비용: {actualCost} {canAfford ? "" : "(부족)"}
+                      </div>
                     </motion.button>
                   );
                 })}

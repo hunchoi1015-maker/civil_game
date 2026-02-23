@@ -4,6 +4,7 @@ import { TECHNOLOGIES } from '../../constants/technologies';
 import { Player } from '../../types/player';
 import { PlayerTechnology } from '../../types/tech';
 import {TECH_COSTS} from '../../types'
+import { Position } from '../../types/map'; 
 
 // 🌟 [피라미드 검증 헬퍼 함수]
 export function canResearchPyramid(player: Player, targetTechId: string): { canResearch: boolean, reason?: string } {
@@ -56,6 +57,8 @@ export interface TechSlice {
   showResearchResults: boolean;
   setShowResearchResults: (show: boolean) => void;
   clearResearchResults: () => void;
+  steamPowerSource: Position | null; // 🌟 추가
+  setSteamPowerSource: (pos: Position | null) => void; // 🌟 추가
 }
 
 export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]], [], TechSlice> = (set, get) => ({
@@ -335,11 +338,117 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
               alert("모든 도시가 이번 턴에 한 번 더 행동할 수 있습니다!");
           } else alert("우라늄(핵 자원)이 부족합니다.");
           break;
+        
+         case 'monarchy': // [군주제] 비단 1 소모 -> 적 부대 무작위 파괴 OR 고대 불가사의 무효화
+          if (player.luxuryResources.silk >= 1) {
+              if (payload?.targetType === 'wonder' && payload?.targetWonder && payload?.targetPlayerId) {
+                  const targetPlayer = state.players.find(p => p.id === payload.targetPlayerId);
+                  if (targetPlayer) {
+                      player.luxuryResources.silk -= 1;
+                      targetPlayer.invalidatedWonders = targetPlayer.invalidatedWonders || [];
+                      targetPlayer.invalidatedWonders.push(payload.targetWonder);
+                      success = true;
+                      alert(`[군주제] ${targetPlayer.name}의 불가사의 효과를 무효화했습니다!`);
+                  }
+              } else if (payload?.targetType === 'random_card' && payload?.targetPlayerId) {
+                  const targetPlayer = state.players.find(p => p.id === payload.targetPlayerId);
+                  if (targetPlayer && targetPlayer.armyCards.length > 0) {
+                      player.luxuryResources.silk -= 1;
+                      const randomIndex = Math.floor(Math.random() * targetPlayer.armyCards.length);
+                      const destroyedCard = targetPlayer.armyCards.splice(randomIndex, 1)[0];
+                      success = true;
+                      alert(`[군주제] ${targetPlayer.name}의 부대 카드 [${destroyedCard.name}]을(를) 무작위로 파괴했습니다!`);
+                  } else {
+                      alert("파괴할 수 있는 상대의 부대 카드가 없습니다.");
+                  }
+              }
+          } else alert("비단이 부족합니다.");
+          break;
+
+        case 'gunpowder': // [화약] 자원 2개 소모 -> 건물 파괴 OR 고대/중세 불가사의 무효화
+          if (payload?.consumedResources) {
+              let totalConsumed = 0;
+              Object.entries(payload.consumedResources).forEach(([res, amount]) => {
+                  const num = amount as number;
+                  totalConsumed += num;
+                  if (res === 'spies') player.spies -= num;
+                  else if (res === 'nuclearMaterial') player.nuclearMaterial -= num;
+                  else player.luxuryResources[res as keyof typeof player.luxuryResources] -= num;
+              });
+
+              if (totalConsumed < 2) {
+                  alert("자원이 부족합니다.");
+                  return;
+              }
+
+              if (payload.targetType === 'wonder') {
+                  const targetPlayer = state.players.find(p => p.id === payload.targetPlayerId);
+                  if (targetPlayer) {
+                      targetPlayer.invalidatedWonders = targetPlayer.invalidatedWonders || [];
+                      targetPlayer.invalidatedWonders.push(payload.targetWonder);
+                      success = true;
+                      alert(`[화약] ${targetPlayer.name}의 불가사의 효과를 무효화했습니다!`);
+                  }
+              } else if (payload.targetType === 'building') {
+                  const targetPlayer = state.players.find(p => p.id === payload.targetPlayerId);
+                  const targetCity = targetPlayer?.cities.find(c => c.id === payload.targetCityId);
+                  if (targetCity) {
+                      const bIdx = targetCity.buildings.findIndex(b => b.type === payload.targetBuilding);
+                      if (bIdx !== -1) {
+                          targetCity.buildings.splice(bIdx, 1);
+                          success = true;
+                          alert(`[화약] ${targetCity.name}의 ${payload.targetBuilding} 건물을 파괴했습니다!`);
+                      }
+                  }
+              }
+          }
+          break;
+
+        case 'steam_power': // [증기력] 비단 1 소모 -> A타일 유닛 물타일로 순간이동
+          if (player.luxuryResources.silk >= 1 && state.steamPowerSource && payload?.x !== undefined && payload?.y !== undefined) {
+              const targetTile = state.map.tiles[payload.y][payload.x];
+              if (targetTile.terrain !== 'water') {
+                  alert("도착지는 반드시 물 타일이어야 합니다.");
+                  return; 
+              }
+
+              const sourceUnits = player.units.filter(u => u.position.x === state.steamPowerSource!.x && u.position.y === state.steamPowerSource!.y);
+              
+              if (sourceUnits.length === 0) {
+                  alert("출발지에 이동할 유닛이 없습니다.");
+                  state.steamPowerSource = null;
+                  return;
+              }
+
+              player.luxuryResources.silk -= 1;
+              
+              sourceUnits.forEach(u => {
+                  const oldTile = state.map.tiles[u.position.y][u.position.x];
+                  oldTile.unitIds = oldTile.unitIds.filter(id => id !== u.id);
+                  
+                  u.position = { x: payload.x, y: payload.y };
+                  u.movement = 0; 
+                  u.hasMoved = true;
+                  
+                  if (!targetTile.unitIds.includes(u.id)) {
+                      targetTile.unitIds.push(u.id);
+                  }
+              });
+
+              success = true;
+              state.steamPowerSource = null; 
+              alert(`[증기력] 유닛들이 물 타일로 순간이동했습니다!`);
+          } else {
+              alert("비단이 부족하거나 출발지/도착지가 올바르지 않습니다.");
+              state.steamPowerSource = null;
+          }
+          break;
 
         default:
           alert("구현 준비 중인 능력입니다.");
           break;
       }
+      
       
 
       if (success) {
@@ -347,5 +456,7 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
           // (선택 사항) 효과음이나 성공 알림을 띄울 수 있습니다.
       }
     });
-  }
+  },
+  steamPowerSource: null, // 🌟 추가
+  setSteamPowerSource: (pos) => set((state) => { state.steamPowerSource = pos; }), // 🌟 추가
 });
