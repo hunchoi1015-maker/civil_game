@@ -19,6 +19,19 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
     set((state) => {
       const currentIndex = phases.indexOf(state.currentPhase);
       if (currentIndex < phases.length - 1) {
+        // 페이즈 넘어가기 전 체크 사항
+        state.players.forEach(player => {
+            // 1. 시작 단계를 넘어가면, 체제 무료 전환 기회(유효기간) 증발!
+            if (state.currentPhase === 'start') {
+                player.freeGovernmentSwitch = false; 
+            }
+            // 2. 도시 경영 단계가 시작될 때 무정부 상태라면 수도 봉쇄!
+            if (phases[currentIndex + 1] === 'cityManagement' && player.government === 'anarchy') {
+                const capital = player.cities.find(c => c.isCapital);
+                if (capital) capital.hasActedThisTurn = true; // 강제로 행동 완료 처리
+            }
+        });
+
         state.currentPhase = phases[currentIndex + 1];
         state.phaseComplete = new Array(state.players.length).fill(false);
         state.currentPlayerIndex = state.firstPlayerIndex;
@@ -55,9 +68,18 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
         state.players.forEach((player) => {
           player.cities.forEach((city) => {
             city.hasActedThisTurn = false;
+            city.hasHarvestedCulture = false;
           });
         });
       } else {
+        state.players.forEach(player => {
+            if (state.currentPhase === 'start') player.freeGovernmentSwitch = false; 
+            if (phases[currentIndex + 1] === 'cityManagement' && player.government === 'anarchy') {
+                const capital = player.cities.find(c => c.isCapital);
+                if (capital) capital.hasActedThisTurn = true;
+            }
+        });
+        
         state.currentPhase = phases[currentIndex + 1];
         state.phaseComplete = new Array(state.players.length).fill(false);
         state.currentPlayerIndex = state.firstPlayerIndex;
@@ -121,6 +143,7 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
         // 플레이어의 도시 행동 초기화
         player.cities.forEach((city) => {
           city.hasActedThisTurn = false;
+          city.hasHarvestedCulture = false;
           city.tempProductionBonus = 0;
         });
       });
@@ -131,7 +154,7 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
   },
 
   endPhaseForCurrentPlayer: () => {
-    let shouldEndTurn = false; // 🌟 턴 종료 플래그 추가
+    let shouldEndTurn = false; 
     const phases: GamePhase[] = ['start', 'trade', 'cityManagement', 'movement', 'research'];
     
     set((state) => {
@@ -145,6 +168,19 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
       } else {
         const currentIndex = phases.indexOf(state.currentPhase);
         if (currentIndex < phases.length - 1) {
+          
+          // 실제 게임 진행 중 페이즈가 넘어갈 때 체크!
+          state.players.forEach(player => {
+              if (state.currentPhase === 'start') {
+                  player.freeGovernmentSwitch = false; 
+              }
+              if (phases[currentIndex + 1] === 'cityManagement' && player.government === 'anarchy') {
+                  const capital = player.cities.find(c => c.isCapital);
+                  if (capital) capital.hasActedThisTurn = true; // 수도 강제 행동 완료 처리!
+              }
+          });
+          // ==========================================
+
           state.currentPhase = phases[currentIndex + 1];
           state.phaseComplete = new Array(state.players.length).fill(false);
           state.currentPlayerIndex = state.firstPlayerIndex;
@@ -154,9 +190,7 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
           }
           if (state.currentPhase === 'movement') {
             state.players.forEach((player) => {
-              // 🌟 하드코딩 삭제 및 패시브 함수 하나로 통합
               const passives = getPlayerPassives(player);
-
               player.units.forEach((unit) => {
                 unit.maxMovement = passives.maxMovement; 
                 unit.movement = passives.maxMovement; 
@@ -165,15 +199,12 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
             });
           }
         } else {
-          // 🌟 마지막 단계(research)까지 모두 끝났다면 라운드(Turn)를 넘겨야 합니다!
           shouldEndTurn = true; 
         }
       }
     });
 
-    // 상태 업데이트(set)가 끝난 후 다음 라운드로 넘깁니다.
     if (shouldEndTurn) {
-      // 이번 라운드에 연구된 기술이 하나라도 있다면 요약 모달 띄우기!
       if (get().turnResearchResults.length > 0) {
         get().setShowResearchResults(true);
       }

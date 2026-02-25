@@ -153,29 +153,33 @@ export function calculateCityCulture(city: City, map: GameMap): number {
 
   return culture;
 }
-
-// 플레이어 총 교역량
+// 플레이어 총 교역량 (민주주의 +2, 근본주의 -2 적용)
 export function calculatePlayerTrade(player: Player, map: GameMap): number {
   let totalTrade = 0;
   for (const city of player.cities) {
     totalTrade += calculateCityTrade(city, map);
   }
-  if (player.government === 'democracy') totalTrade += 3;
-  if (player.government === 'republic') totalTrade += 1;
-  if (player.government === 'communism') totalTrade -= 1;
-  return Math.max(0, totalTrade);
+  
+  // 🌟 [새로운 기획 반영] 체제별 실시간 증감 (체제가 바뀌면 즉각 교체됨!)
+  if (player.government === 'democracy') totalTrade += 2;
+  if (player.government === 'fundamentalism') totalTrade -= 2;
+  
+  return Math.max(0, totalTrade); // 교역량이 마이너스가 되지 않도록 방어
 }
 
-// 플레이어 총 생산량
+// 플레이어 총 생산량 (공산주의 모든 도시 +2 적용)
 export function calculatePlayerProduction(player: Player, map: GameMap): number {
   let totalProduction = 0;
   for (const city of player.cities) {
     totalProduction += calculateCityProduction(city, map);
   }
-  if (player.government === 'monarchy') totalProduction += 2;
-  if (player.government === 'communism') totalProduction += 3;
-  if (player.government === 'republic') totalProduction += 1;
+  
+  // 🌟 [새로운 기획 반영] 공산주의 채택 시 보유한 도시 개수만큼 2씩 추가!
+  if (player.government === 'communism') {
+      totalProduction += (player.cities.length * 2);
+  }
 
+  // 기존 군사학 패시브 유지
   if (player.technologies.some(t => t.id === 'military_science')) {
     totalProduction += Math.floor(player.resources.currency / 3);
   }

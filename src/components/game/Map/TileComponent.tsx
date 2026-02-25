@@ -219,19 +219,19 @@ export function TileComponent({ tile, isSelected, onClick }: TileComponentProps)
       <div className="absolute bottom-0 w-full flex justify-center gap-0.5 bg-black/30 backdrop-blur-[1px] rounded-b-sm py-[1px]">
         {tileYield.production > 0 && (
           <div className="flex items-center">
-            <span className="text-[6px] text-orange-300">⚙️</span>
+            <span className="text-[6px] text-orange-300">🔨</span>
             <span className="text-[6px] text-white font-bold ml-[1px]">{tileYield.production}</span>
           </div>
         )}
         {tileYield.trade > 0 && (
           <div className="flex items-center">
-            <span className="text-[6px] text-yellow-300">💰</span>
+            <span className="text-[6px] text-yellow-300">📦</span>
             <span className="text-[6px] text-white font-bold ml-[1px]">{tileYield.trade}</span>
           </div>
         )}
         {tileYield.culture > 0 && (
           <div className="flex items-center">
-            <span className="text-[6px] text-purple-300">🎵</span>
+            <span className="text-[6px] text-purple-300">📜</span>
             <span className="text-[6px] text-white font-bold ml-[1px]">{tileYield.culture}</span>
           </div>
         )}

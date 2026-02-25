@@ -5,6 +5,7 @@ import { Player } from '../../types/player';
 import { PlayerTechnology } from '../../types/tech';
 import {TECH_COSTS} from '../../types'
 import { Position } from '../../types/map'; 
+import { GOVERNMENTS } from '../../constants/governments';
 
 // 🌟 [피라미드 검증 헬퍼 함수]
 export function canResearchPyramid(player: Player, targetTechId: string): { canResearch: boolean, reason?: string } {
@@ -96,6 +97,13 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
           abilityUsedThisTurn: false
       };
       player.technologies.push(newTech);
+
+      // 방금 연구한 기술이 정치체제를 해금하는가
+      const unlockedGov = Object.values(GOVERNMENTS).find(g => g.requiredTech === techId);
+      if (unlockedGov) {
+          // 정치체제를 해금하는 기술을 개발했다면, 다음 턴에 한 번 무료로 바꿀 기회를 줌!
+          player.freeGovernmentSwitch = true;
+      }
 
       const hasFlight = player.technologies.some(t => t.id === 'flight');
       const hasSteam = player.technologies.some(t => t.id === 'steam_power');

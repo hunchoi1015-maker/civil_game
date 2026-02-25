@@ -110,14 +110,38 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       const player = findPlayerById(state.players, playerId);
       if (!player) return;
       const city = player.cities.find((c) => c.id === cityId);
-      if (!city || city.hasActedThisTurn) return;
       
-      const cityCulture = calculateCityCulture(city, state.map);
-      if (cityCulture > 0) {
-        // [수정된 부분] 트랙(cultureTrack)이 아니라 보유 자원(resources.culture)을 증가
-        // 최대 한도인 50까지만 저장되도록 Math.min 적용
-        player.resources.culture = Math.min(player.resources.culture + cityCulture, 50);
+      if (!city || city.hasActedThisTurn || city.hasHarvestedCulture) return;
+      
+      // ==========================================
+      // 🌟 [추가] 새로운 문화 수확 룰 적용!
+      // ==========================================
+      
+      // 1. 기본적으로 무조건 +1 의 문화가 보장됩니다!
+      let totalCulture = calculateCityCulture(city, state.map) + 1;
+      
+      // 2. '수도'에서 문화를 수확할 때만 체제별 보너스/페널티 적용!
+      if (city.isCapital) {
+          if (player.government === 'monarchy') {
+              totalCulture += 1; // 군주제 수도 보너스
+          } else if (player.government === 'communism') {
+              totalCulture -= 1; // 공산주의 수도 페널티
+          }
+      }
+      
+      // ==========================================
+
+      // 최종 수확량이 0보다 클 때만 더해줍니다.
+      if (totalCulture > 0) {
+        player.resources.culture = Math.min(player.resources.culture + totalCulture, 50);
+        
         city.hasActedThisTurn = true;
+        city.hasHarvestedCulture = true; 
+
+        if (!state.combatState.log) state.combatState.log = [];
+        state.combatState.log.push({ message: `🎭 ${player.name}이(가) ${city.name}에서 문화 ${totalCulture}을(를) 수확했습니다!` });
+      } else {
+        alert("수확할 문화가 없습니다.");
       }
     });
   },

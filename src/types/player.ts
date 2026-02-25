@@ -40,76 +40,26 @@ export interface Player {
   pendingCardDraw: number | null;
   invalidatedWonders?: string[]; //효과가 무효화된 불가사의 ID 목록
   builtWonders?: string[];
+  freeGovernmentSwitch?: boolean; //갓 연구하여 무정부 없이 체제를 바꿀 수 있는 1턴의 기회 플래그
 }
 
 export type PlayerColor = 'red' | 'blue' | 'green' | 'yellow';
 
 export type GovernmentType =
-  | 'despotism'
-  | 'monarchy'
-  | 'democracy'
-  | 'republic'
-  | 'communism'
-  | 'fundamentalism';
-
-export const GOVERNMENT_EFFECTS: Record<GovernmentType, GovernmentEffect> = {
-  despotism: {
-    name: '전제정',
-    description: '기본 정치체제',
-    tradeBonus: 0,
-    productionBonus: 0,
-    militaryBonus: 0,
-  },
-  monarchy: {
-    name: '군주정',
-    description: '생산력 보너스',
-    tradeBonus: 0,
-    productionBonus: 2,
-    militaryBonus: 0,
-  },
-  democracy: {
-    name: '민주정',
-    description: '교역 보너스',
-    tradeBonus: 3,
-    productionBonus: 0,
-    militaryBonus: 0,
-  },
-  republic: {
-    name: '공화정',
-    description: '균형잡힌 보너스',
-    tradeBonus: 1,
-    productionBonus: 1,
-    militaryBonus: 0,
-  },
-  communism: {
-    name: '공산주의',
-    description: '생산력 대폭 보너스',
-    tradeBonus: -1,
-    productionBonus: 3,
-    militaryBonus: 1,
-  },
-  fundamentalism: {
-    name: '신정정치',
-    description: '전투 보너스',
-    tradeBonus: 0,
-    productionBonus: 0,
-    militaryBonus: 3,
-  },
-};
-
-export interface GovernmentEffect {
-  name: string;
-  description: string;
-  tradeBonus: number;
-  productionBonus: number;
-  militaryBonus: number;
-}
+  | 'despotism'      // 전제정치
+  | 'republic'       // 공화제
+  | 'monarchy'       // 군주제
+  | 'democracy'      // 민주주의
+  | 'feudalism'      // 봉건제
+  | 'communism'      // 공산주의
+  | 'fundamentalism' // 근본주의
+  | 'anarchy';       // 무정부 (행동 불가 페널티 상태)
 
 export function createInitialResources(): Resources {
   return {
     trade: 0,
     production: 0,
-    culture: 0,
+    culture: 38,
     currency: 0,
     combatBonus: 0,
   };

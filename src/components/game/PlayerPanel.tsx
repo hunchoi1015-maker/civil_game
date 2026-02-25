@@ -1,5 +1,5 @@
 import { useGameStore } from '../../store/gameStore';
-import { GOVERNMENT_EFFECTS } from '../../types';
+import { GOVERNMENTS } from '../../constants/governments';
 
 const PLAYER_COLORS_BG: Record<string, string> = {
   red: 'bg-red-500',
@@ -25,7 +25,7 @@ export function PlayerPanel() {
       {players.map((player, index) => {
         const isCurrentPlayer = index === currentPlayerIndex;
         const isMe = index === currentPlayerIndex;
-        const govEffect = player.government ? GOVERNMENT_EFFECTS[player.government] : null;
+        const govEffect = player.government ? GOVERNMENTS[player.government] : null;
 
         return (
           <div

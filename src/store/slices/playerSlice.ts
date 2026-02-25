@@ -85,19 +85,47 @@ export const createPlayerSlice: StateCreator<GameStore, [["zustand/immer", never
     });
   },
 
-  changeGovernment: (playerId: string, government: string) => {
+  changeGovernment: (playerId: string, targetGovernment: string) => {
     if (get().currentPhase !== 'start') {
+      alert("정치체제는 턴의 '시작' 단계에서만 변경할 수 있습니다.");
       return;
     }
     set((state) => {
       const player = findPlayerById(state.players, playerId);
       if (!player) return;
-      const govDef = GOVERNMENTS[government as keyof typeof GOVERNMENTS];
-      if (!govDef) return;
-      if (govDef.requiredTech && !player.technologies.some(t => t.id === govDef.requiredTech)) {
-        return;
+      const currentGov = player.government;
+      
+      // 🌟 1. 봉건제 해제 시 화폐 -1 페널티 (무정부로 갈 때도 적용됨!)
+      if (currentGov === 'feudalism' && targetGovernment !== 'feudalism') {
+          player.resources.currency = Math.max(0, player.resources.currency - 1);
       }
-      player.government = government as any;
+
+      // 🌟 2. 타겟 체제 적용 (무정부 또는 해금된 정상 체제)
+      if (targetGovernment === 'anarchy') {
+          player.government = 'anarchy';
+      } else {
+          // 정상 체제로 갈아탈 때
+          const govDef = GOVERNMENTS[targetGovernment as keyof typeof GOVERNMENTS];
+          if (!govDef) return;
+          
+          if (govDef.requiredTech && !player.technologies.some(t => t.id === govDef.requiredTech)) {
+              alert("해당 체제를 해금하는 기술이 없습니다.");
+              return;
+          }
+
+          player.government = targetGovernment as any;
+
+          // 🌟 봉건제를 새롭게 채택했다면 화폐 +1 보너스!
+          if (targetGovernment === 'feudalism' && currentGov !== 'feudalism') {
+              player.resources.currency = Math.min(4, player.resources.currency + 1);
+          }
+      }
+
+      // 체제를 변경했으므로 무료 기회 소모 (만약 썼다면)
+      player.freeGovernmentSwitch = false;
+      
+      if (!state.combatState.log) state.combatState.log = [];
+      state.combatState.log.push({ message: `👑 ${player.name}이(가) 정치체제를 [${targetGovernment === 'anarchy' ? '무정부' : GOVERNMENTS[targetGovernment as keyof typeof GOVERNMENTS]?.name}]로 변경했습니다!` });
     });
   },
 });

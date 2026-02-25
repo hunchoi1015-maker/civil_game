@@ -226,7 +226,20 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
 
   const selectedCityProduction = (selectedCity && map) ? calculateCityProduction(selectedCity, map) : 0;
   
-  const selectedCityCulture = (selectedCity && map) ? calculateCityCulture(selectedCity, map) : 0;
+  let selectedCityCulture = 0;
+  if (selectedCity && map) {
+      // 1. 기본 수확량 + 1 보장
+      selectedCityCulture = calculateCityCulture(selectedCity, map) + 1;
+      
+      // 2. 수도일 경우 정치체제 보너스/페널티 적용
+      if (selectedCity.isCapital) {
+          if (currentPlayer.government === 'monarchy') {
+              selectedCityCulture += 1;
+          } else if (currentPlayer.government === 'communism') {
+              selectedCityCulture -= 1;
+          }
+      }
+  }
 
   const nextCultureCost = getNextStepCost(currentPlayer.cultureTrack);
   const canAdvanceCulture = 
@@ -404,7 +417,11 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
                   <h4 className="text-md font-bold text-purple-300">📜 문화 생산</h4>
                   <p className="text-xs text-slate-400">도시와 주변 불가사의에서 문화를 수확합니다.</p>
                 </div>
-                <button onClick={handleHarvestCulture} disabled={selectedCity.hasHarvestedCulture} className={clsx('px-4 py-2 rounded-lg text-sm font-bold', selectedCity.hasHarvestedCulture ? 'bg-slate-700 opacity-50 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-500 text-white')}>
+                <button 
+                  onClick={handleHarvestCulture} 
+                  disabled={selectedCity.hasHarvestedCulture || selectedCity.hasActedThisTurn} 
+                  className={clsx('px-4 py-2 rounded-lg text-sm font-bold', (selectedCity.hasHarvestedCulture || selectedCity.hasActedThisTurn) ? 'bg-slate-700 opacity-50 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-500 text-white')}
+                >
                   +{selectedCityCulture} 획득
                 </button>
             </div>
