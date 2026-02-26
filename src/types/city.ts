@@ -8,7 +8,7 @@ export interface City {
   isCapital: boolean;
   buildings: Building[];
   builtWonders?: string[];
-  combatBonus: number;        // 전역 전투 보너스 (예: 막사) - 모든 전투에 합산
+  
   hasWalls: boolean;          // 성벽 건설 여부
   cityDefenseBonus: number;   // 도시 방어 보너스 (기본 + 성벽, 이 도시가 공격받을 때만 적용)
   hasActedThisTurn: boolean;
@@ -21,7 +21,6 @@ export interface City {
 export interface Building {
   id: string;
   type: BuildingType;
-  isConstructed: boolean;
   tilePosition?: Position;
 }
 
@@ -33,7 +32,14 @@ export type BuildingType =
   | 'temple'
   | 'university'
   | 'cathedral'
-  | 'bank';
+  | 'bank'
+  | 'granary'         // 곡물창고
+  | 'aqueduct'        // 수로교
+  | 'workshop'        // 작업장
+  | 'iron_mine'       // 철광
+  | 'military_academy'// 사관학교
+  | 'trading_post'    // 교역소
+  | 'harbor';         // 항구
 
 export interface BuildingDefinition {
   type: BuildingType;
@@ -54,17 +60,13 @@ export interface BuildingEffect {
   cultureBonus: number;
   combatBonus: number;
   cityDefenseBonus: number;
-  techCostReduction: number;
-  currencyPerTurn: number;
-}
 
+}
 
 export const MAX_CITIES = 3;
 export const MAX_BUILDINGS_PER_CITY = 8;
 
-// 변경: 일반 도시 기본 방어력
 export const CITY_BASE_DEFENSE_BONUS = 6;
-// 변경: 수도 기본 방어 보너스 (12로 상향)
 export const CAPITAL_BASE_DEFENSE_BONUS = 12;
 
 export function createCity(
@@ -82,8 +84,7 @@ export function createCity(
     isCapital,
     buildings: [],
     builtWonders: [],
-    combatBonus: 0, // 수도 보너스는 이제 defenseBonus로 이동
-    hasWalls: isCapital, // 수도는 기본적으로 성벽을 가짐
+    hasWalls: isCapital,
     cityDefenseBonus: isCapital ? CAPITAL_BASE_DEFENSE_BONUS : CITY_BASE_DEFENSE_BONUS, 
     hasActedThisTurn: false,
     hasHarvestedCulture: false,

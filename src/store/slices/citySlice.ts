@@ -14,9 +14,7 @@ export interface CitySlice {
   foundCity: (playerId: string, position: Position, name: string) => void;
   buildInCity: (cityId: string, buildingType: string, position?: Position) => void;
   harvestCityCulture: (playerId: string, cityId: string) => void;
-  // [수정] 자원 타입을 인자로 받도록 변경
   harvestResource: (playerId: string, cityId: string, targetResource: ResourceType) => void;
-  //setProduction: (cityId: string, itemType: string, itemId: string) => void;
   constructWonder: (cityId: string, wonderType: WonderType, tilePos: Position) => void;
   produceArmyCard: (playerId: string, ype: string, tier: number, attack: number, health: number, name: string, cityId: string) => void;
 }
@@ -78,7 +76,6 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
           city.buildings.push({
             id: buildingId,
             type: buildingType as any,
-            isConstructed: true,
             tilePosition: position,
           });
           
@@ -92,9 +89,6 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
           if (buildingType === 'walls') {
             city.hasWalls = true;
             city.cityDefenseBonus += buildingDef.effects.cityDefenseBonus;
-          }
-          if (buildingType === 'barracks') {
-            city.combatBonus += buildingDef.effects.combatBonus;
           }
           
           city.hasActedThisTurn = true;

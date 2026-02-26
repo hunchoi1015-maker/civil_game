@@ -1,6 +1,7 @@
 import { Position } from './map';
 
-export type ArmyCardType = 'infantry' | 'artillery' | 'cavalry' | 'airforce'| 'settler';
+// 🌟 1. 'settler' 타입 제거
+export type ArmyCardType = 'infantry' | 'artillery' | 'cavalry' | 'airforce';
 export type ArmyTier = 1 | 2 | 3 | 4;
 
 // 공격력/체력 분리된 부대 카드
@@ -12,7 +13,7 @@ export interface ArmyCard {
   health: number;    // 체력
   maxHealth: number;
   ownerId: string;
-  isDeployed: boolean;
+  // 🌟 2. isDeployed 제거됨
   name: string;
 }
 
@@ -55,13 +56,7 @@ export const ARMY_CARD_DEFINITIONS: Record<ArmyCardType, ArmyCardDefinition> = {
     strongAgainst: null,
     weakAgainst: null,
   },
-  settler: {
-    type: 'settler',
-    name: '개척자',
-    description: '공격할 줄 모름',
-    strongAgainst: null,
-    weakAgainst: null
-  },
+  // 🌟 1. 개척자 정의 제거됨
 };
 
 // === 전투 타입 ===
@@ -198,7 +193,7 @@ export function createArmyCard(
     health,
     maxHealth: health,
     ownerId,
-    isDeployed: false,
+    // 🌟 2. isDeployed 제거됨
     name,
   };
 }

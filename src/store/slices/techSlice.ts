@@ -6,6 +6,8 @@ import { PlayerTechnology } from '../../types/tech';
 import {TECH_COSTS} from '../../types'
 import { Position } from '../../types/map'; 
 import { GOVERNMENTS } from '../../constants/governments';
+import { ARMY_CARD_TEMPLATES } from '../../constants/armyCards';
+import { BuildingType } from '../../types';
 
 // 🌟 [피라미드 검증 헬퍼 함수]
 export function canResearchPyramid(player: Player, targetTechId: string): { canResearch: boolean, reason?: string } {
@@ -92,11 +94,60 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
       // 2. 플레이어 기술 인벤토리에 새 구조체로 추가
       const newTech: PlayerTechnology = {
           ...techDef,
-          isResearched: true,
           tokensOnCard: 0,
           abilityUsedThisTurn: false
       };
       player.technologies.push(newTech);
+    
+      // ==========================================
+      // 3. 🚀 건물 자동 개량 (도시에 지어진 건물 & 맵 타일 동시 교체)
+      // ==========================================
+      if (techDef.upgradesBuilding) {
+          const fromBuilding = techDef.upgradesBuilding.from;
+          const toBuilding = techDef.upgradesBuilding.to;
+          
+          // A. 도시 내부의 건물 목록 교체
+          player.cities.forEach(city => {
+              city.buildings.forEach(building => {
+                  if (building.type === fromBuilding) {
+                      building.type = toBuilding as any;
+                  }
+              });
+          });
+
+          // B. 🌟 맵 전체를 스캔해서 타일 위에 지어진 건물 아이콘도 즉시 교체!
+          for (let y = 0; y < state.map.height; y++) {
+              for (let x = 0; x < state.map.width; x++) {
+                  const tile = state.map.tiles[y][x];
+                  if (tile.ownerId === player.id && tile.buildingType === fromBuilding) {
+                      tile.buildingType = toBuilding as any;
+                  }
+              }
+          }
+      }
+
+      // ==========================================
+      // 4. 🚀 부대 카드 자동 개량 (인벤토리 카드 스탯/이름 업데이트)
+      // ==========================================
+      // 이번에 연구한 기술로 새롭게 풀린 카드가 있는지 확인
+      const unlockedCards = ARMY_CARD_TEMPLATES.filter(c => c.requiredTech === techId);
+      unlockedCards.forEach(newCard => {
+          if (newCard.tier > 1) {
+              // 내 인벤토리에 있는 부대 카드를 전부 스캔
+              if (player.armyCards) { 
+                  player.armyCards.forEach(card => {
+                      // 예: 보병(infantry) 타입이면서, 내 카드의 티어가 새 카드(검사, 2티어)보다 낮다면 업그레이드!
+                      if (card.type === newCard.type && card.tier < newCard.tier) {
+                          card.tier = newCard.tier;           // 1 -> 2
+                          card.name = newCard.name;           // 민병대 -> 검사
+                          card.attack += 1;                   // 🌟 기존 공격력 + 1 보너스!
+                          card.health += 1;                   // 🌟 기존 체력 + 1 보너스!
+                          card.maxHealth += 1;                // 🌟 최대 체력 한도도 + 1 보너스!
+                      }
+                  });
+              }
+          }
+      });
 
       // 방금 연구한 기술이 정치체제를 해금하는가
       const unlockedGov = Object.values(GOVERNMENTS).find(g => g.requiredTech === techId);

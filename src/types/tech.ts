@@ -52,7 +52,6 @@ export interface Technology {
 
 // 플레이어가 실제로 보유하게 될 데이터 형태
 export interface PlayerTechnology extends Technology {
-  isResearched: boolean;
   tokensOnCard: number; // 기술 카드에 올려진 화폐 토큰 수
   abilityUsedThisTurn: boolean; // 이번 턴 자원 능력 사용 여부
 }
