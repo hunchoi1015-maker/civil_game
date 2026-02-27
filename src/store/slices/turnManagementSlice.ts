@@ -137,6 +137,7 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
         if (player.technologies) {
           player.technologies.forEach(tech => {
             tech.abilityUsedThisTurn = false;
+            tech.usedPhases = [];
           });
         }
 

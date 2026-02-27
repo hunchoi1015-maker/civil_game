@@ -54,4 +54,5 @@ export interface Technology {
 export interface PlayerTechnology extends Technology {
   tokensOnCard: number; // 기술 카드에 올려진 화폐 토큰 수
   abilityUsedThisTurn: boolean; // 이번 턴 자원 능력 사용 여부
+  usedPhases?: string[]; //이번 턴에 이 기술을 사용한 페이즈 목록
 }

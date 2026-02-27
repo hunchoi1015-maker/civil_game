@@ -5,6 +5,7 @@ import { PlayerTechnology } from './tech';
 import { NationType } from './nation';
 import {ResourceType} from './map';
 import { CultureEventCard } from './game';
+import { GreatPerson } from './greatPerson';
 
 export interface Resources {
   trade: number;
@@ -34,6 +35,7 @@ export interface Player {
   luxuryResources: Record<Exclude<ResourceType, 'none'>, number>;
   spies: number;          // 스파이 (상대에게 안 보임)
   greatPeople: number;    // 위인 (공개)
+  unplacedGreatPeople: GreatPerson[]; // 배치하지 않은 위인 
   nuclearMaterial: number;// 핵 자원 (상대에게 안 보임)
   cultureEventCards: CultureEventCard[]; 
   pendingGreatPerson: boolean; // 위인을 획득하여 배치 대기 중인지 여부

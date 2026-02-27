@@ -50,7 +50,7 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
         luxuryResources: createInitialLuxuryResources(),
         spies: 3,
         greatPeople: 0,
-        nuclearMaterial: 0,
+        nuclearMaterial: 3,
         cultureEventCards: [],
         pendingGreatPerson: false,
         pendingCardDraw: 0,

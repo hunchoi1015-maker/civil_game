@@ -17,6 +17,7 @@ export interface CitySlice {
   harvestResource: (playerId: string, cityId: string, targetResource: ResourceType) => void;
   constructWonder: (cityId: string, wonderType: WonderType, tilePos: Position) => void;
   produceArmyCard: (playerId: string, ype: string, tier: number, attack: number, health: number, name: string, cityId: string) => void;
+  placeGreatPerson: (playerId: string, gpId: string, x: number, y: number) => void;
 }
 
 export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]], [], CitySlice> = (set) => ({
@@ -70,6 +71,16 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
               const targetTile = state.map.tiles[position.y]?.[position.x];
               if (targetTile && !buildingDef.allowedTerrain.includes(targetTile.terrain)) return;
             }
+          }
+
+          // 건물을 지을 타일에 이미 위인이 있다면 대기열로 돌려보냄!
+          if (position) {
+              const targetTile = state.map.tiles[position.y]?.[position.x];
+              if (targetTile?.greatPerson) {
+                  if (!player.unplacedGreatPeople) player.unplacedGreatPeople = []; // 안전장치
+                  player.unplacedGreatPeople.push(targetTile.greatPerson);
+                  targetTile.greatPerson = undefined;
+              }
           }
 
           const buildingId = uuidv4();
@@ -169,8 +180,12 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
         const dy = Math.abs(city.position.y - tilePos.y);
         if (dx > 1 || dy > 1) return;
 
-        // 🌟 3. 자원 차감 코드 삭제! 대신 도시 행동력을 소모합니다.
-        // player.resources.production -= actualCost; <-- 이 코드가 있었다면 지워주세요!
+        // 불가사의를 지을 타일에 이미 위인이 있다면 대기열로 돌려보냄!
+        if (tile.greatPerson) {
+            if (!player.unplacedGreatPeople) player.unplacedGreatPeople = []; // 안전장치
+            player.unplacedGreatPeople.push(tile.greatPerson);
+            tile.greatPerson = undefined;
+        }
         
         tile.wonder = { type: wonderType };
         tile.ownerId = player.id; 
@@ -283,5 +298,57 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       // 먼저 하고 있으므로, 행동력 소진만으로도 정상 동작할 것입니다.
     });
   },
-  
+
+  // 위인을 타일에 배치하는 완벽한 로직!
+  placeGreatPerson: (playerId: string, gpId: string, x: number, y: number) => {
+    set((state) => {
+      const player = state.players.find(p => p.id === playerId);
+      if (!player) return;
+
+      // 1. 대기열에서 위인 찾기
+      const gpIndex = (player.unplacedGreatPeople || []).findIndex(g => g.id === gpId);
+      if (gpIndex === -1) return;
+      const gp = player.unplacedGreatPeople[gpIndex];
+
+      // 타일 유효성 검사
+      if (y < 0 || y >= state.map.height || x < 0 || x >= state.map.width) return;
+      const tile = state.map.tiles[y][x];
+
+      // 도심부나 물, 산 위에는 위인을 둘 수 없음 (기획에 맞게 조절 가능)
+      if (tile.cityId || tile.terrain === 'water' || tile.terrain === 'mountain') {
+        alert("이 지형에는 위인을 배치할 수 없습니다.");
+        return;
+      }
+
+      // 2. 대기열에서 빼기
+      player.unplacedGreatPeople.splice(gpIndex, 1);
+
+      // 3. 기존 건물이 있으면 무자비하게 파괴! 💥 (불가사의 제외)
+      if (tile.buildingType && tile.ownerId) {
+        const owner = state.players.find(p => p.id === tile.ownerId);
+        if (owner) {
+          owner.cities.forEach(city => {
+            // 도시 건물 목록에서 해당 좌표의 건물을 찾아 아예 지워버림
+            city.buildings = city.buildings.filter(b => b.tilePosition?.x !== x || b.tilePosition?.y !== y);
+          });
+        }
+        tile.buildingType = null;
+      }
+
+      // 불가사의 파괴 로직이 필요하다면 여기에 추가 (현재는 건드리지 않음)
+      if (tile.wonder) {
+          alert("불가사의가 있는 타일에는 위인을 배치할 수 없습니다.");
+          player.unplacedGreatPeople.push(gp); // 다시 복구
+          return;
+      }
+
+      // 4. 타일 소유권 설정 (없다면) 및 위인 꽂기!
+      tile.ownerId = playerId;
+      tile.greatPerson = gp;
+
+      // 로그 추가
+      if (!state.combatState.log) state.combatState.log = [];
+      state.combatState.log.push({ message: `🌟 ${player.name}이(가) ${gp.type} 위인을 맵에 배치했습니다! ${gp.description}` });
+    });
+  },
 });

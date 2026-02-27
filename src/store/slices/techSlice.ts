@@ -387,15 +387,109 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
           break;
 
 
-        case 'atomic_theory': // [원자론] 우라늄 1 소모 -> 모든 도시 행동 1번 추가
-          if (player.nuclearMaterial >= 1) {
+        case 'atomic_theory': 
+          if (player.nuclearMaterial < 1) {
+              alert("우라늄(핵 자원)이 부족합니다.");
+              return;
+          }
+
+          // ☢️ [1] 도시 경영 단계 (핵발전소)
+          if (state.currentPhase === 'cityManagement') {
+              if (tech?.usedPhases?.includes('cityManagement')) {
+                  alert("이번 턴에 이미 핵발전소를 가동했습니다.");
+                  return;
+              }
+
               player.nuclearMaterial -= 1;
               player.cities.forEach(city => {
-                  city.hasActedThisTurn = false; // 행동 기회를 리셋하여 다시 행동 가능하게 함
+                  city.hasActedThisTurn = false; 
+                  city.hasHarvestedCulture = false; 
               });
-              success = true;
-              alert("모든 도시가 이번 턴에 한 번 더 행동할 수 있습니다!");
-          } else alert("우라늄(핵 자원)이 부족합니다.");
+
+              // 🌟 장부에 '도시 경영' 단계 사용 기록 추가
+              if (tech) {
+                  if (!tech.usedPhases) tech.usedPhases = [];
+                  tech.usedPhases.push('cityManagement');
+              }
+              
+              alert("핵발전소가 가동되었습니다! 모든 도시가 이번 턴에 다시 행동 및 수확을 할 수 있습니다.");
+          } 
+          // ☢️ [2] 이동 단계 (핵 공격)
+          else if (state.currentPhase === 'movement' && payload?.x !== undefined && payload?.y !== undefined) {
+              if (tech?.usedPhases?.includes('movement')) {
+                  alert("이번 턴에 이미 핵무기를 투하했습니다.");
+                  return;
+              }
+              const targetTile = state.map.tiles[payload.y][payload.x];
+              const targetCityId = targetTile.cityId;
+              
+              if (!targetCityId) {
+                  alert("핵 공격은 도시에만 할 수 있습니다.");
+                  return;
+              }
+
+              // 타겟 도시 찾기 (적의 도시이거나 내 도시일 수도 있음)
+              let targetPlayer = null;
+              let targetCityIndex = -1;
+              
+              for (const p of state.players) {
+                  targetCityIndex = p.cities.findIndex(c => c.id === targetCityId);
+                  if (targetCityIndex !== -1) {
+                      targetPlayer = p;
+                      break;
+                  }
+              }
+
+              if (targetPlayer && targetPlayer.cities[targetCityIndex].isCapital) {
+                  alert("수도에는 핵 공격을 할 수 없습니다.");
+                  return;
+              }
+
+              // 우라늄 소모
+              player.nuclearMaterial -= 1;
+              if (tech) {
+                  if (!tech.usedPhases) tech.usedPhases = [];
+                  tech.usedPhases.push('movement');
+              }
+
+              // 🌟 1. 도시 데이터 완전 삭제
+              if (targetPlayer) {
+                  targetPlayer.cities.splice(targetCityIndex, 1);
+              }
+
+              // 🌟 2. 교외 포함 9칸 초토화 및 사막화 진행
+              const cx = payload.x;
+              const cy = payload.y;
+              for (let dy = -1; dy <= 1; dy++) {
+                  for (let dx = -1; dx <= 1; dx++) {
+                      const nx = cx + dx;
+                      const ny = cy + dy;
+                      
+                      if (nx >= 0 && nx < state.map.width && ny >= 0 && ny < state.map.height) {
+                          const tile = state.map.tiles[ny][nx];
+                          
+                          // A. 해당 칸에 있는 모든 유닛 삭제
+                          if (tile.unitIds.length > 0) {
+                              state.players.forEach(p => {
+                                  p.units = p.units.filter(u => !tile.unitIds.includes(u.id));
+                              });
+                          }
+                          
+                          // B. 타일 데이터 포맷 및 사막화
+                          tile.terrain = 'desert';
+                          tile.cityId = null;
+                          tile.ownerId = null;
+                          tile.buildingType = null;
+                          tile.wonder = undefined;
+                          tile.unitIds = [];
+                          tile.greatPerson = undefined; // 위인 증발
+                          // 자원(resource)도 날리고 싶다면 tile.resource = 'none'; 추가
+                      }
+                  }
+              }
+              
+              alert(`경고! 좌표 (${payload.x}, ${payload.y}) 일대에 핵 공격이 감행되었습니다! 일대가 사막으로 변했습니다.`);
+          }
           break;
         
          case 'monarchy': // [군주제] 비단 1 소모 -> 적 부대 무작위 파괴 OR 고대 불가사의 무효화

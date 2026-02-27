@@ -1,5 +1,6 @@
 import {BuildingType} from "./city";
 import { WonderType } from './wonder';
+import { GreatPerson } from './greatPerson';
 
 export interface Position {
   x: number;
@@ -40,6 +41,7 @@ export interface Tile {
   object?: TileObject;
   wonder?: { type: WonderType };
   isParalyzed?: boolean;
+  greatPerson?: GreatPerson;
 }
 
 export interface GameMap {

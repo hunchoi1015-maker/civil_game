@@ -24,12 +24,22 @@ export function TechAbilityWidget() {
   const [customModalMode, setCustomModalMode] = useState<{ type: string, techId: string, extra?: any } | null>(null);
   const [gunpowderSelections, setGunpowderSelections] = useState<Record<string, number>>({}); // 화약
 
-  const availableTechs = player.technologies.filter(
-    tech => tech.resourceAbility && !tech.abilityUsedThisTurn
-  );
+  // 🌟 원자론(atomic_theory)은 턴당 횟수 제한 없이 항상 보이도록 예외 처리 추가!
+  const availableTechs = player.technologies.filter(tech => {
+    if (!tech.resourceAbility) return false;
+    
+    if (tech.id === 'atomic_theory') {
+      // 원자론: 현재 페이즈(예: cityManagement)에 이미 사용했으면 목록에서 숨김
+      return !(tech.usedPhases?.includes(currentPhase));
+    }
+    
+    // 일반 기술: 1턴 1회 제한
+    return !tech.abilityUsedThisTurn;
+  });
 
   // 기술별 허용되는 페이즈 구분
-  const getRequiredPhase = (techId: string) => {
+  const getRequiredPhase = (techId: string): string | string[] => {
+    if (techId === 'atomic_theory') return ['cityManagement', 'movement']; // ☢️ 원자론 추가!
     if (['horseback_riding'].includes(techId)) return 'trade';
     // 🌟 금속가공(metal_casting)을 movement(이동/전투) 단계에 추가!
     if (['communism', 'steam_power', 'biology', 'mathematics', 'ballistics', 'metal_casting'].includes(techId)) return 'movement';
@@ -38,14 +48,38 @@ export function TechAbilityWidget() {
   
   const handleAbilityUse = (tech: Technology) => {
     const reqPhase = getRequiredPhase(tech.id);
-    if (currentPhase !== reqPhase) {
+    const isAllowed = Array.isArray(reqPhase) ? reqPhase.includes(currentPhase) : currentPhase === reqPhase;
+
+    if (!isAllowed) {
         const phaseNames: Record<string, string> = {
             trade: '교역',
             cityManagement: '도시 경영',
             movement: '이동'
         };
-        alert(`이 능력은 ${phaseNames[reqPhase]} 단계에서만 사용할 수 있습니다.`);
+        const allowedNames = Array.isArray(reqPhase) ? reqPhase.map(p => phaseNames[p]).join(' 또는 ') : phaseNames[reqPhase as string];
+        alert(`이 능력은 ${allowedNames} 단계에서만 사용할 수 있습니다.`);
         return;
+    }
+
+    // ==========================================
+    // ☢️ [신규 추가] 0. 원자론 특별 분기 로직
+    // ==========================================
+    if (tech.id === 'atomic_theory') {
+      if (currentPhase === 'cityManagement') {
+        // 핵발전소 가동: 아직 행동하지 않은 도시가 있는지 검사!
+        const hasUnactedCity = player.cities.some(city => !city.hasActedThisTurn);
+        if (hasUnactedCity) {
+          const confirmUse = window.confirm("아직 행동하지 않은 도시가 있습니다. 그래도 원자론(핵발전소) 스킬을 사용하여 모든 행동을 리셋하시겠습니까?");
+          if (!confirmUse) return; // 취소하면 모달도 닫히지 않고 발동 취소
+        }
+        useTechResourceAbility('atomic_theory', {});
+      } else if (currentPhase === 'movement') {
+        // 핵무기 발사: 맵 타겟팅 모드로 진입
+        startTargeting(tech.id, 'tile');
+        alert("지도에서 핵 공격을 감행할 타일(도시)을 클릭하세요.");
+      }
+      setIsOpen(false);
+      return;
     }
 
     // 🌟 1. 커스텀 모달 타겟팅
@@ -64,6 +98,7 @@ export function TechAbilityWidget() {
         setIsOpen(false);
         return;
     }
+    
     // 🌟 2. 맵 타일 타겟팅 (내 도시)
     if (['animal_husbandry', 'construction', 'finance'].includes(tech.id)) {
       startTargeting(tech.id, 'my_city'); 

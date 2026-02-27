@@ -51,6 +51,16 @@ export function MapGrid() {
         useTechResourceAbility('steam_power', { x, y });
         cancelTargeting();
       }
+      // 원자론 (핵 공격))
+      else if (targetingMode.techId === 'atomic_theory') {
+        // 클릭한 타일에 도시가 있는지 1차 검사 (수도 등 자세한 검사는 스토어에서 처리)
+        if (!tile.cityId) {
+          alert('핵 공격은 도시가 있는 타일(🏛️)에만 할 수 있습니다.');
+          return;
+        }
+        useTechResourceAbility('atomic_theory', { x, y });
+        cancelTargeting();
+      }
       return; 
     }
 
