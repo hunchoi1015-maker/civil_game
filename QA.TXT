@@ -11,6 +11,8 @@ https://memoria-aeon.tistory.com/209
 https://blog.naver.com/onlybest01/221402449879
 https://velog.io/@dj258255/posts
 https://dj258255.github.io/IT-Oasis/
+https://www.hanbit.co.kr/channel/view.html?cmscode=CMS4076562233
+https://jjoreg.tistory.com/entry/%EB%B0%B8%EB%9F%B0%EC%8B%B1-%EA%B4%80%EB%A0%A8-%EC%9D%98%EA%B2%AC
 =======================================
 qa ver1
 
@@ -553,3 +555,5 @@ qa ver2
 전투 > 패스는 더 이상 낼 수 있는 카드가 없을 때만 활성화 시켜야 해
 전투 > 더이상 금속 가공 능력을 사용할 수 없으면(이미 사용했거나, 철 자원이 없을 때) 비활성화하거나, 안 보이도록 해줘.
 전투 > 데미지 분배시에 어떤 카드인지 구분할 수 있도록, 공격력도 함께 팝업에 올려줬으면 좋겠어.
+민주주의인데, 도시나 수도를 공격할 수 있어.
+플레이어 보드 상에 교역과 실제 교역 계산 수치가 다를 때가 있어.
