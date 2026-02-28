@@ -12,6 +12,7 @@ export function MapGrid() {
     currentPhase, players, currentPlayerIndex,
     activeCardTargeting, handleCardMapClick,
     targetingMode, cancelTargeting, useTechResourceAbility,
+    placeGreatPerson,
   } = useGameStore();
 
   const currentPlayer = players[currentPlayerIndex];
@@ -59,6 +60,17 @@ export function MapGrid() {
           return;
         }
         useTechResourceAbility('atomic_theory', { x, y });
+        cancelTargeting();
+      }
+      // 위인 맵 배치 타겟팅
+      else if (targetingMode.techId === 'place_great_person') {
+        // 대기열의 첫 번째 위인을 꺼내서 배치
+        const gpToPlace = currentPlayer.unplacedGreatPeople?.[0];
+        if (!gpToPlace) {
+            cancelTargeting();
+            return;
+        }
+        placeGreatPerson(currentPlayer.id, gpToPlace.id, x, y);
         cancelTargeting();
       }
       return; 

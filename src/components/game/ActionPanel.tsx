@@ -20,9 +20,13 @@ export function ActionPanel() {
     firstPlayerIndex,
     getPlayerOrderForCurrentRound,
     debugSkipPhase,
+    startTargeting, 
+    targetingMode,
   } = useGameStore();
 
   const currentPlayer = players[currentPlayerIndex];
+
+  const unplacedGPCount = currentPlayer.unplacedGreatPeople?.length || 0;
   const selectedTileData = selectedTile
     ? map.tiles[selectedTile.y]?.[selectedTile.x]
     : null;
@@ -38,7 +42,7 @@ export function ActionPanel() {
     collectTradeIncome(currentPlayer.id);
   };
 
-
+  
   return (
     <div className="p-4 space-y-4">
       {/* 현재 단계 정보 */}
@@ -97,6 +101,29 @@ export function ActionPanel() {
       <div className="space-y-2">
         {currentPhase === 'start' && (
           <div className="space-y-2">
+            
+            {/* 🌟 [신규 추가] 대기 중인 위인이 있을 때만 보이는 버튼 UI */}
+            {unplacedGPCount > 0 && (
+              <div className="bg-amber-900/50 border border-amber-500 p-3 rounded-lg mb-2">
+                <p className="text-amber-300 text-sm font-bold mb-2">
+                  🌟 대기 중인 위인이 있습니다! ({unplacedGPCount}명)
+                </p>
+                <button
+                  onClick={() => {
+                    startTargeting('place_great_person', 'tile');
+                    alert("지도에서 위인을 배치할 타일을 클릭하세요. (도심부, 물, 불가사의 제외)");
+                  }}
+                  className={`w-full py-2 rounded font-bold transition-colors ${
+                    targetingMode?.techId === 'place_great_person' 
+                      ? 'bg-amber-500 text-black animate-pulse' 
+                      : 'bg-amber-600 hover:bg-amber-500 text-white'
+                  }`}
+                >
+                  {targetingMode?.techId === 'place_great_person' ? '맵에서 타일 선택 중...' : '위인 맵에 배치하기'}
+                </button>
+              </div>
+            )}
+            
             <p className="text-sm text-slate-400">
               정치체제를 변경하거나 개척자로 도시를 건설할 수 있습니다.
             </p>

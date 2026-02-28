@@ -40,6 +40,15 @@ const BUILDING_ICONS: Record<string, string> = {
   cathedral: '⛪',
 };
 
+const GREAT_PERSON_ICONS: Record<string, string> = {
+  artist: '🎨',
+  inventor: '💡',
+  general: '🎖️',
+  humanitarian: '🕊️',
+  explorer: '🔭',
+  scientist: '🔬',
+};
+
 const PLAYER_COLORS: Record<string, string> = {
   red: 'ring-red-500',
   blue: 'ring-blue-500',
@@ -120,8 +129,12 @@ export function TileComponent({ tile, isSelected, onClick }: TileComponentProps)
   }
   tooltip += `\n생산: ${tileYield.production}, 교역: ${tileYield.trade}, 문화: ${tileYield.culture}`;
 
+  if (tile.greatPerson) {
+    const icon = GREAT_PERSON_ICONS[tile.greatPerson.type] || '🌟';
+    tooltip += `\n위인: ${tile.greatPerson.type.toUpperCase()} ${icon}\n${tile.greatPerson.description}`;
+  }
+  tooltip += `\n생산: ${tileYield.production}, 교역: ${tileYield.trade}, 문화: ${tileYield.culture}`;
 
-  
   return (
     <button
       onClick={onClick}
@@ -209,6 +222,14 @@ export function TileComponent({ tile, isSelected, onClick }: TileComponentProps)
         </span>
     </div>
     )}
+    {/* 위인 */}
+    {tile.greatPerson && (
+        <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+          <span className="text-3xl filter drop-shadow-lg animate-pulse" title="위인">
+            {GREAT_PERSON_ICONS[tile.greatPerson.type] || '🌟'}
+          </span>
+        </div>
+      )}
 
       {/* 적 유닛 경고 */}
       {hasEnemyUnits && (

@@ -4,6 +4,7 @@ import { GameStore } from '../types/storeTypes';
 import { CombatState, Position, CombatType, ArmyCard, Player, getAttackerMaxCards, CITY_CAPITAL_MAX_CARDS, LOOT_MAX_PER_SELECTION, createInitialResources, createInitialLuxuryResources, RewardType } from '../../types';
 import { resolveBattlefields, resolvePairedFight } from '../../engine/CombatResolver';
 import { shuffleArray } from '../helpers/playerHelpers';
+import { BUILDINGS } from '../../constants/buildings';
 
 export interface CombatSlice {
   combatState: CombatState;
@@ -169,15 +170,47 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         rolesSwapped ? isMoverMilitary : (defenderMilitaryUnits.length > 0 || combatType !== 'field')
     );
 
-    let attackerCombatBonus = 0;
-    for (const city of attackerPlayer.cities) attackerCombatBonus += city.combatBonus;
+    // 🌟 [신규 추가] 맵 전체를 스캔하여 플레이어의 '장군' 위인 보너스를 끌어모으는 함수
+    const getPlayerGeneralBonus = (playerId: string) => {
+      let bonus = 0;
+      state.map.tiles.forEach(row => {
+        row.forEach(tile => {
+          if (tile.ownerId === playerId && tile.greatPerson && tile.greatPerson.stats.combatBonus) {
+            bonus += tile.greatPerson.stats.combatBonus;
+          }
+        });
+      });
+      return bonus;
+    };
+
+    // 🌟 1. 공격자 총 전투 보너스 = (장군 보너스) + (막사 등 순수 전투 보너스)
+    let attackerCombatBonus = getPlayerGeneralBonus(attackerPlayer.id);
+    for (const city of attackerPlayer.cities) {
+        city.buildings.forEach(b => {
+            const def = BUILDINGS[b.type as keyof typeof BUILDINGS];
+            // 방어력(cityDefenseBonus)은 철저히 배제하고 전투 보너스(combatBonus)만 더합니다!
+            if (def && def.effects && def.effects.combatBonus) {
+                attackerCombatBonus += def.effects.combatBonus;
+            }
+        });
+    }
     
-    let defenderCombatBonus = 0;
-    for (const city of defenderPlayer.cities) defenderCombatBonus += city.combatBonus;
+    // 🌟 2. 방어자 총 전투 보너스 = (장군 보너스) + (막사 등 순수 전투 보너스)
+    let defenderCombatBonus = getPlayerGeneralBonus(defenderPlayer.id);
+    for (const city of defenderPlayer.cities) {
+        city.buildings.forEach(b => {
+            const def = BUILDINGS[b.type as keyof typeof BUILDINGS];
+            if (def && def.effects && def.effects.combatBonus) {
+                defenderCombatBonus += def.effects.combatBonus;
+            }
+        });
+    }
+    
     
     let attackerCityDefenseBonus = 0;
     let defenderCityDefenseBonus = 0;
 
+    
     if (combatType !== 'field' && targetCityId) {
       const city = defender.cities.find((c) => c.id === targetCityId);
       if (city) {
@@ -242,9 +275,9 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     // 마을 방어군 생성 (Tier 1 랜덤 - 총 전투력 4)
     // 기획: 민병대(2/2), 투석기(3/1), 경기병(2/2) 중 하나
     const villageCardTemplates: ArmyCard[] = [
-        { id: uuidv4(), type: 'infantry', name: '민병대', tier: 1, attack: 2, health: 2, maxHealth: 2,  ownerId: 'village', isDeployed: false, },
-        { id: uuidv4(), type: 'artillery', name: '투석기', tier: 1, attack: 3, health: 1, maxHealth: 1,  ownerId: 'village', isDeployed: false,},
-        { id: uuidv4(), type: 'cavalry', name: '경기병', tier: 1, attack: 2, health: 2, maxHealth: 2,  ownerId: 'village', isDeployed: false,},
+        { id: uuidv4(), type: 'infantry', name: '민병대', tier: 1, attack: 2, health: 2, maxHealth: 2,  ownerId: 'village',  },
+        { id: uuidv4(), type: 'artillery', name: '투석기', tier: 1, attack: 3, health: 1, maxHealth: 1,  ownerId: 'village', },
+        { id: uuidv4(), type: 'cavalry', name: '경기병', tier: 1, attack: 2, health: 2, maxHealth: 2,  ownerId: 'village', },
     ];
     
     // 마을도 카드를 1장만 사용한다고 가정 (또는 기획에 따라 여러 장일 수도 있음. 여기서는 1장으로 예시)
@@ -267,6 +300,15 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     const shuffledAttackerCards = shuffleArray(currentPlayer.armyCards);
     const attackerAvailableCards = shuffledAttackerCards.slice(0, attackerMaxCards);
 
+    let attackerGeneralBonus = 0;
+    state.map.tiles.forEach(row => {
+      row.forEach(tile => {
+        if (tile.ownerId === currentPlayer.id && tile.greatPerson && tile.greatPerson.stats.combatBonus) {
+          attackerGeneralBonus += tile.greatPerson.stats.combatBonus;
+        }
+      });
+    });
+    
     set((s) => {
         s.combatState = {
             isActive: true,
@@ -293,7 +335,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
             },
             graveyard: [],
             phase: 'placement',
-            attackerCombatBonus: 0, // 도시 보너스 등은 적용 안됨 (마을 밖 야전)
+            attackerCombatBonus: attackerGeneralBonus,
             defenderCombatBonus: 0, 
             attackerCityDefenseBonus: 0,
             defenderCityDefenseBonus: 0,
@@ -880,6 +922,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
                 cultureEventCards: [],
                 pendingGreatPerson: false,
                 pendingCardDraw: 0,
+                unplacedGreatPeople:[],
             });
         }
         if (!state.players.find(p => p.id === devDefenderId)) {
@@ -892,6 +935,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
                 cultureEventCards: [],
                 pendingGreatPerson: false,
                 pendingCardDraw: 0,
+                unplacedGreatPeople:[],
 
             });
         }

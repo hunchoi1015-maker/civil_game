@@ -5,6 +5,7 @@ import { getNextStepCost, GREAT_PERSON_SPOTS, CULTURE_TRACK_MAX, getCultureLevel
 import { CULTURE_CARD_TEMPLATES } from '../../constants/cultureCards';
 import { TECHNOLOGIES } from '../../constants/technologies';
 import { Position } from '../../types/map';
+import { drawRandomGreatPerson } from '../../constants/greatPerson';
 
 export interface CardTargetingState {
   cardId: string;
@@ -53,9 +54,14 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
 
       if (GREAT_PERSON_SPOTS.includes(newTrack)) {
         player.greatPeople += 1;
-        player.pendingGreatPerson = true;
-        alert("위인이 탄생했습니다!");
-      } else {
+        
+        // 🌟 [신규] 랜덤 위인을 뽑아서 플레이어의 대기열(주머니)에 쏙 넣어줍니다!
+        if (!player.unplacedGreatPeople) player.unplacedGreatPeople = [];
+        const newGreatPerson = drawRandomGreatPerson();
+        player.unplacedGreatPeople.push(newGreatPerson);
+        
+        alert(`🌟 위인이 탄생했습니다! [${newGreatPerson.type}] 위인이 대기열에 합류합니다.`);
+      }else {
         const level = getCultureLevel(newTrack) as 1|2|3;
         const hasPottery = player.technologies.some(t => t.id === 'pottery');
         const hasDemocracy = player.government === 'democracy';
@@ -244,7 +250,6 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
                   // 🌟 1. 내가 상대 기술을 가져올 때 새 속성 추가
                   player.technologies.push({ 
                       ...targetTechDef, 
-                      isResearched: true,
                       tokensOnCard: 0,
                       abilityUsedThisTurn: false 
                   });
@@ -263,7 +268,6 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
                           // 🌟 2. 상대에게 내 기술을 넘겨줄 때도 새 속성 추가
                           opponent.technologies.push({ 
                               ...rTechDef, 
-                              isResearched: true,
                               tokensOnCard: 0,
                               abilityUsedThisTurn: false 
                           });

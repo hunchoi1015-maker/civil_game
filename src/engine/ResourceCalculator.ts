@@ -16,39 +16,41 @@ export interface TileYield {
   trade: number;
   culture: number;
 }
-
 // 타일 기본 수확량 계산 (단일 타일 기준)
 export function calculateTileYield(tile: Tile): TileYield {
   let production = 0;
   let trade = 0;
   let culture = 0;
 
-  // 1. 건물 또는 지형 기본 수확량 확인
-  if (tile.buildingType && BUILDINGS[tile.buildingType]) {
+  // 🌟 1순위: 위인이 있다면? 기존 지형/건물 싹 다 무시하고 위인 스탯으로 덮어쓰기!
+  if (tile.greatPerson) {
+    production = tile.greatPerson.stats.production;
+    trade = tile.greatPerson.stats.trade;
+    culture = tile.greatPerson.stats.culture;
+  }
+  // 🌟 2순위: 불가사의가 있다면? 불가사의 스탯으로 덮어쓰기!
+  else if (tile.wonder) {
+    const wonderDef = WONDERS[tile.wonder.type as WonderType];
+    if (wonderDef) {
+      // (현재 불가사의는 문화만 주지만, 나중에 생산/교역이 추가된다면 아래 0을 변수로 바꿔주세요)
+      production = 0; 
+      trade = 0;
+      culture = wonderDef.cultureProduction;
+    }
+  }
+  // 🌟 3순위: 건물이 있다면? 건물 스탯으로 덮어쓰기! (기존 로직 동일)
+  else if (tile.buildingType && BUILDINGS[tile.buildingType]) {
     const buildingDef = BUILDINGS[tile.buildingType];
     production = buildingDef.effects.productionBonus;
     trade = buildingDef.effects.tradeBonus;
     culture = buildingDef.effects.cultureBonus;
-  } else {
+  }
+  // 🌟 4순위: 아무것도 없는 빈 땅이라면? 지형 기본 스탯 적용!
+  else {
     const terrain = TERRAIN_PROPERTIES[tile.terrain];
     production = terrain.productionBonus;
     trade = terrain.tradeBonus;
     culture = terrain.cultureBonus;
-  }
-
-  // ==========================================
-  // 🌟 2. 불가사의 수확량 합산!
-  // ==========================================
-  if (tile.wonder) {
-    const wonderDef = WONDERS[tile.wonder.type as WonderType];
-    if (wonderDef) {
-      // 해당 타일에 불가사의가 있다면 문화 생산량을 더해줍니다.
-      culture += wonderDef.cultureProduction;
-      
-      // (나중에 생산력이나 교역량을 주는 불가사의가 생기면 여기에 추가하시면 됩니다!)
-      // production += wonderDef.productionBonus || 0;
-      // trade += wonderDef.tradeBonus || 0;
-    }
   }
 
   return { production, trade, culture };

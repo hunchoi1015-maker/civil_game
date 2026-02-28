@@ -79,6 +79,7 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
               if (targetTile?.greatPerson) {
                   if (!player.unplacedGreatPeople) player.unplacedGreatPeople = []; // 안전장치
                   player.unplacedGreatPeople.push(targetTile.greatPerson);
+                  player.resources.currency = Math.max(0, player.resources.currency - targetTile.greatPerson.stats.currency);
                   targetTile.greatPerson = undefined;
               }
           }
@@ -179,11 +180,12 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
         const dx = Math.abs(city.position.x - tilePos.x);
         const dy = Math.abs(city.position.y - tilePos.y);
         if (dx > 1 || dy > 1) return;
-
+        
         // 불가사의를 지을 타일에 이미 위인이 있다면 대기열로 돌려보냄!
         if (tile.greatPerson) {
             if (!player.unplacedGreatPeople) player.unplacedGreatPeople = []; // 안전장치
             player.unplacedGreatPeople.push(tile.greatPerson);
+            //player.resources.currency = Math.max(0, player.resources.currency - targetTile.greatPerson.stats.currency);
             tile.greatPerson = undefined;
         }
         
@@ -315,7 +317,7 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       const tile = state.map.tiles[y][x];
 
       // 도심부나 물, 산 위에는 위인을 둘 수 없음 (기획에 맞게 조절 가능)
-      if (tile.cityId || tile.terrain === 'water' || tile.terrain === 'mountain') {
+      if (tile.cityId || tile.terrain === 'water') {
         alert("이 지형에는 위인을 배치할 수 없습니다.");
         return;
       }
@@ -345,6 +347,11 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       // 4. 타일 소유권 설정 (없다면) 및 위인 꽂기!
       tile.ownerId = playerId;
       tile.greatPerson = gp;
+
+      // 위인의 화폐 적용
+      if (gp.stats.currency > 0) {
+          player.resources.currency = Math.min(15, player.resources.currency + gp.stats.currency);
+      }
 
       // 로그 추가
       if (!state.combatState.log) state.combatState.log = [];
