@@ -67,7 +67,7 @@ export const TECHNOLOGIES: Technology[] = [
   {
     id: 'printing_press', name: '인쇄기', level: 2,
     description: "해제 건물: 대학\n배치제한: 4\n문화 5개 소모해 화폐 토큰 1개 추가 (최대 4)",
-    unlocksBuildings: ['university'], passiveEffects: { stackingLimitBonus: 2 /* 기본2+2=4 */ }, resourceAbility: { description: "문화 5 소모 -> 화폐 토큰 +1", maxTokens: 4 }
+    unlocksBuildings: ['university'], upgradesBuilding: { from: 'library', to: 'university' },passiveEffects: { stackingLimitBonus: 2 /* 기본2+2=4 */ }, resourceAbility: { description: "문화 5 소모 -> 화폐 토큰 +1", maxTokens: 4 }
   },
   {
     id: 'civil_service', name: '공공서비스', level: 2,

@@ -8,7 +8,7 @@ export function CultureCardInventory() {
   const { 
     players, currentPlayerIndex, 
     activeCardTargeting, startCardTargeting, cancelCardTargeting, 
-    discardCultureCard, executeCultureCard 
+    discardCultureCard, playCultureCard 
   } = useGameStore();
 
   const player = players[currentPlayerIndex];
@@ -27,7 +27,7 @@ export function CultureCardInventory() {
               <button 
                 key={city.id}
                 onClick={() => {
-                  executeCultureCard(activeCardTargeting.cardId, { cityId: city.id });
+                  playCultureCard(activeCardTargeting.cardId, { cityId: city.id });
                   cancelCardTargeting();
                 }}
                 className="w-full p-3 bg-slate-700 hover:bg-slate-600 rounded text-left text-white font-bold transition-colors flex justify-between"
@@ -74,7 +74,7 @@ export function CultureCardInventory() {
               <button 
                 key={idx}
                 onClick={() => {
-                  executeCultureCard(activeCardTargeting.cardId, { opponentId: item.oppId, techId: item.tech.id });
+                  playCultureCard(activeCardTargeting.cardId, { opponentId: item.oppId, techId: item.tech.id });
                   cancelCardTargeting();
                 }}
                 className="w-full p-3 bg-slate-700 hover:bg-slate-600 flex justify-between rounded text-white transition-colors"
@@ -90,7 +90,7 @@ export function CultureCardInventory() {
                 <p className="text-amber-400 text-sm mb-3">뺏어올 수 있는 기술이 없어 카드가 낭비됩니다.</p>
                 <button 
                   onClick={() => {
-                    executeCultureCard(activeCardTargeting.cardId, { opponentId: null, techId: null });
+                    playCultureCard(activeCardTargeting.cardId, { opponentId: null, techId: null });
                     cancelCardTargeting();
                   }}
                   className="w-full p-2 bg-red-600 hover:bg-red-500 text-white rounded font-bold"

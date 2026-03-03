@@ -6,28 +6,29 @@ const OBSOLETE_TECH_MAP: Partial<Record<BuildingType, string>> = {
   'temple': 'theology',          // 신학 개발 시 사원 단종
   'workshop': 'railroad',        // 철도 개발 시 작업장 단종
   'market': 'finance',           // 금융 개발 시 시장 단종
-  'barracks': 'military_science' // 군사학 개발 시 막사 단종
+  'barracks': 'military_science', // 군사학 개발 시 막사 단종
+  'library': 'printing_press'    // 인쇄기 개발 시 도서관 단종
 };
 
 export const BUILDINGS: Record<BuildingType, BuildingDefinition> = {
-  // ... 기존 성벽(walls), 막사(barracks), 도서관(library), 대학교(university) 유지 ...
-  walls: { type: 'walls', name: '성벽', description: '도시 방어 +4', productionCost: 4, effects: { productionBonus: 0, tradeBonus: 0, cultureBonus: 0, combatBonus: 0, cityDefenseBonus: 4, }, requiredTech: null, requiredBuilding: null, allowedTerrain: ['city'], maxPerCity: 1 },
-  barracks: { type: 'barracks', name: '막사', description: '교역 +2, 전투 보너스 +2', productionCost: 4, effects: { productionBonus: 0, tradeBonus: 2, cultureBonus: 0, combatBonus: 2, cityDefenseBonus: 0, }, requiredTech: null, requiredBuilding: null, allowedTerrain: ['grassland', 'forest', 'mountain', 'desert'], maxPerCity: 1 },
-  library: { type: 'library', name: '도서관', description: '교역 +1, 문화 +1', productionCost: 4, effects: { productionBonus: 0, tradeBonus: 1, cultureBonus: 1, combatBonus: 0, cityDefenseBonus: 0, }, requiredTech: 'writing', requiredBuilding: null, allowedTerrain: ['forest', 'grassland'], maxPerCity: 1 },
-  university: { type: 'university', name: '대학교', description: '교역 +2, 문화 +2', productionCost: 6, effects: { productionBonus: 0, tradeBonus: 2, cultureBonus: 2, combatBonus: 0, cityDefenseBonus: 0, }, requiredTech: 'philosophy', requiredBuilding: 'library', allowedTerrain: ['forest', 'grassland'], maxPerCity: 1 },
-  market: { type: 'market', name: '시장', description: '생산 +1, 교역 +1, 문화 +1', productionCost: 4, effects: { productionBonus: 1, tradeBonus: 1, cultureBonus: 1, combatBonus: 0, cityDefenseBonus: 0, }, requiredTech: 'currency', requiredBuilding: null, allowedTerrain: ['grassland', 'forest', 'mountain', 'desert'], maxPerCity: 1 },
-  bank: { type: 'bank', name: '은행', description: '생산 +1, 교역 +1, 문화 +1, 화폐 +1', productionCost: 6, effects: { productionBonus: 1, tradeBonus: 1, cultureBonus: 1, combatBonus: 0, cityDefenseBonus: 0, }, requiredTech: 'banking', requiredBuilding: 'market', allowedTerrain: ['grassland', 'forest', 'mountain', 'desert'], maxPerCity: 1 },
-  temple: { type: 'temple', name: '사원', description: '문화 +2', productionCost: 4, effects: { productionBonus: 0, tradeBonus: 0, cultureBonus: 2, combatBonus: 0, cityDefenseBonus: 0,}, requiredTech: 'philosophy', requiredBuilding: null, allowedTerrain: ['grassland', 'forest', 'mountain', 'desert'], maxPerCity: 1 },
-  cathedral: { type: 'cathedral', name: '대성당', description: '문화 +3', productionCost: 8, effects: { productionBonus: 0, tradeBonus: 0, cultureBonus: 3, combatBonus: 0, cityDefenseBonus: 0, }, requiredTech: 'theology', requiredBuilding: 'temple', allowedTerrain: ['grassland', 'forest', 'mountain', 'desert'], maxPerCity: 1 },
-  
-  // 🌟 [추가] 업그레이드 시스템을 위한 신규 건물들!
-  granary: { type: 'granary', name: '곡물창고', description: '생산 +1 교역 +1', productionCost: 4, effects: { productionBonus: 1, tradeBonus: 1, cultureBonus: 0, combatBonus: 0, cityDefenseBonus: 0, }, requiredTech: 'pottery', requiredBuilding: null, allowedTerrain: ['grassland', 'forest'], maxPerCity: 1 },
+  // === [1차 건물들] ===
+  walls: { type: 'walls', name: '성벽', description: '도시 방어 +4', productionCost: 7, effects: { productionBonus: 0, tradeBonus: 0, cultureBonus: 0, combatBonus: 0, cityDefenseBonus: 4, }, requiredTech: 'masonry', requiredBuilding: null, allowedTerrain: ['city'], maxPerCity: 1 },
+  barracks: { type: 'barracks', name: '막사', description: '교역 +2, 전투 보너스 +2', productionCost: 7, effects: { productionBonus: 0, tradeBonus: 2, cultureBonus: 0, combatBonus: 2, cityDefenseBonus: 0, }, requiredTech: 'metal_casting', requiredBuilding: null, allowedTerrain: ['grassland', 'forest', 'mountain', 'desert'], maxPerCity: 1 },
+  library: { type: 'library', name: '도서관', description: '교역 +1, 문화 +1', productionCost: 5, effects: { productionBonus: 0, tradeBonus: 1, cultureBonus: 1, combatBonus: 0, cityDefenseBonus: 0, }, requiredTech: 'writing', requiredBuilding: null, allowedTerrain: ['forest', 'grassland'], maxPerCity: 1 },
+  market: { type: 'market', name: '시장', description: '생산 +1, 교역 +1, 문화 +1', productionCost: 7, effects: { productionBonus: 1, tradeBonus: 1, cultureBonus: 1, combatBonus: 0, cityDefenseBonus: 0, }, requiredTech: 'currency', requiredBuilding: null, allowedTerrain: ['grassland', 'forest', 'mountain', 'desert'], maxPerCity: 1 },
+  temple: { type: 'temple', name: '사원', description: '문화 +2', productionCost: 7, effects: { productionBonus: 0, tradeBonus: 0, cultureBonus: 2, combatBonus: 0, cityDefenseBonus: 0,}, requiredTech: 'philosophy', requiredBuilding: null, allowedTerrain: ['grassland', 'forest', 'mountain', 'desert'], maxPerCity: 1 },
+  granary: { type: 'granary', name: '곡물창고', description: '생산 +1 교역 +1', productionCost: 5, effects: { productionBonus: 1, tradeBonus: 1, cultureBonus: 0, combatBonus: 0, cityDefenseBonus: 0, }, requiredTech: 'pottery', requiredBuilding: null, allowedTerrain: ['grassland', 'forest'], maxPerCity: 1 },
+  workshop: { type: 'workshop', name: '작업장', description: '생산 +3', productionCost: 7, effects: { productionBonus: 1, tradeBonus: 0, cultureBonus: 0, combatBonus: 0, cityDefenseBonus: 0,  }, requiredTech: 'construction', requiredBuilding: null, allowedTerrain: ['grassland', 'mountain',], maxPerCity: 1 },
+  trading_post: { type: 'trading_post', name: '교역소', description: '교역 +1', productionCost: 7, effects: { productionBonus: 0, tradeBonus: 1, cultureBonus: 0, combatBonus: 0, cityDefenseBonus: 0,}, requiredTech: 'code_of_laws', requiredBuilding: null, allowedTerrain: [ 'desert', ], maxPerCity: 1 },
+  harbor: { type: 'harbor', name: '항구', description: '생산 +1, 교역 +2', productionCost: 7, effects: { productionBonus: 1, tradeBonus: 2, cultureBonus: 0, combatBonus: 0, cityDefenseBonus: 0,  }, requiredTech: 'sailing', requiredBuilding: null, allowedTerrain: ['water',  ], maxPerCity: 1 },
+
+  // === [2차 진화 건물들] ===
+  university: { type: 'university', name: '대학교', description: '교역 +2, 문화 +2', productionCost: 6, effects: { productionBonus: 0, tradeBonus: 2, cultureBonus: 2, combatBonus: 0, cityDefenseBonus: 0, }, requiredTech: 'printing_press', requiredBuilding: null, allowedTerrain: ['forest', 'grassland'], maxPerCity: 1 },
+  bank: { type: 'bank', name: '은행', description: '생산 +1, 교역 +1, 문화 +1, 화폐 +1', productionCost: 6, effects: { productionBonus: 1, tradeBonus: 1, cultureBonus: 1, combatBonus: 0, cityDefenseBonus: 0, }, requiredTech: 'finance', requiredBuilding: null, allowedTerrain: ['grassland', 'forest', 'mountain', 'desert'], maxPerCity: 1 },
+  cathedral: { type: 'cathedral', name: '대성당', description: '문화 +3', productionCost: 8, effects: { productionBonus: 0, tradeBonus: 0, cultureBonus: 3, combatBonus: 0, cityDefenseBonus: 0, }, requiredTech: 'theology', requiredBuilding: null, allowedTerrain: ['grassland', 'forest', 'mountain', 'desert'], maxPerCity: 1 },
   aqueduct: { type: 'aqueduct', name: '수로교', description: '생산 +2 교역 +2. (곡물창고 개량)', productionCost: 6, effects: { productionBonus: 2, tradeBonus: 2, cultureBonus: 0, combatBonus: 0, cityDefenseBonus: 0,}, requiredTech: 'engineering', requiredBuilding: null, allowedTerrain: ['grassland', 'forest'], maxPerCity: 1 },
-  workshop: { type: 'workshop', name: '작업장', description: '생산 +3', productionCost: 4, effects: { productionBonus: 1, tradeBonus: 0, cultureBonus: 0, combatBonus: 0, cityDefenseBonus: 0,  }, requiredTech: 'construction', requiredBuilding: null, allowedTerrain: ['grassland', 'mountain',], maxPerCity: 1 },
   iron_mine: { type: 'iron_mine', name: '철광', description: '생산 +4. (작업장 개량)', productionCost: 6, effects: { productionBonus: 3, tradeBonus: 0, cultureBonus: 0, combatBonus: 0, cityDefenseBonus: 0, }, requiredTech: 'railroad', requiredBuilding: null, allowedTerrain: ['mountain',], maxPerCity: 1 },
   military_academy: { type: 'military_academy', name: '사관학교', description: '전투 보너스 +4. (막사 개량)', productionCost: 8, effects: { productionBonus: 0, tradeBonus: 0, cultureBonus: 0, combatBonus: 4, cityDefenseBonus: 0, }, requiredTech: 'military_science', requiredBuilding: null, allowedTerrain: ['grassland', 'forest', 'mountain', 'desert', ], maxPerCity: 1 },
-  trading_post: { type: 'trading_post', name: '교역소', description: '교역 +1', productionCost: 4, effects: { productionBonus: 0, tradeBonus: 1, cultureBonus: 0, combatBonus: 0, cityDefenseBonus: 0,}, requiredTech: 'code_of_laws', requiredBuilding: null, allowedTerrain: [ 'desert', ], maxPerCity: 1 },
-  harbor: { type: 'harbor', name: '항구', description: '생산 +1, 교역 +2', productionCost: 5, effects: { productionBonus: 1, tradeBonus: 2, cultureBonus: 0, combatBonus: 0, cityDefenseBonus: 0,  }, requiredTech: 'sailing', requiredBuilding: null, allowedTerrain: ['water',  ], maxPerCity: 1 },
 };
 
 export function getAvailableBuildings(

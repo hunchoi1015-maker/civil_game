@@ -19,7 +19,8 @@ export interface CultureSlice {
   drawCultureCard: (level: 1|2|3) => void;
   discardCultureCard: (cardId: string) => void;
   executeCultureCard: (cardId: string, payload: any) => void;
-  
+  playCultureCard: (cardId: string, payload: any) => void;
+
   // [신규] UI 타겟팅 관리
   activeCardTargeting: CardTargetingState | null;
   startCardTargeting: (cardId: string) => void;
@@ -213,6 +214,25 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
     if (executePayload && cardToExecute) {
        get().executeCultureCard(cardToExecute, executePayload);
     }
+  },
+
+  playCultureCard: (cardId: string, payload: any) => {
+    const state = get();
+    const player = state.players[state.currentPlayerIndex];
+    
+    // 이 시점에 전투 로그를 띄워 사람들에게 알립니다.
+    const card = player.cultureEventCards?.find(c => c.id === cardId);
+    
+    // (선택) 카드 사용 시 즉시 손패에서 안 보이게 하려면 여기서 제거해도 되지만,
+    // 무효화되었을 때 묘지로 가는 연출을 위해 일단 손에 둔 상태로 스택에 올립니다.
+    
+    // 스택에 액션 등록!
+    state.pushActionToStack({
+      id: Date.now().toString(),
+      sourcePlayerId: player.id,
+      actionType: 'culture_card',
+      payload: { cardId, ...payload } // payload 안에 cardId도 같이 넣어줌
+    });
   },
 
   executeCultureCard: (cardId: string, payload: any) => {

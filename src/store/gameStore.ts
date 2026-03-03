@@ -13,6 +13,7 @@ import { createCombatSlice } from './slices/combatSlice';
 import { createTechSlice } from './slices/techSlice';
 import { createUISlice } from './slices/uiSlice';
 import { createCultureSlice } from './slices/cultureSlice';
+import { createInterruptSlice, InterruptSlice } from './slices/interruptSlice';
 
 // Helpers Import
 import { getTileSafe } from './helpers/mapHelpers';
@@ -35,6 +36,12 @@ const createInitialState = () => ({
   winCondition: null,
   isGameOver: false,
   phaseComplete: [] as boolean[],
+  interruptState: {
+    actionStack: [],
+    respondersQueue: [],
+    currentResponderId: null,
+    timerEndsAt: null,
+  },
 });
 
 export const useGameStore = create<GameStore>()(
@@ -56,6 +63,7 @@ export const useGameStore = create<GameStore>()(
       ...createTechSlice(...a),
       ...createUISlice(...a),
       ...createCultureSlice(...a),
+      ...createInterruptSlice(...a),
       // 3. 메인 스토어 전용 메서드 (슬라이스에 속하지 않는 공통 로직)
 
       // 게임 초기화: Setup 슬라이스의 initSetup 호출

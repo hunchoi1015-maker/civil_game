@@ -374,6 +374,7 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
               success = true;
           } else alert("교역 토큰이 부족합니다.");
           break;
+          
         case 'horseback_riding': // [승마] 비단 1 소모 -> 교역 9 획득, 상대 1명 교역 6 부여
           if (player.luxuryResources.silk >= 1 && payload?.targetPlayerId) {
               const targetPlayer = state.players.find(p => p.id === payload.targetPlayerId);

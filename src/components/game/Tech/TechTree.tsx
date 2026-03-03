@@ -100,6 +100,7 @@ export function TechTree() {
 
               <div className="flex flex-wrap justify-center gap-3">
                 {techs.map((tech) => {
+                  const playerTech = currentPlayer.technologies.find(t => t.id === tech.id);
                   const isResearched = researchedIds.has(tech.id);
                   const validation = validateTechResearch(tech.id, currentPlayer.technologies,0);
 
@@ -130,6 +131,12 @@ export function TechTree() {
                       {/* 고유 기술 뱃지 */}
                       {tech.isStartingTechFor && (
                         <div className="absolute -top-2 -right-2 text-lg">⭐</div>
+                      )}
+
+                      {isResearched && tech.resourceAbility?.maxTokens && (
+                        <div className="absolute -top-3 -left-3 bg-slate-900 border-2 border-amber-500 rounded-full px-2 py-0.5 text-xs font-bold text-amber-400 shadow-xl z-20 animate-bounce">
+                          💰 {playerTech?.tokensOnCard || 0}/{tech.resourceAbility.maxTokens}
+                        </div>
                       )}
                     </motion.button>
                   );

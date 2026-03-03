@@ -738,6 +738,34 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         }
       }
 
+      // 법계 화폐 로직
+      if (winner) {
+        // 승자의 기술 목록에서 법계를 찾습니다.
+        const legalism = winner.technologies.find(t => t.id === 'code_of_laws');
+        
+        // 기술이 존재하고, 이번 턴(라운드)에 아직 능력을 발동하지 않았다면?
+        if (legalism && !legalism.abilityUsedThisTurn) {
+            const maxTokens = legalism.resourceAbility?.maxTokens || 4; 
+            const currentTokens = legalism.tokensOnCard || 0; // 값이 깨지지 않도록 안전장치
+            
+            // 토큰(카운터)이 한도(4개)보다 적을 때만 획득 가능
+            if (currentTokens < maxTokens) {
+                // 1. 기술 카드 위에 발동 횟수(카운터) 1 증가
+                legalism.tokensOnCard = currentTokens + 1;
+                legalism.abilityUsedThisTurn = true; // 이번 턴 발동 완료 처리
+                
+                // 2. 플레이어의 실제 주머니 화폐를 +1 증가 (최대 15 제한)
+                const oldCurrency = winner.resources.currency || 0;
+                winner.resources.currency = Math.min(15, oldCurrency + 1);
+                
+                // 전투 로그에 기록
+                state.combatState.log.push({ 
+                    message: `⚖️ ${winner.name}이(가) 전투 승리로 '법계' 능력을 발동하여 화폐를 1 획득했습니다! 💰(${legalism.tokensOnCard}/${maxTokens})` 
+                });
+            }
+        }
+      }
+
       // 2. 묘지 처리 (카드 체력 회복 로직이 없다면 덱에서 제거)
       const graveyardIds = new Set(state.combatState.graveyard.map((c) => c.id));
       if (winner) {

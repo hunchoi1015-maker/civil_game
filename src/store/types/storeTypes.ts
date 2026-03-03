@@ -1,12 +1,13 @@
 import { NationType, Position, GameState, GameConfig, Tile,  } from '../../types';
 import { StateCreator } from 'zustand';
 import { CultureSlice } from '../slices/cultureSlice';
+import { InterruptSlice } from '../slices/interruptSlice';
 
 // [수정] 'any' 제거 및 타입 구체화
 // GameSlice는 기본 데이터(GameState)와 자기 자신의 액션(T)을 알고 있는 상태로 정의합니다.
 // 이렇게 하면 GameStore(전체 스토어)가 이 타입의 상위 집합이므로 호환됩니다.
 export type GameSlice<T> = StateCreator<
-  GameState & T, 
+  GameStore, 
   [['zustand/immer', never]],
   [],
   T
@@ -38,7 +39,8 @@ export interface GameStore extends GameState,
   CombatSlice,
   TechSlice,
   UISlice,
-  CultureSlice
+  CultureSlice,
+  InterruptSlice
   {
   // 공통 액션
   initGame: (config: GameConfig) => void;

@@ -132,6 +132,10 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
 
       state.players.forEach((player) => {
         player.hasResearchedThisTurn = false;
+
+        player.technologies.forEach(tech => {
+            tech.abilityUsedThisTurn = false;
+        });
         
         // 플레이어의 기술 스킬 초기화 (도시에 종속되지 않고 플레이어별로 1번씩만!)
         if (player.technologies) {

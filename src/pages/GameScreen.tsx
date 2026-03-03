@@ -20,6 +20,7 @@ import { CultureCardInventory } from '../components/game/CultureCardInventory';
 import { TechAbilityWidget } from '../components/game/TechAbilityWidget';
 import { ResearchResultsModal } from '../components/game/ResearchResultsModal';
 import { ResourceSelectionModal } from '../components/game/ResourceSelectionModal';
+import { InterruptModal } from '../components/game/InterruptModal';
 
 type PanelView = 'map' | 'tech' | 'city' | 'units';
 
@@ -178,7 +179,8 @@ export function GameScreen() {
         <div className="pointer-events-auto">
           <TechAbilityWidget />
         </div>
-
+        {/* 공공 서비스 방해 모달 */}
+        <InterruptModal />     
       </div>
 
       {/* 승리 모달 */}
