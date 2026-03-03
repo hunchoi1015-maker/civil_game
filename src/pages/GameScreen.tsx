@@ -178,10 +178,10 @@ export function GameScreen() {
         
         <div className="pointer-events-auto">
           <TechAbilityWidget />
-        </div>
-        {/* 공공 서비스 방해 모달 */}
-        <InterruptModal />     
+        </div>     
       </div>
+      {/* 공공 서비스 방해 모달 */}
+        <InterruptModal />
 
       {/* 승리 모달 */}
       {isGameOver && winner && <VictoryModal />}

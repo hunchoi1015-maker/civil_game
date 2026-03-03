@@ -212,26 +212,37 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
     });
 
     if (executePayload && cardToExecute) {
-       get().executeCultureCard(cardToExecute, executePayload);
+       get().playCultureCard(cardToExecute, executePayload);
     }
   },
 
   playCultureCard: (cardId: string, payload: any) => {
+    // 1. 상태를 변경하여 카드를 손에서 즉시 제거합니다. (Zustand Immer 안전 구역)
+    set((draft) => {
+      const player = draft.players[draft.currentPlayerIndex];
+      const cardIndex = player.cultureEventCards?.findIndex(c => c.id === cardId);
+      
+      if (cardIndex !== undefined && cardIndex !== -1) {
+        const card = player.cultureEventCards![cardIndex];
+        
+        // 전투 로그 추가
+        if (draft.combatState && !draft.combatState.log) draft.combatState.log = [];
+        draft.combatState?.log?.push({ 
+          message: `📜 ${player.name}이(가) [${card.name}]을(를) 사용했습니다! (개입 대기 중...)` 
+        });
+        
+        // 🌟 핵심: 카운터 여부와 상관없이 내 손에서 카드를 즉시 제거(소모)합니다!
+        player.cultureEventCards!.splice(cardIndex, 1);
+      }
+    });
+
+    // 2. set 구역 밖에서 안전하게 스택에 액션을 올립니다.
     const state = get();
-    const player = state.players[state.currentPlayerIndex];
-    
-    // 이 시점에 전투 로그를 띄워 사람들에게 알립니다.
-    const card = player.cultureEventCards?.find(c => c.id === cardId);
-    
-    // (선택) 카드 사용 시 즉시 손패에서 안 보이게 하려면 여기서 제거해도 되지만,
-    // 무효화되었을 때 묘지로 가는 연출을 위해 일단 손에 둔 상태로 스택에 올립니다.
-    
-    // 스택에 액션 등록!
     state.pushActionToStack({
       id: Date.now().toString(),
-      sourcePlayerId: player.id,
+      sourcePlayerId: state.players[state.currentPlayerIndex].id,
       actionType: 'culture_card',
-      payload: { cardId, ...payload } // payload 안에 cardId도 같이 넣어줌
+      payload: { cardId, ...payload } 
     });
   },
 
@@ -239,7 +250,6 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
     set((state) => {
       const player = state.players[state.currentPlayerIndex];
       const cardIdx = player.cultureEventCards.findIndex(c => c.id === cardId);
-      if (cardIdx === -1) return;
       const card = player.cultureEventCards[cardIdx];
 
       if (card.templateId === 'exile') {
@@ -296,8 +306,6 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
               }
           }
       }
-
-      player.cultureEventCards.splice(cardIdx, 1);
     });
   }
 });
