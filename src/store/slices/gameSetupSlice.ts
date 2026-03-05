@@ -1,7 +1,9 @@
+// src/store/slices/gameSetupSlice.ts
+
 import { StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { GameStore, GameSetupState } from '../types/storeTypes';
-import { NationType, Position, Player, createInitialResources, createCity, createUnit, getStartPositionOptions } from '../../types';
+import { NationType, Position, Player, createInitialResources, createCity, createUnit, getStartPositionOptions, UnitType } from '../../types';
 import { generateMap, setAdjacentTilesOwner } from '../helpers/mapHelpers';
 import { createInitialLuxuryResources } from '../../types/player';
 
@@ -10,6 +12,7 @@ export interface GameSetupSlice {
   initSetup: (playerCount: number, playerNames: string[]) => void;
   selectNation: (playerIndex: number, nation: NationType) => void;
   selectCapitalPosition: (playerIndex: number, position: Position) => void;
+  placeInitialUnit: (playerIndex: number, position: Position) => void; // 🌟 [신규] 초기 유닛 배치 액션
   startGame: () => void;
 }
 
@@ -18,6 +21,7 @@ const initialSetupState: GameSetupState = {
   currentSetupPlayer: 0,
   selectedNations: [],
   capitalPositionOptions: [],
+  pendingInitialUnits: {}, // 초기화
 };
 
 const PLAYER_COLORS_LIST = ['red', 'blue', 'green', 'yellow'] as const;
@@ -66,10 +70,11 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
       state.players = players;
       state.map = map;
       state.setupState = {
-        phase: 'capitalSelect',
+        phase: 'capitalSelect', // 테스트 끝나면 nationSelect로 돌리기
         currentSetupPlayer: 0,
         selectedNations: availableNations.slice(0, playerCount),
         capitalPositionOptions: capitalOptions,
+        pendingInitialUnits: {},
       };
     });
   },
@@ -127,24 +132,60 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
       if (playerIndex < state.players.length - 1) {
         state.setupState.currentSetupPlayer = playerIndex + 1;
       } else {
-        state.setupState.phase = 'ready';
-        // 초기 유닛 배치
+        // 🌟 [수정] 모든 수도가 지어지면 ready가 아니라 유닛 배치 페이즈로 전환!
+        state.setupState.phase = 'initialUnitSelect';
+        state.setupState.currentSetupPlayer = 0;
+        
+        // 각 플레이어별 초기 유닛 큐 세팅 (러시아는 군사 1개 추가)
         state.players.forEach((p) => {
-          const playerCapital = p.cities.find((c) => c.isCapital);
-          if (playerCapital) {
-            const settlerId = uuidv4();
-            const settler = createUnit(settlerId, 'settler', p.id, playerCapital.position);
-            p.units.push(settler);
-            state.map.tiles[playerCapital.position.y][playerCapital.position.x].unitIds.push(settlerId);
-            
-            const militaryId = uuidv4();
-            const military = createUnit(militaryId, 'military', p.id, playerCapital.position);
-            p.units.push(military);
-            state.map.tiles[playerCapital.position.y][playerCapital.position.x].unitIds.push(militaryId);
-          }
+            const initialQueue: UnitType[] = ['military', 'settler'];
+            if (p.nation === 'russia') {
+                initialQueue.unshift('military'); // 러시아: 군사, 군사, 개척자
+            }
+            state.setupState.pendingInitialUnits![p.id] = initialQueue;
         });
       }
     });
+  },
+
+  // 🌟 [신규] 초기 유닛 1개 배치 후 턴 넘기기 로직
+  placeInitialUnit: (playerIndex: number, position: Position) => {
+      set((state) => {
+          const player = state.players[playerIndex];
+          const queue = state.setupState.pendingInitialUnits?.[player.id] || [];
+          
+          if (queue.length === 0) return; // 이미 다 배치함
+
+          const unitTypeToPlace = queue.shift(); // 큐에서 맨 앞 유닛 꺼내기
+          if (!unitTypeToPlace) return;
+
+          // 유닛 생성 및 맵 배치
+          const unitId = uuidv4();
+          const unit = createUnit(unitId, unitTypeToPlace, player.id, position);
+          player.units.push(unit);
+          state.map.tiles[position.y][position.x].unitIds.push(unitId);
+
+          // 다음 차례 계산 (아직 유닛을 덜 배치한 사람 찾기)
+          let nextPlayerFound = false;
+          let nextIdx = (playerIndex + 1) % state.players.length;
+          
+          // 한 바퀴 돌면서 큐가 남은 사람 찾기
+          for (let count = 0; count < state.players.length; count++) {
+              const nextP = state.players[nextIdx];
+              const nextQueue = state.setupState.pendingInitialUnits?.[nextP.id];
+              if (nextQueue && nextQueue.length > 0) {
+                  state.setupState.currentSetupPlayer = nextIdx;
+                  nextPlayerFound = true;
+                  break;
+              }
+              nextIdx = (nextIdx + 1) % state.players.length;
+          }
+
+          // 아무도 큐가 남아있지 않다면 (모두 배치 완료) -> 게임 시작!
+          if (!nextPlayerFound) {
+              state.setupState.phase = 'ready';
+          }
+      });
   },
 
   startGame: () => {

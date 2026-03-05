@@ -1,15 +1,16 @@
+// src/store/slices/unitSlice.ts
+
 import { StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
-// 🌟 [추가] UNIT_DEFINITIONS 임포트 추가
 import { Position, UnitType, createUnit, BASE_STACKING_LIMIT, createInitialLuxuryResources, RewardType, UNIT_DEFINITIONS } from '../../types';
 import { findPlayerById } from '../helpers/playerHelpers';
 import { getPlayerPassives } from '../helpers/playerHelpers';
-// 🌟 [추가] 생산력 계산 함수 임포트
 import { calculateDetailedCityProduction } from '../../engine/ResourceCalculator';
 
 export interface UnitSlice {
-  createUnit: (playerId: string, type: UnitType, position: Position) => void;
+  // 🌟 [수정] 4번째 파라미터(sourceCityId) 추가!
+  createUnit: (playerId: string, type: UnitType, position: Position, sourceCityId?: string) => void;
   moveUnit: (unitId: string, newPosition: Position) => void;
   removeUnit: (unitId: string) => void;
   moveSelectedUnits: (newPosition: Position) => void;
@@ -18,7 +19,8 @@ export interface UnitSlice {
 }
 
 export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]], [], UnitSlice> = (set, get) => ({
-  createUnit: (playerId: string, type: UnitType, position: Position) => {
+  // 🌟 [수정] 4번째 파라미터(sourceCityId) 추가!
+  createUnit: (playerId: string, type: UnitType, position: Position, sourceCityId?: string) => {
     set((state) => {
       const player = findPlayerById(state.players, playerId);
       if (!player) return;
@@ -26,11 +28,12 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       let cityToUpdate = null;
       let cost = 0;
 
-      // 🌟 [수정] 도시 경영 단계일 때, 공학 시스템 및 잔여 생산력 로직 적용
       if (state.currentPhase === 'cityManagement') {
-        const city = player.cities.find(
-          (c) => c.position.x === position.x && c.position.y === position.y
-        );
+        // 🌟 [수정] sourceCityId가 있다면 그 도시를 찾고, 없다면 타일 위치로 찾습니다.
+        const city = sourceCityId 
+            ? player.cities.find((c) => c.id === sourceCityId)
+            : player.cities.find((c) => c.position.x === position.x && c.position.y === position.y);
+            
         if (!city) return;
 
         // 1. 행동 충돌 방지
@@ -61,7 +64,6 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       player.units.push(unit);
       state.map.tiles[position.y][position.x].unitIds.push(unit.id);
       
-      // 🌟 [수정] 상태 업데이트 부분: 잔여 생산력 및 공학 사용 여부 기록
       if (cityToUpdate) {
         cityToUpdate.usedProductionThisTurn = (cityToUpdate.usedProductionThisTurn || 0) + cost;
         cityToUpdate.producedItemsCount = (cityToUpdate.producedItemsCount || 0) + 1;
@@ -75,7 +77,6 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
   },
 
   exploreChunk: (unitId: string, targetChunkPos: Position) => {
-    // ... (이하 기존 exploreChunk 로직 동일하게 유지)
     set((state) => {
       const player = state.players.find((p) => p.id === state.players[state.currentPlayerIndex].id);
       if (!player) return;
@@ -100,7 +101,6 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
   },
 
   moveUnit: (unitId: string, newPosition: Position) => {
-    // ... (기존 moveUnit 로직 동일하게 유지)
     const state = get();
     const currentPlayer = state.players[state.currentPlayerIndex];
     const unit = currentPlayer.units.find((u) => u.id === unitId);
@@ -241,7 +241,6 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
   },
 
   removeUnit: (unitId: string) => {
-    // ... (기존 동일)
     set((state) => {
       for (const player of state.players) {
         const unitIndex = player.units.findIndex((u) => u.id === unitId);
@@ -257,7 +256,6 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
   },
 
   moveSelectedUnits: (newPosition: Position) => {
-    // ... (기존 동일)
     const currentState = get();
     const player = currentState.players[currentState.currentPlayerIndex];
     const firstSelectedUnit = currentState.selectedUnits
@@ -305,6 +303,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
     set((state) => {
       const currentPlayer = state.players[state.currentPlayerIndex];
       const tile = state.map.tiles[newPosition.y][newPosition.x];
+      const passives = getPlayerPassives(currentPlayer); // 🌟 동적 패시브 계산
       const unitsToMove = state.selectedUnits
         .map((id) => currentPlayer.units.find((u) => u.id === id))
         .filter((u): u is NonNullable<typeof u> => u !== undefined && u.movement > 0);
@@ -317,7 +316,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       );
       if (!allOnSameTile) return;
       
-      const stackingLimit = BASE_STACKING_LIMIT + currentPlayer.stackingLimitBonus;
+      const stackingLimit = BASE_STACKING_LIMIT + passives.stackingLimitBonus;
       const myUnitsOnTarget = tile.unitIds.filter((id) =>
         currentPlayer.units.some((u) => u.id === id)
       ).length;
@@ -340,7 +339,6 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
   },
 
   claimObjectReward: (playerId, reward) => {
-    // ... (기존 동일)
       set(state => {
           const player = state.players.find(p => p.id === playerId);
           if (!player) return;

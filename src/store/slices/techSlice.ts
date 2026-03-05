@@ -9,6 +9,8 @@ import { TECH_COSTS } from '../../types';
 import { Position } from '../../types/map'; 
 import { GOVERNMENTS } from '../../constants/governments';
 import { ARMY_CARD_TEMPLATES } from '../../constants/armyCards';
+// 🌟 [추가] 패시브(배치 한도 등)를 가져오기 위한 헬퍼 함수 임포트
+import { getPlayerPassives } from '../helpers/playerHelpers';
 
 // 🌟 [피라미드 검증 헬퍼 함수]
 export function canResearchPyramid(player: Player, targetTechId: string): { canResearch: boolean, reason?: string } {
@@ -97,27 +99,21 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
       };
       player.technologies.push(newTech);
     
-      // ==========================================
-      // 3. 🚀 건물 자동 개량 (도시에 지어진 건물 & 맵 타일 동시 교체)
-      // ==========================================
       if (techDef.upgradesBuilding) {
           const fromBuilding = techDef.upgradesBuilding.from;
           const toBuilding = techDef.upgradesBuilding.to;
           
-          let upgradedBankCount = 0; // 🌟 [추가] 은행 개량 개수 추적기
+          let upgradedBankCount = 0; 
 
-          // A. 도시 내부의 건물 목록 교체
           player.cities.forEach(city => {
               city.buildings.forEach(building => {
                   if (building.type === fromBuilding) {
                       building.type = toBuilding as any;
-                      // 🌟 [추가] 은행으로 바뀌었다면 카운트 증가
                       if (toBuilding === 'bank') upgradedBankCount++;
                   }
               });
           });
 
-          // B. 맵 전체를 스캔해서 타일 위에 지어진 건물 아이콘도 즉시 교체
           for (let y = 0; y < state.map.height; y++) {
               for (let x = 0; x < state.map.width; x++) {
                   const tile = state.map.tiles[y][x];
@@ -127,7 +123,6 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
               }
           }
 
-          // 🌟 [추가] 은행 개량 시 화폐 즉시 획득 및 로그 출력
           if (upgradedBankCount > 0) {
               player.resources.currency = Math.min(player.resources.currency + upgradedBankCount, 15);
               if (state.combatState && !state.combatState.log) state.combatState.log = [];
@@ -137,9 +132,6 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
           }
       }
 
-      // ==========================================
-      // 4. 🚀 부대 카드 자동 개량 (인벤토리 카드 스탯/이름 업데이트)
-      // ==========================================
       const unlockedCards = ARMY_CARD_TEMPLATES.filter(c => c.requiredTech === techId);
       unlockedCards.forEach(newCard => {
           if (newCard.tier > 1) {
@@ -184,7 +176,6 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
           techName: techDef.name
       });
 
-      // 4. 🚀 맵 상의 부대 자동 개량 (예: 민병대 -> 검사)
       if (techDef.upgradesUnit) {
           const fromUnit = techDef.upgradesUnit.from;
           const toUnit = techDef.upgradesUnit.to;
@@ -195,8 +186,6 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
               }
           });
       }
-
-      // 🗑️ 중복되었던 하단의 upgradesBuilding 처리 로직은 삭제되었습니다.
     });
   },
 
@@ -213,7 +202,6 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
         case 'pottery':
         case 'printing_press':
         case 'democracy':
-          // 🌟 카드 내 4개 제한 검사 (유지)
           if (tech.tokensOnCard >= (tech.resourceAbility.maxTokens || 4)) {
               alert("이 기술 카드에 더 이상 화폐 토큰을 올릴 수 없습니다.");
               return;
@@ -253,10 +241,42 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
           if (player.luxuryResources.wheat >= 1) { player.luxuryResources.wheat -= 1; costPaid = true; } else { alert("밀이 부족합니다."); return; }
           break;
 
+        // 🌟 [수정] 스팀파워 분리
         case 'horseback_riding':
         case 'monarchy':
-        case 'steam_power':
           if (player.luxuryResources.silk >= 1) { player.luxuryResources.silk -= 1; costPaid = true; } else { alert("비단이 부족합니다."); return; }
+          break;
+
+        // 🌟 [신규] 스팀파워 전용 케이스 (도착지 한도 검사 포함)
+        case 'steam_power':
+          if (player.luxuryResources.silk >= 1 && state.steamPowerSource && payload?.x !== undefined && payload?.y !== undefined) {
+              const targetTile = state.map.tiles[payload.y][payload.x];
+              if (targetTile.terrain !== 'water') { 
+                  alert("도착지는 반드시 물 타일이어야 합니다."); 
+                  state.steamPowerSource = null;
+                  return; 
+              }
+              
+              const sourceUnits = player.units.filter(u => u.position.x === state.steamPowerSource!.x && u.position.y === state.steamPowerSource!.y);
+              
+              // 🌟 타일 배치 한도 검사!
+              const passives = getPlayerPassives(player);
+              const stackingLimit = 2 + passives.stackingLimitBonus;
+              const myUnitsOnTarget = targetTile.unitIds.filter(id => player.units.some(u => u.id === id)).length;
+              
+              if (myUnitsOnTarget + sourceUnits.length > stackingLimit) {
+                  alert(`도착지 타일의 배치 한도(${stackingLimit}개)가 초과되어 순간이동할 수 없습니다.`);
+                  state.steamPowerSource = null;
+                  return; // 발동 취소 (비단도 안 깎임)
+              }
+
+              player.luxuryResources.silk -= 1; 
+              costPaid = true; 
+          } else { 
+              alert("비단이 부족하거나 출발지/도착지가 올바르지 않습니다."); 
+              state.steamPowerSource = null; 
+              return;
+          }
           break;
 
         case 'gunpowder':
@@ -334,7 +354,6 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
             case 'printing_press':
             case 'democracy':
                 if (tech) tech.tokensOnCard += 1;
-                // 🌟 [수정] 전체 화폐 지갑 한도를 15로 수정
                 player.resources.currency = Math.min(player.resources.currency + 1, 15);
                 success = true; break;
             case 'philosophy':

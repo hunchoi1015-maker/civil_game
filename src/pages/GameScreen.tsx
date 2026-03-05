@@ -32,6 +32,13 @@ export function GameScreen() {
   const [previousPlayerIndex, setPreviousPlayerIndex] = useState(currentPlayerIndex);
 
   // 플레이어 변경 시 전환 화면 표시
+
+  useEffect(() => {
+    if (players.length === 0) {
+      navigate('/');
+    }
+  }, [players.length, navigate]);
+
   useEffect(() => {
     if (previousPlayerIndex !== currentPlayerIndex && players.length > 1) {
       setShowPlayerTransition(true);
@@ -40,7 +47,6 @@ export function GameScreen() {
   }, [currentPlayerIndex, previousPlayerIndex, players.length]);
 
   if (players.length === 0) {
-    navigate('/');
     return null;
   }
 

@@ -1,15 +1,18 @@
+// src/components/game/City/CityPanel.tsx
+
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../../../store/gameStore';
-import { City, UnitType, UNIT_DEFINITIONS, Position, TERRAIN_PROPERTIES, BuildingDefinition, TerrainType } from '../../../types';
+import { City, UnitType, UNIT_DEFINITIONS, Position, TERRAIN_PROPERTIES, BuildingDefinition, TerrainType, Player } from '../../../types';
 import { BUILDINGS, getAvailableBuildings } from '../../../constants/buildings';
 import { getAvailableArmyCards, ArmyCardTemplate } from '../../../constants/armyCards';
-import {  calculateCityCulture, calculateDetailedCityProduction } from '../../../engine/ResourceCalculator';
+import { calculateCityProduction, calculateDetailedCityProduction, calculateCityCulture } from '../../../engine/ResourceCalculator';
 import clsx from 'clsx';
 import { ResourceType } from '../../../types/map';
 import { getNextStepCost, CULTURE_TRACK_MAX } from '../../../constants/culture';
 import { CultureTrackModal } from '../CultureTrackModal';
 import { WONDERS, WonderType, WonderDefinition } from '../../../types/wonder'; 
+import { getPlayerPassives } from '../../../store/helpers/playerHelpers';
 
 type ProductionTab = 'buildings' | 'units' | 'armyCards' | 'wonders';
 
@@ -72,20 +75,23 @@ function ArmyCardProductionModal({ template, onSelect, onClose }: ArmyCardProduc
   );
 }
 
+// 🌟 [수정] 다목적 통합 모달 (건물/불가사의/유닛 모두 처리)
 interface LocationModalProps {
   name: string;
   city: City;
+  currentPlayer: Player;
   onSelect: (position: Position) => void;
   onClose: () => void;
-  isWonder?: boolean;
+  mode: 'building' | 'wonder' | 'unit';
 }
 
-function LocationModal({ name, city, onSelect, onClose, isWonder = false }: LocationModalProps) {
+function LocationModal({ name, city, currentPlayer, onSelect, onClose, mode }: LocationModalProps) {
   const { map } = useGameStore();
+  const stackingLimit = 2 + getPlayerPassives(currentPlayer).stackingLimitBonus;
 
   const getAdjacentTiles = () => {
     if (!map) return []; 
-    const tiles: { position: Position; isValid: boolean; terrain: string; hasBuilding: boolean; hasWonder: boolean }[] = [];
+    const tiles: { position: Position; isValid: boolean; terrain: string; hasBuilding: boolean; hasWonder: boolean; myUnitsCount: number }[] = [];
     const directions = [
       { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
       { x: -1, y: 0 },  { x: 0, y: 0 },  { x: 1, y: 0 },
@@ -99,10 +105,18 @@ function LocationModal({ name, city, onSelect, onClose, isWonder = false }: Loca
       if (x >= 0 && x < map.width && y >= 0 && y < map.height) {
         const tile = map.tiles[y][x];
         const isCenter = dir.x === 0 && dir.y === 0;
+        const myUnitsCount = tile.unitIds.filter(id => currentPlayer.units.some(u => u.id === id)).length;
         
-        let isValid = !tile.buildingType && !tile.wonder && tile.terrain !== 'water' && tile.terrain !== 'mountain' && tile.ownerId === city.ownerId;
-        if (isWonder && isCenter) isValid = false;
-        if (!isWonder && isCenter) isValid = true;
+        let isValid = false;
+
+        // 🌟 모드에 따른 조건 분기
+        if (mode === 'unit') {
+            isValid = tile.terrain !== 'water' && tile.terrain !== 'mountain' && myUnitsCount < stackingLimit && tile.isExplored;
+        } else {
+            isValid = !tile.buildingType && !tile.wonder && tile.terrain !== 'water' && tile.terrain !== 'mountain' && tile.ownerId === city.ownerId && tile.isExplored;
+            if (mode === 'wonder' && isCenter) isValid = false;
+            if (mode === 'building' && isCenter) isValid = true;
+        }
 
         tiles.push({
           position: { x, y },
@@ -110,6 +124,7 @@ function LocationModal({ name, city, onSelect, onClose, isWonder = false }: Loca
           terrain: tile.terrain,
           hasBuilding: !!tile.buildingType || (isCenter && city.buildings.length > 0),
           hasWonder: !!tile.wonder,
+          myUnitsCount
         });
       }
     }
@@ -121,8 +136,8 @@ function LocationModal({ name, city, onSelect, onClose, isWonder = false }: Loca
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-slate-800 rounded-lg p-6" onClick={e => e.stopPropagation()}>
-        <h3 className="text-white text-lg font-semibold mb-2">{name} 건설 위치 선택</h3>
-        <p className="text-slate-400 text-sm mb-4">도시 주변 타일 중 건설할 위치를 선택하세요</p>
+        <h3 className="text-white text-lg font-semibold mb-2">{name} {mode === 'unit' ? '배치' : '건설'} 위치 선택</h3>
+        <p className="text-slate-400 text-sm mb-4">도시 주변 타일 중 {mode === 'unit' ? '유닛을 배치' : '건설'}할 위치를 선택하세요</p>
 
         <div className="grid grid-cols-3 gap-1 mb-4">
           {adjacentTiles.map((tile, idx) => {
@@ -140,8 +155,16 @@ function LocationModal({ name, city, onSelect, onClose, isWonder = false }: Loca
                 )}
               >
                 {isCenter && <span className="text-lg z-10">🏛️</span>}
-                {tile.hasBuilding && !isCenter && <span className="text-lg z-10">🏗️</span>}
-                {tile.hasWonder && <span className="text-lg z-10">🗽</span>}
+                {tile.hasBuilding && !isCenter && mode !== 'unit' && <span className="text-lg z-10">🏗️</span>}
+                {tile.hasWonder && mode !== 'unit' && <span className="text-lg z-10">🗽</span>}
+                
+                {/* 🌟 유닛 모드일 때 해당 타일의 내 유닛 개수 뱃지 표시 */}
+                {mode === 'unit' && tile.myUnitsCount > 0 && (
+                    <div className="absolute top-1 right-1 bg-red-600 text-white text-[10px] font-bold px-1 rounded-full z-20 shadow-md border border-red-800">
+                        {tile.myUnitsCount}/{stackingLimit}
+                    </div>
+                )}
+                
                 <span className="text-[10px] text-white/80 z-10 mt-1">
                   {TERRAIN_PROPERTIES[tile.terrain as TerrainType]?.name || tile.terrain}
                 </span>
@@ -151,8 +174,12 @@ function LocationModal({ name, city, onSelect, onClose, isWonder = false }: Loca
         </div>
 
         <div className="text-xs text-slate-500 mb-4 text-center">
-          <p>🏛️ = 도시 중앙 | 🏗️ = 지어진 건물 | 🗽 = 불가사의</p>
-          <p>어두운 타일 = 건설 불가 (물/산/소유권 없음/이미 지어짐)</p>
+          {mode === 'unit' ? (
+              <p>배치 한도(Stacking Limit): 타일당 {stackingLimit}개</p>
+          ) : (
+              <p>🏛️ = 도시 중앙 | 🏗️ = 지어진 건물 | 🗽 = 불가사의</p>
+          )}
+          <p>어두운 타일 = {mode === 'unit' ? '배치 불가 (물/산/한도 초과/미탐험)' : '건설 불가 (물/산/소유권 없음/이미 지어짐/미탐험)'}</p>
         </div>
 
         <button onClick={onClose} className="w-full py-2 bg-slate-600 text-slate-300 rounded-lg hover:bg-slate-500">
@@ -192,6 +219,10 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
   const [selectedArmyTemplate, setSelectedArmyTemplate] = useState<ArmyCardTemplate | null>(null);
   const [selectedBuildingToBuild, setSelectedBuildingToBuild] = useState<BuildingDefinition | null>(null);
   const [selectedWonderToBuild, setSelectedWonderToBuild] = useState<WonderDefinition | null>(null);
+  
+  // 🌟 [추가] 유닛 배치 모달용 상태
+  const [selectedUnitToProduce, setSelectedUnitToProduce] = useState<UnitType | null>(null);
+  
   const [showCultureModal, setShowCultureModal] = useState(false);
 
   const canManageCity = currentPhase === 'cityManagement';
@@ -223,7 +254,6 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
   const militaryCount = currentPlayer.units.filter((u) => u.type === 'military').length;
   const settlerCount = currentPlayer.units.filter((u) => u.type === 'settler').length;
 
-  // 🌟 [추가] 공학 능력 상태 계산
   const hasEngineering = currentPlayer.technologies.some(t => t.id === 'engineering');
   const currentProduced = selectedCity?.producedItemsCount || 0;
   const actionType = selectedCity?.actionTypeThisTurn || 'none';
@@ -235,7 +265,6 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
   const totalCityProduction = productionDetails.total;
   const availableProduction = totalCityProduction - (selectedCity?.usedProductionThisTurn || 0);
   
-  // 🌟 [추가] 수확 및 생산 금지 조건 판별
   const cannotProduce = 
       actionType === 'harvest' || 
       currentProduced >= 2 || 
@@ -299,13 +328,24 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
     }
   };
 
+  // 🌟 [수정] 즉시 생산이 아니라 모달을 띄우도록 변경
   const handleProduceUnit = (type: UnitType) => {
     if (!canManageCity || !selectedCity || cannotProduce) return;
     const def = UNIT_DEFINITIONS[type];
     if (availableProduction < def.productionCost) return alert('잔여 생산력이 부족합니다.');
     if (type === 'military' && militaryCount >= 6) return alert('군사 유닛 한도 도달.');
     if (type === 'settler' && settlerCount >= 2) return alert('개척자 한도 도달.');
-    createUnit(currentPlayer.id, type, selectedCity.position);
+    
+    setSelectedUnitToProduce(type); // 모달 오픈
+  };
+
+  // 🌟 [추가] 모달에서 배치 위치를 선택했을 때 실제 유닛 생성
+  const handleUnitAtLocation = (position: Position) => {
+    if (selectedCity && selectedUnitToProduce) {
+        // 4번째 인자로 sourceCityId를 넘겨주어 생산 비용이 해당 도시에서 깎이도록 함
+        createUnit(currentPlayer.id, selectedUnitToProduce, position, selectedCity.id);
+        setSelectedUnitToProduce(null);
+    }
   };
 
   const handleProduceArmyCard = (attack: number, health: number) => {
@@ -313,7 +353,6 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
     if (!canManageCity || !selectedArmyTemplate || cannotProduce) return;
     if (availableProduction < selectedArmyTemplate.productionCost) return alert('잔여 생산력이 부족합니다.');
     
-    // 🌟 [수정] 8번째 파라미터로 생산 비용(productionCost) 전달
     produceArmyCard(
         currentPlayer.id, 
         selectedArmyTemplate.type, 
@@ -341,7 +380,6 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
     return <div className="text-center text-slate-400 py-8">도시가 없습니다.</div>;
   }
 
-  // 🌟 [추가] 행동 상태 텍스트 색상 및 문구 분기
   let actionStatusText = '가능';
   let actionStatusColor = 'text-green-400';
   if (selectedCity?.isParalyzed) {
@@ -362,12 +400,19 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
     <div className="flex gap-6">
       {selectedArmyTemplate && <ArmyCardProductionModal template={selectedArmyTemplate} onSelect={handleProduceArmyCard} onClose={() => setSelectedArmyTemplate(null)} />}
       
+      {/* 건물 모달 */}
       {selectedBuildingToBuild && selectedCity && (
-        <LocationModal name={selectedBuildingToBuild.name} city={selectedCity} onSelect={handleBuildAtLocation} onClose={() => setSelectedBuildingToBuild(null)} />
+        <LocationModal name={selectedBuildingToBuild.name} city={selectedCity} currentPlayer={currentPlayer} mode="building" onSelect={handleBuildAtLocation} onClose={() => setSelectedBuildingToBuild(null)} />
       )}
 
+      {/* 불가사의 모달 */}
       {selectedWonderToBuild && selectedCity && (
-        <LocationModal name={selectedWonderToBuild.name} city={selectedCity} onSelect={handleWonderAtLocation} onClose={() => setSelectedWonderToBuild(null)} isWonder={true} />
+        <LocationModal name={selectedWonderToBuild.name} city={selectedCity} currentPlayer={currentPlayer} mode="wonder" onSelect={handleWonderAtLocation} onClose={() => setSelectedWonderToBuild(null)} />
+      )}
+
+      {/* 🌟 유닛 배치 모달 */}
+      {selectedUnitToProduce && selectedCity && (
+        <LocationModal name={UNIT_DEFINITIONS[selectedUnitToProduce].name} city={selectedCity} currentPlayer={currentPlayer} mode="unit" onSelect={handleUnitAtLocation} onClose={() => setSelectedUnitToProduce(null)} />
       )}
       
       {showCultureModal && <CultureTrackModal onClose={() => setShowCultureModal(false)} />}
@@ -385,9 +430,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
             )}
           >
             <div className="font-medium flex items-center gap-2">{city.isCapital && <span>👑</span>} {city.name}</div>
-            <div className="text-sm opacity-75 mt-1">
-              생산력: {map ? calculateDetailedCityProduction(city, map, currentPlayer).total : 0} | 건물: {city.buildings.length}
-            </div>
+            <div className="text-sm opacity-75 mt-1">생산력: {map ? calculateDetailedCityProduction(city, map, currentPlayer).total : 0} | 건물: {city.buildings.length}</div>
           </button>
         ))}
       </div>
@@ -398,12 +441,11 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
           <div className="bg-slate-800 rounded-lg p-4 mb-4">
             <h3 className="text-xl font-semibold text-white mb-2">{selectedCity.isCapital && '👑 '}{selectedCity.name}</h3>
             <div className="grid grid-cols-3 gap-4 text-sm">
-              <div className="text-slate-300 relative group cursor-help">
+              <div className="text-slate-300 relative group cursor-help w-max">
                   <span className="text-orange-400">잔여 생산력: </span> 
                   <span className="font-bold text-lg text-white">{availableProduction}</span> 
                   <span className="text-slate-500 text-xs"> / {totalCityProduction}</span>
                   
-                  {/* 툴팁 내용 */}
                   <div className="absolute left-0 top-full mt-2 w-48 bg-slate-900 border border-slate-600 rounded-lg p-3 text-xs text-slate-300 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                       <div className="font-bold text-orange-400 mb-1 border-b border-slate-700 pb-1">총 생산력 내역</div>
                       <div className="flex justify-between py-0.5"><span>기본(지형):</span> <span>+{productionDetails.base}</span></div>
@@ -547,7 +589,6 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
               </div>
             )}
             
-            {/* 🌟 [수정] 수확을 마친 도시의 경고 문구 추가 */}
             {canManageCity && actionType === 'harvest' && (
               <div className="mb-4 p-3 bg-red-900/50 border border-red-600 rounded-lg">
                 <p className="text-red-400 text-sm">
@@ -556,7 +597,6 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
               </div>
             )}
 
-            {/* 🌟 [수정] 공학에 따른 동적 경고 메시지 */}
             {canManageCity && cannotProduce && actionType !== 'harvest' && !selectedCity?.isParalyzed && (
               <div className="mb-4 p-3 bg-red-900/50 border border-red-600 rounded-lg">
                 <p className="text-red-400 text-sm">

@@ -1,4 +1,4 @@
-import { NationType, Position, GameState, GameConfig, Tile,  } from '../../types';
+import { NationType, Position, GameState, GameConfig, Tile, UnitType } from '../../types';
 import { StateCreator } from 'zustand';
 import { CultureSlice } from '../slices/cultureSlice';
 import { InterruptSlice } from '../slices/interruptSlice';
@@ -13,12 +13,14 @@ export type GameSlice<T> = StateCreator<
   T
 >;
 
-// GameSetupState 정의
 export interface GameSetupState {
-  phase: 'nationSelect' | 'capitalSelect' | 'ready';
+  // 🌟 phase 타입에 'initialUnitSelect' 추가
+  phase: 'nationSelect' | 'capitalSelect' | 'initialUnitSelect' | 'ready';
   currentSetupPlayer: number;
   selectedNations: (NationType | null)[];
   capitalPositionOptions: Position[][];
+  // 🌟 [추가] 플레이어별 남은 초기 유닛 배열 (예: 러시아 ['military', 'military', 'settler'])
+  pendingInitialUnits?: Record<string, UnitType[]>; 
 }
 
 // TurnResearchResult 정의
