@@ -123,7 +123,10 @@ export function UnitPanel() {
 
   const canFoundCity = () => {
     if (!selectedUnitData || selectedUnitData.type !== 'settler') return false;
-    if (currentPlayer.cities.length >= 3) return false;
+    
+    // 🌟 [수정됨] 하드코딩되었던 `if (currentPlayer.cities.length >= 3) return false;` 삭제
+    // 한도 초과 메시지를 렌더링하기 위해 일단 true를 반환하도록 허용합니다.
+
     // 도시 건설은 시작 단계에서만 가능
     if (currentPhase !== 'start') return false;
 
@@ -135,6 +138,14 @@ export function UnitPanel() {
 
   const getFoundCityError = (): string | null => {
     if (!selectedUnitData || selectedUnitData.type !== 'settler') return null;
+
+    // 🌟 [신규 추가] 동적 도시 한도 계산 (관개 기술 보유 여부 확인)
+    const hasIrrigation = currentPlayer.technologies.some(tech => tech.id === 'irrigation');
+    const maxCitiesLimit = hasIrrigation ? 3 : 2;
+
+    if (currentPlayer.cities.length >= maxCitiesLimit) {
+      return `⚠️ 최대 도시 건설 한도(${maxCitiesLimit}개)에 도달했습니다. ${!hasIrrigation ? '(관개 기술 연구 필요)' : ''}`;
+    }
 
     const pos = selectedUnitData.position;
 
@@ -394,13 +405,11 @@ export function UnitPanel() {
             </div>
           )}
 
-          {/* 좌표 이동 버튼 삭제됨 */}
-
           {selectedUnitData.type === 'settler' && canFoundCity() && (
             <>
               {getFoundCityError() ? (
                 <div className="p-2 bg-red-900/50 border border-red-600 rounded-lg">
-                  <p className="text-red-400 text-sm">{getFoundCityError()}</p>
+                  <p className="text-red-400 text-sm font-bold">{getFoundCityError()}</p>
                 </div>
               ) : (
                 <button

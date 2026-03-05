@@ -1,9 +1,12 @@
 import { StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
-import { Position, UnitType, createUnit, BASE_STACKING_LIMIT, createInitialLuxuryResources, RewardType } from '../../types';
+// 🌟 [추가] UNIT_DEFINITIONS 임포트 추가
+import { Position, UnitType, createUnit, BASE_STACKING_LIMIT, createInitialLuxuryResources, RewardType, UNIT_DEFINITIONS } from '../../types';
 import { findPlayerById } from '../helpers/playerHelpers';
 import { getPlayerPassives } from '../helpers/playerHelpers';
+// 🌟 [추가] 생산력 계산 함수 임포트
+import { calculateCityProduction } from '../../engine/ResourceCalculator';
 
 export interface UnitSlice {
   createUnit: (playerId: string, type: UnitType, position: Position) => void;
@@ -20,11 +23,33 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       const player = findPlayerById(state.players, playerId);
       if (!player) return;
       
+      let cityToUpdate = null;
+      let cost = 0;
+
+      // 🌟 [수정] 도시 경영 단계일 때, 공학 시스템 및 잔여 생산력 로직 적용
       if (state.currentPhase === 'cityManagement') {
         const city = player.cities.find(
           (c) => c.position.x === position.x && c.position.y === position.y
         );
-        if (city?.hasActedThisTurn) return;
+        if (!city) return;
+
+        // 1. 행동 충돌 방지
+        if (city.actionTypeThisTurn === 'harvest') return;
+
+        // 2. 공학 능력 및 횟수 한도 체크
+        const currentProduced = city.producedItemsCount || 0;
+        const hasEngineering = player.technologies.some(t => t.id === 'engineering');
+        if (currentProduced === 1 && (!hasEngineering || player.hasUsedEngineeringThisTurn)) return;
+        if (currentProduced >= 2) return;
+
+        // 3. 잔여 생산력 검사
+        cost = UNIT_DEFINITIONS[type].productionCost;
+        const totalCityProduction = calculateCityProduction(city, state.map);
+        const availableProduction = totalCityProduction - (city.usedProductionThisTurn || 0);
+
+        if (availableProduction < cost) return;
+
+        cityToUpdate = city;
       }
       
       const militaryCount = player.units.filter((u) => u.type === 'military').length;
@@ -36,27 +61,31 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       player.units.push(unit);
       state.map.tiles[position.y][position.x].unitIds.push(unit.id);
       
-      if (state.currentPhase === 'cityManagement') {
-        const city = player.cities.find(
-          (c) => c.position.x === position.x && c.position.y === position.y
-        );
-        if (city) city.hasActedThisTurn = true;
+      // 🌟 [수정] 상태 업데이트 부분: 잔여 생산력 및 공학 사용 여부 기록
+      if (cityToUpdate) {
+        cityToUpdate.usedProductionThisTurn = (cityToUpdate.usedProductionThisTurn || 0) + cost;
+        cityToUpdate.producedItemsCount = (cityToUpdate.producedItemsCount || 0) + 1;
+        cityToUpdate.actionTypeThisTurn = 'produce';
+        if (cityToUpdate.producedItemsCount === 2) {
+            player.hasUsedEngineeringThisTurn = true;
+        }
+        cityToUpdate.hasActedThisTurn = true;
       }
     });
   },
+
   exploreChunk: (unitId: string, targetChunkPos: Position) => {
+    // ... (이하 기존 exploreChunk 로직 동일하게 유지)
     set((state) => {
       const player = state.players.find((p) => p.id === state.players[state.currentPlayerIndex].id);
       if (!player) return;
 
       const unit = player.units.find((u) => u.id === unitId);
-      if (!unit || unit.movement < 1) return; // 이동력 1 이상 필요
+      if (!unit || unit.movement < 1) return;
 
-      // 이동력 소모
       unit.movement -= 1;
       if (unit.movement <= 0) unit.hasMoved = true;
 
-      // 청크 개방 (4x4 영역)
       const startX = targetChunkPos.x * 4;
       const startY = targetChunkPos.y * 4;
 
@@ -69,7 +98,9 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       }
     });
   },
+
   moveUnit: (unitId: string, newPosition: Position) => {
+    // ... (기존 moveUnit 로직 동일하게 유지)
     const state = get();
     const currentPlayer = state.players[state.currentPlayerIndex];
     const unit = currentPlayer.units.find((u) => u.id === unitId);
@@ -83,17 +114,12 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
     const targetTile = state.map.tiles[newPosition.y][newPosition.x];
 
     const passives = getPlayerPassives(currentPlayer);
-    if (!passives.ignoreTerrain) { // 비행(flight)이 없을 때만 지형 검사
-      
-      // ❌ 산 타일(mountain) 제약 로직은 완전히 삭제했습니다!
-
-      // 물 타일 검사는 그대로 유지
+    if (!passives.ignoreTerrain) { 
       if (targetTile.terrain === 'water') {
         if (!passives.waterMovement) {
           alert("물 타일로 이동하려면 '항해술' 기술이 필요합니다.");
           return;
         }
-        // 물에서 이동을 마칠 수 없는 경우 (이동력이 1 남았을 때 물로 진입 시도)
         if (!passives.waterStop && unit.movement === 1) {
           alert("물 타일에서 이동을 마칠 수 없습니다. ('범선항해술' 기술 필요)");
           return;
@@ -102,8 +128,6 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
     }
     
     let enemyPlayerId: string | null = null;
-    
-    // 적 유닛 체크
     for (const enemyUnitId of targetTile.unitIds) {
       for (const player of state.players) {
         if (player.id !== currentPlayer.id) {
@@ -117,7 +141,6 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       if (enemyPlayerId) break;
     }
     
-    // 적 도시 체크
     if (!enemyPlayerId && targetTile.cityId) {
       for (const player of state.players) {
         if (player.id !== currentPlayer.id) {
@@ -131,7 +154,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
     }
     
     if (enemyPlayerId) {
-      if (unit.type === 'settler') return; // 개척자는 공격 불가
+      if (unit.type === 'settler') return; 
       
       set((s) => {
         if (!s.selectedUnits.includes(unitId)) {
@@ -141,24 +164,19 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       get().startCombat(currentPlayer.id, newPosition);
       return;
     }
+
     if (targetTile.object) {
         const obj = targetTile.object;
-        
-        // 1. 오두막 (Hut)
         if (obj.type === 'hut') {
             const isMilitary = unit.type === 'military';
             const isSettler = unit.type === 'settler';
             const isRepublic = currentPlayer.government === 'republic';
 
             if (isMilitary || (isSettler && isRepublic)) {
-                // 획득 성공 -> 이동 및 보상 지급
-                // 여기서 set을 호출하여 상태 업데이트
                 set(s => {
                     const p = s.players.find(pl => pl.id === currentPlayer.id);
                     const u = p?.units.find(un => un.id === unitId);
                     if (p && u) {
-                        // 보상 지급 (claimObjectReward 로직 인라인 또는 호출)
-                        // 여기서는 직접 로직 구현
                         if (obj.reward.type === 'resource') {
                             if (!p.luxuryResources) p.luxuryResources = createInitialLuxuryResources();
                             if (p.luxuryResources[obj.reward.resource] !== undefined) {
@@ -168,37 +186,34 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
                         else if (obj.reward.type === 'greatPerson') p.greatPeople += 1;
                         else if (obj.reward.type === 'nuclear') p.nuclearMaterial += 1;
 
-                        // 객체 제거
                         s.map.tiles[newPosition.y][newPosition.x].object = undefined;
                         
-                        // 유닛 이동 처리
                         const oldTile = s.map.tiles[u.position.y][u.position.x];
                         oldTile.unitIds = oldTile.unitIds.filter(id => id !== unitId);
                         s.map.tiles[newPosition.y][newPosition.x].unitIds.push(unitId);
                         
                         u.position = newPosition;
-                        u.movement = 0; // 즉시 종료
+                        u.movement = 0; 
                         u.hasMoved = true;
                     }
                 });
                 return;
             } else {
                 alert("오두막은 군사 유닛 또는 공화제일 때의 개척자만 진입할 수 있습니다.");
-                return; // 진입 불가
+                return; 
             }
         }
 
-        // 2. 마을 (Village)
         if (obj.type === 'village') {
             if (unit.type !== 'military') {
                 alert("마을은 군사 유닛으로만 진입할 수 있습니다.");
                 return;
             }
-            // 전투 시작
             get().startVillageCombat(unitId, newPosition);
-            return; // 이동 중단
+            return; 
         }
     }
+
     set((s) => {
       for (const player of s.players) {
         const u = player.units.find((u) => u.id === unitId);
@@ -226,6 +241,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
   },
 
   removeUnit: (unitId: string) => {
+    // ... (기존 동일)
     set((state) => {
       for (const player of state.players) {
         const unitIndex = player.units.findIndex((u) => u.id === unitId);
@@ -241,6 +257,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
   },
 
   moveSelectedUnits: (newPosition: Position) => {
+    // ... (기존 동일)
     const currentState = get();
     const player = currentState.players[currentState.currentPlayerIndex];
     const firstSelectedUnit = currentState.selectedUnits
@@ -256,7 +273,6 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
     const targetTile = currentState.map.tiles[newPosition.y][newPosition.x];
     let enemyPlayerId: string | null = null;
     
-    // 적 체크 로직 (단일 이동과 동일)
     for (const enemyUnitId of targetTile.unitIds) {
       for (const p of currentState.players) {
         if (p.id !== player.id) {
@@ -324,6 +340,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
   },
 
   claimObjectReward: (playerId, reward) => {
+    // ... (기존 동일)
       set(state => {
           const player = state.players.find(p => p.id === playerId);
           if (!player) return;
