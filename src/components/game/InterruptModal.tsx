@@ -1,3 +1,5 @@
+// src/components/game/InterruptModal.tsx
+
 import React, { useEffect, useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 
@@ -8,31 +10,33 @@ export const InterruptModal: React.FC = () => {
   const currentResponder = players.find(p => p.id === interruptState.currentResponderId);
   const topAction = interruptState.actionStack[interruptState.actionStack.length - 1];
 
-  // 🌟 타이머 동기화 로직
   useEffect(() => {
     if (!interruptState.timerEndsAt || !interruptState.currentResponderId) return;
-
     const interval = setInterval(() => {
       const remaining = Math.max(0, Math.ceil((interruptState.timerEndsAt! - Date.now()) / 1000));
       setTimeLeft(remaining);
-
-      // 타이머가 0이 되면 자동으로 '통과' 처리
       if (remaining <= 0) {
         clearInterval(interval);
         passInterrupt();
       }
     }, 100);
-
     return () => clearInterval(interval);
   }, [interruptState.timerEndsAt, interruptState.currentResponderId, passInterrupt]);
 
-  // 대기 중인 상태가 아니면 렌더링하지 않음 (숨김 처리)
   if (!interruptState.currentResponderId || !topAction) return null;
 
-  // 개입할 수 있는 조건 검사 (공공서비스 기술 보유 & 스파이 1개 이상)
-  const hasCivilService = currentResponder?.technologies.some(t => t.id === 'civil_service');
+  // 🌟 [수정] 액션 타입에 따른 개입 조건 분리
   const hasSpy = (currentResponder?.spies || 0) > 0;
-  const canCounter = hasCivilService && hasSpy && topAction.actionType === 'culture_card';
+  let canCounter = false;
+  
+  if (topAction.actionType === 'culture_card') {
+      const hasCivilService = currentResponder?.technologies.some(t => t.id === 'civil_service') ?? false;
+      canCounter = hasCivilService && hasSpy;
+  } else if (topAction.actionType === 'resource_ability') {
+      const hasMassMedia = currentResponder?.technologies.some(t => t.id === 'mass_media') ?? false;
+      const hasUsedMassMedia = currentResponder?.hasUsedMassMediaThisTurn ?? false;
+      canCounter = hasMassMedia && hasSpy && !hasUsedMassMedia;
+  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -40,14 +44,15 @@ export const InterruptModal: React.FC = () => {
         
         <h2 className="text-2xl font-bold text-red-400 mb-2 animate-pulse">⚠️ 액션 감지 ⚠️</h2>
         <p className="text-slate-300 mb-6">
-          누군가 <span className="text-amber-400 font-bold">{topAction.actionType === 'culture_card' ? '문화 이벤트 카드' : '특수 능력'}</span>를 사용했습니다!
+          누군가 <span className="text-amber-400 font-bold">
+            {topAction.actionType === 'culture_card' ? '문화 이벤트 카드' : '자원(기술) 능력'}
+          </span>를 사용했습니다!
         </p>
 
         <div className="text-lg text-white mb-4">
           현재 <span className="font-bold text-blue-300">{currentResponder?.name}</span>님의 결정을 기다리는 중...
         </div>
 
-        {/* 타이머 진행 바 */}
         <div className="w-full bg-slate-700 h-4 rounded-full overflow-hidden mb-6">
           <div 
             className="h-full bg-amber-500 transition-all duration-100 ease-linear"
@@ -74,12 +79,13 @@ export const InterruptModal: React.FC = () => {
           </button>
         </div>
         
-        {!canCounter && (
-          <p className="text-sm text-slate-400 mt-4">
-            (공공서비스 기술과 스파이가 없어 개입할 수 없습니다.)
-          </p>
+        {/* 개입할 수 없는 이유 동적 표시 */}
+        {!canCounter && topAction.actionType === 'culture_card' && (
+          <p className="text-sm text-slate-400 mt-4">(공공서비스 기술과 스파이가 없어 개입할 수 없습니다.)</p>
         )}
-
+        {!canCounter && topAction.actionType === 'resource_ability' && (
+          <p className="text-sm text-slate-400 mt-4">(대중매체 기술, 스파이가 없거나 이미 이번 턴에 개입하여 막을 수 없습니다.)</p>
+        )}
       </div>
     </div>
   );

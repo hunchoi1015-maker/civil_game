@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
 import { Position, createCity, createInitialLuxuryResources } from '../../types';
 import { BUILDINGS } from '../../constants/buildings';
-import { calculateCityProduction, calculateCityCulture } from '../../engine/ResourceCalculator';
+import { calculateDetailedCityProduction, calculateCityCulture } from '../../engine/ResourceCalculator';
 import { findPlayerById } from '../helpers/playerHelpers';
 import { setAdjacentTilesOwner } from '../helpers/mapHelpers';
 import { ResourceType } from '../../types/map';
@@ -73,7 +73,7 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
           if (currentProduced >= 2) return;
 
           // 🌟 3. 잔여 생산력 계산 및 차감
-          const totalCityProduction = calculateCityProduction(city, state.map);
+          const totalCityProduction = calculateDetailedCityProduction(city, state.map, player).total; // 수정됨
           const availableProduction = totalCityProduction - (city.usedProductionThisTurn || 0);
           
           if (availableProduction < buildingDef.productionCost) return;
@@ -202,7 +202,7 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
         }
 
         // 🌟 3. 잔여 생산력 검사
-        const totalCityProduction = calculateCityProduction(city, state.map);
+        const totalCityProduction = calculateDetailedCityProduction(city, state.map, player).total; 
         const availableProduction = totalCityProduction - (city.usedProductionThisTurn || 0);
         if (availableProduction < actualCost) return;
 
@@ -317,8 +317,8 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       if (currentProduced >= 2) return;
 
       // 🌟 3. 잔여 생산력 검사 (파라미터로 받은 cost 사용)
-      const totalCityProduction = calculateCityProduction(city, state.map);
-      const availableProduction = totalCityProduction - (city.usedProductionThisTurn || 0);
+      const totalCityProduction = calculateDetailedCityProduction(city, state.map, player).total; 
+          const availableProduction = totalCityProduction - (city.usedProductionThisTurn || 0);
       if (availableProduction < cost) return;
 
       const newArmyCard = {

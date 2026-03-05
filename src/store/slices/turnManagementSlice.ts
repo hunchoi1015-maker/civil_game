@@ -68,6 +68,7 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
         state.players.forEach((player) => {
 
           player.hasUsedEngineeringThisTurn = false;
+          player.hasUsedMassMediaThisTurn = false;
           player.cities.forEach((city) => {
             city.hasActedThisTurn = false;
             city.hasHarvestedCulture = false;
@@ -139,6 +140,7 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
         player.hasResearchedThisTurn = false;
 
         player.hasUsedEngineeringThisTurn = false;
+        player.hasUsedMassMediaThisTurn = false;
 
         player.technologies.forEach(tech => {
             tech.abilityUsedThisTurn = false;

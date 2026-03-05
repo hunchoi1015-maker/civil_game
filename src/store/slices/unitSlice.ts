@@ -6,7 +6,7 @@ import { Position, UnitType, createUnit, BASE_STACKING_LIMIT, createInitialLuxur
 import { findPlayerById } from '../helpers/playerHelpers';
 import { getPlayerPassives } from '../helpers/playerHelpers';
 // 🌟 [추가] 생산력 계산 함수 임포트
-import { calculateCityProduction } from '../../engine/ResourceCalculator';
+import { calculateDetailedCityProduction } from '../../engine/ResourceCalculator';
 
 export interface UnitSlice {
   createUnit: (playerId: string, type: UnitType, position: Position) => void;
@@ -44,7 +44,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
 
         // 3. 잔여 생산력 검사
         cost = UNIT_DEFINITIONS[type].productionCost;
-        const totalCityProduction = calculateCityProduction(city, state.map);
+        const totalCityProduction = calculateDetailedCityProduction(city, state.map, player).total;
         const availableProduction = totalCityProduction - (city.usedProductionThisTurn || 0);
 
         if (availableProduction < cost) return;

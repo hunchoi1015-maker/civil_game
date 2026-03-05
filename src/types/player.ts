@@ -44,6 +44,7 @@ export interface Player {
   builtWonders?: string[];
   freeGovernmentSwitch?: boolean; //갓 연구하여 무정부 없이 체제를 바꿀 수 있는 1턴의 기회 플래그
   hasUsedEngineeringThisTurn?: boolean;
+  hasUsedMassMediaThisTurn?: boolean;
 }
 
 export type PlayerColor = 'red' | 'blue' | 'green' | 'yellow';

@@ -4,7 +4,7 @@ import { useGameStore } from '../../../store/gameStore';
 import { City, UnitType, UNIT_DEFINITIONS, Position, TERRAIN_PROPERTIES, BuildingDefinition, TerrainType } from '../../../types';
 import { BUILDINGS, getAvailableBuildings } from '../../../constants/buildings';
 import { getAvailableArmyCards, ArmyCardTemplate } from '../../../constants/armyCards';
-import { calculateCityProduction, calculateCityCulture } from '../../../engine/ResourceCalculator';
+import {  calculateCityCulture, calculateDetailedCityProduction } from '../../../engine/ResourceCalculator';
 import clsx from 'clsx';
 import { ResourceType } from '../../../types/map';
 import { getNextStepCost, CULTURE_TRACK_MAX } from '../../../constants/culture';
@@ -228,8 +228,11 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
   const currentProduced = selectedCity?.producedItemsCount || 0;
   const actionType = selectedCity?.actionTypeThisTurn || 'none';
 
-  // 잔여 생산력 계산
-  const totalCityProduction = (selectedCity && map) ? calculateCityProduction(selectedCity, map) : 0;
+  const productionDetails = (selectedCity && map && currentPlayer) 
+      ? calculateDetailedCityProduction(selectedCity, map, currentPlayer) 
+      : { total: 0, base: 0, buildings: 0, militaryScience: 0, tempBonus: 0 };
+
+  const totalCityProduction = productionDetails.total;
   const availableProduction = totalCityProduction - (selectedCity?.usedProductionThisTurn || 0);
   
   // 🌟 [추가] 수확 및 생산 금지 조건 판별
@@ -382,7 +385,9 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
             )}
           >
             <div className="font-medium flex items-center gap-2">{city.isCapital && <span>👑</span>} {city.name}</div>
-            <div className="text-sm opacity-75 mt-1">생산력: {map ? calculateCityProduction(city, map) : 0} | 건물: {city.buildings.length}</div>
+            <div className="text-sm opacity-75 mt-1">
+              생산력: {map ? calculateDetailedCityProduction(city, map, currentPlayer).total : 0} | 건물: {city.buildings.length}
+            </div>
           </button>
         ))}
       </div>
@@ -393,10 +398,19 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
           <div className="bg-slate-800 rounded-lg p-4 mb-4">
             <h3 className="text-xl font-semibold text-white mb-2">{selectedCity.isCapital && '👑 '}{selectedCity.name}</h3>
             <div className="grid grid-cols-3 gap-4 text-sm">
-              <div className="text-slate-300">
+              <div className="text-slate-300 relative group cursor-help">
                   <span className="text-orange-400">잔여 생산력: </span> 
                   <span className="font-bold text-lg text-white">{availableProduction}</span> 
                   <span className="text-slate-500 text-xs"> / {totalCityProduction}</span>
+                  
+                  {/* 툴팁 내용 */}
+                  <div className="absolute left-0 top-full mt-2 w-48 bg-slate-900 border border-slate-600 rounded-lg p-3 text-xs text-slate-300 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                      <div className="font-bold text-orange-400 mb-1 border-b border-slate-700 pb-1">총 생산력 내역</div>
+                      <div className="flex justify-between py-0.5"><span>기본(지형):</span> <span>+{productionDetails.base}</span></div>
+                      {productionDetails.buildings > 0 && <div className="flex justify-between py-0.5"><span>건물 보너스:</span> <span>+{productionDetails.buildings}</span></div>}
+                      {productionDetails.tempBonus > 0 && <div className="flex justify-between py-0.5 text-amber-400"><span>임시 보너스:</span> <span>+{productionDetails.tempBonus}</span></div>}
+                      {productionDetails.militaryScience > 0 && <div className="flex justify-between py-0.5 text-red-400 font-bold"><span>군사학 (화폐):</span> <span>+{productionDetails.militaryScience}</span></div>}
+                  </div>
               </div>
               <div className="text-slate-300"><span className="text-red-400">방어 보너스:</span> +{selectedCity.cityDefenseBonus}</div>
               <div className="text-slate-300"><span className="text-blue-400">성벽:</span> {selectedCity.hasWalls ? '있음' : '없음'}</div>

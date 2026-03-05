@@ -217,28 +217,46 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
   },
 
   playCultureCard: (cardId: string, payload: any) => {
-    // 🌟 1. 발동자를 안전하게 찾습니다.
+    // 1. 발동자를 안전하게 찾습니다.
     const state = get();
     const sourcePlayerId = state.players[state.currentPlayerIndex].id;
+
+    let hasMassMedia = false; // 🌟 대중매체 보유 여부 체크 변수
 
     set((draft) => {
       const player = draft.players.find(p => p.id === sourcePlayerId);
       if (!player) return;
       const card = player.cultureEventCards?.find(c => c.id === cardId);
       
+      // 🌟 [패시브 체크] 발동자가 '대중매체(mass_media)' 기술을 가지고 있는지 확인
+      hasMassMedia = player.technologies.some(t => t.id === 'mass_media');
+      
       if (draft.combatState && !draft.combatState.log) draft.combatState.log = [];
-      draft.combatState?.log?.push({ 
-        message: `📜 ${player.name}이(가) [${card?.name || '카드'}]을(를) 사용했습니다! (개입 대기 중...)` 
-      });
-      // 🌟 핵심: 대기 중이므로 여기서 절대 카드를 지우지(splice) 않습니다!
+      
+      if (hasMassMedia) {
+        // 🌟 패시브 발동 로그
+        draft.combatState?.log?.push({ 
+          message: `📰 ${player.name}이(가) [대중매체]의 언론 통제로 방해 없이 [${card?.name || '카드'}]을(를) 발동했습니다!` 
+        });
+      } else {
+        draft.combatState?.log?.push({ 
+          message: `📜 ${player.name}이(가) [${card?.name || '카드'}]을(를) 사용했습니다! (개입 대기 중...)` 
+        });
+      }
     });
 
-    get().pushActionToStack({
-      id: Date.now().toString(),
-      sourcePlayerId: sourcePlayerId,
-      actionType: 'culture_card',
-      payload: { cardId, ...payload } 
-    });
+    if (hasMassMedia) {
+      // 🌟 대중매체를 보유했다면 큐(Stack)에 올리지 않고, 다른 플레이어 개입 없이 '즉시' 효과를 발동시킵니다.
+      get().executeCultureCard(cardId, { ...payload, sourcePlayerId });
+    } else {
+      // 기존처럼 인터럽트 스택에 올리고 대기합니다.
+      get().pushActionToStack({
+        id: Date.now().toString(),
+        sourcePlayerId: sourcePlayerId,
+        actionType: 'culture_card',
+        payload: { cardId, ...payload } 
+      });
+    }
   },
 
   executeCultureCard: (cardId: string, payload: any) => {
