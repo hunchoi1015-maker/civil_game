@@ -43,6 +43,7 @@ export interface Player {
   invalidatedWonders?: string[]; //효과가 무효화된 불가사의 ID 목록
   builtWonders?: string[];
   freeGovernmentSwitch?: boolean; //갓 연구하여 무정부 없이 체제를 바꿀 수 있는 1턴의 기회 플래그
+  hasUsedEngineeringThisTurn?: boolean;
 }
 
 export type PlayerColor = 'red' | 'blue' | 'green' | 'yellow';

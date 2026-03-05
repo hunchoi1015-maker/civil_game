@@ -66,9 +66,14 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
         state.currentPhase = 'start';
         state.phaseComplete = new Array(state.players.length).fill(false);
         state.players.forEach((player) => {
+
+          player.hasUsedEngineeringThisTurn = false;
           player.cities.forEach((city) => {
             city.hasActedThisTurn = false;
             city.hasHarvestedCulture = false;
+            city.actionTypeThisTurn = 'none';
+            city.usedProductionThisTurn = 0;
+            city.producedItemsCount = 0;
           });
         });
       } else {
@@ -133,6 +138,8 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
       state.players.forEach((player) => {
         player.hasResearchedThisTurn = false;
 
+        player.hasUsedEngineeringThisTurn = false;
+
         player.technologies.forEach(tech => {
             tech.abilityUsedThisTurn = false;
         });
@@ -150,6 +157,9 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
           city.hasActedThisTurn = false;
           city.hasHarvestedCulture = false;
           city.tempProductionBonus = 0;
+          city.actionTypeThisTurn = 'none';
+          city.usedProductionThisTurn = 0;
+          city.producedItemsCount = 0;
         });
       });
     });

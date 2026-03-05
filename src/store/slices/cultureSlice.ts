@@ -217,53 +217,55 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
   },
 
   playCultureCard: (cardId: string, payload: any) => {
-    // 1. 상태를 변경하여 카드를 손에서 즉시 제거합니다. (Zustand Immer 안전 구역)
+    // 🌟 1. 발동자를 안전하게 찾습니다.
+    const state = get();
+    const sourcePlayerId = state.players[state.currentPlayerIndex].id;
+
     set((draft) => {
-      const player = draft.players[draft.currentPlayerIndex];
-      const cardIndex = player.cultureEventCards?.findIndex(c => c.id === cardId);
+      const player = draft.players.find(p => p.id === sourcePlayerId);
+      if (!player) return;
+      const card = player.cultureEventCards?.find(c => c.id === cardId);
       
-      if (cardIndex !== undefined && cardIndex !== -1) {
-        const card = player.cultureEventCards![cardIndex];
-        
-        // 전투 로그 추가
-        if (draft.combatState && !draft.combatState.log) draft.combatState.log = [];
-        draft.combatState?.log?.push({ 
-          message: `📜 ${player.name}이(가) [${card.name}]을(를) 사용했습니다! (개입 대기 중...)` 
-        });
-        
-        // 🌟 핵심: 카운터 여부와 상관없이 내 손에서 카드를 즉시 제거(소모)합니다!
-        player.cultureEventCards!.splice(cardIndex, 1);
-      }
+      if (draft.combatState && !draft.combatState.log) draft.combatState.log = [];
+      draft.combatState?.log?.push({ 
+        message: `📜 ${player.name}이(가) [${card?.name || '카드'}]을(를) 사용했습니다! (개입 대기 중...)` 
+      });
+      // 🌟 핵심: 대기 중이므로 여기서 절대 카드를 지우지(splice) 않습니다!
     });
 
-    // 2. set 구역 밖에서 안전하게 스택에 액션을 올립니다.
-    const state = get();
-    state.pushActionToStack({
+    get().pushActionToStack({
       id: Date.now().toString(),
-      sourcePlayerId: state.players[state.currentPlayerIndex].id,
+      sourcePlayerId: sourcePlayerId,
       actionType: 'culture_card',
       payload: { cardId, ...payload } 
     });
   },
 
   executeCultureCard: (cardId: string, payload: any) => {
-    set((state) => {
-      const player = state.players[state.currentPlayerIndex];
+    set((draft) => {
+      // 🌟 발동자 정확히 찾기 (스택에서 넘겨준 발동자 ID 사용)
+      const playerId = payload.sourcePlayerId || draft.players[draft.currentPlayerIndex].id;
+      const player = draft.players.find(p => p.id === playerId);
+      if (!player || !player.cultureEventCards) return;
+
       const cardIdx = player.cultureEventCards.findIndex(c => c.id === cardId);
+      if (cardIdx === -1) return; // 카드가 없으면 중단
+
       const card = player.cultureEventCards[cardIdx];
 
+      // === 실제 능력 발동 ===
       if (card.templateId === 'exile') {
           const { unitId, targetPos } = payload;
           let targetUnit;
-          for (const p of state.players) {
+          for (const p of draft.players) {
               targetUnit = p.units.find(u => u.id === unitId);
               if (targetUnit) break;
           }
           if (targetUnit) {
-              const oldTile = state.map.tiles[targetUnit.position.y][targetUnit.position.x];
+              const oldTile = draft.map.tiles[targetUnit.position.y][targetUnit.position.x];
               oldTile.unitIds = oldTile.unitIds.filter(id => id !== unitId);
               targetUnit.position = targetPos;
-              state.map.tiles[targetPos.y][targetPos.x].unitIds.push(unitId);
+              draft.map.tiles[targetPos.y][targetPos.x].unitIds.push(unitId);
           }
       } 
       else if (card.templateId === 'dictators_day') {
@@ -273,39 +275,26 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
       } 
       else if (card.templateId === 'idea_share') {
           const { opponentId, techId } = payload;
-          const opponent = state.players.find(p => p.id === opponentId);
+          const opponent = draft.players.find(p => p.id === opponentId);
           if (opponent && techId) {
               const targetTechDef = TECHNOLOGIES.find(t => t.id === techId);
               if (targetTechDef && !player.technologies.some(t => t.id === techId)) {
-                  // 🌟 1. 내가 상대 기술을 가져올 때 새 속성 추가
-                  player.technologies.push({ 
-                      ...targetTechDef, 
-                      tokensOnCard: 0,
-                      abilityUsedThisTurn: false 
-                  });
-                  
-                  // 내 1단계 기술 무작위로 넘겨주기
-                  const myTier1Techs = player.technologies.filter(t => {
-                      const def = TECHNOLOGIES.find(td => td.id === t.id);
-                      return def?.level === 1; // 1단계 기술
-                  });
+                  player.technologies.push({ ...targetTechDef, tokensOnCard: 0, abilityUsedThisTurn: false });
+                  const myTier1Techs = player.technologies.filter(t => TECHNOLOGIES.find(td => td.id === t.id)?.level === 1);
                   const validToGive = myTier1Techs.filter(t => !opponent.technologies.some(ot => ot.id === t.id));
-                  
                   if (validToGive.length > 0) {
                       const randomTech = validToGive[Math.floor(Math.random() * validToGive.length)];
                       const rTechDef = TECHNOLOGIES.find(t => t.id === randomTech.id);
                       if (rTechDef) {
-                          // 🌟 2. 상대에게 내 기술을 넘겨줄 때도 새 속성 추가
-                          opponent.technologies.push({ 
-                              ...rTechDef, 
-                              tokensOnCard: 0,
-                              abilityUsedThisTurn: false 
-                          });
+                          opponent.technologies.push({ ...rTechDef, tokensOnCard: 0, abilityUsedThisTurn: false });
                       }
                   }
               }
           }
       }
+
+      // 🌟 3. 아무 방해 없이 능력을 무사히 썼으므로, 마지막에 카드를 소모(삭제)합니다.
+      player.cultureEventCards.splice(cardIdx, 1);
     });
   }
 });

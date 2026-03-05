@@ -16,6 +16,10 @@ export interface City {
   hasHarvestedCulture: boolean;
   tempProductionBonus?: number;
   isParalyzed?: boolean;
+
+  actionTypeThisTurn?: 'none' | 'harvest' | 'produce'; 
+  usedProductionThisTurn?: number; // 이번 턴에 사용한 생산력
+  producedItemsCount?: number;     // 이번 턴에 생산한 물품 개수
 }
 
 export interface Building {
@@ -88,5 +92,8 @@ export function createCity(
     cityDefenseBonus: isCapital ? CAPITAL_BASE_DEFENSE_BONUS : CITY_BASE_DEFENSE_BONUS, 
     hasActedThisTurn: false,
     hasHarvestedCulture: false,
+    actionTypeThisTurn: 'none',
+    usedProductionThisTurn: 0,
+    producedItemsCount: 0,
   };
 }

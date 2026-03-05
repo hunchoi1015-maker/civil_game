@@ -11,12 +11,16 @@ export interface InterruptSlice {
 
 export const createInterruptSlice: StateCreator<GameStore, [["zustand/immer", never]], [], InterruptSlice> = (set, get) => ({
   
-  // 1. 행동을 스택에 올리고 대기열 세팅
+  // 1. 스택에 올릴 때
   pushActionToStack: (action) => {
-    let shouldResolve = false; // 🌟 set 블록 밖에서 실행하기 위한 플래그
+    let shouldResolve = false; 
 
     set((state) => {
-      state.interruptState.actionStack.push(action);
+      // 🌟 핵심 1: 나중에 속성을 추가하려다 에러가 나지 않도록, 처음부터 isInvalidated를 무조건 달아서 올립니다!
+      state.interruptState.actionStack.push({ 
+          ...action, 
+          isInvalidated: action.isInvalidated || false 
+      });
       
       const responders = state.players
         .filter(p => p.id !== action.sourcePlayerId)
@@ -28,12 +32,10 @@ export const createInterruptSlice: StateCreator<GameStore, [["zustand/immer", ne
         state.interruptState.currentResponderId = responders.shift()!;
         state.interruptState.timerEndsAt = Date.now() + 7000; 
       } else {
-        // 대기자가 없으면 밖에서 폭발시키도록 플래그만 켬!
         shouldResolve = true;
       }
     });
 
-    // 🌟 안전구역(set 바깥)에서 함수 호출
     if (shouldResolve) get().resolveStack();
   },
 
@@ -85,31 +87,69 @@ export const createInterruptSlice: StateCreator<GameStore, [["zustand/immer", ne
     });
   },
 
-  // 4. 스택 역순(LIFO) 해결기
+
+// 4. 스택 역순(LIFO) 해결기
   resolveStack: () => {
-    let stackToResolve: StackAction[] = [];
-    
+    // 🌟 밖으로 안전하게 꺼내올 데이터들을 담을 빈 배열들
+    const cardsToDiscard: { playerId: string, cardId: string }[] = [];
+    const actionsToExecute: any[] = [];
+
+    // 모든 스택 연산을 Immer의 draft(초안) 내부에서 한 번에 끝냅니다!
     set((draft) => {
-      stackToResolve = [...draft.interruptState.actionStack];
-      draft.interruptState.actionStack = []; 
+      const stack = draft.interruptState.actionStack;
+
+      // 역순 검사
+      for (let i = stack.length - 1; i >= 0; i--) {
+        const action = stack[i];
+
+        // 1. 누군가 스파이 등으로 막았다면?
+        if (action.isInvalidated) {
+          if (action.actionType === 'culture_card') {
+            cardsToDiscard.push({ playerId: action.sourcePlayerId, cardId: action.payload.cardId });
+          }
+          continue; 
+        }
+
+        // 2. 이 액션이 다른 액션을 타겟팅(방어)하는 카운터 액션이라면?
+        if (action.targetActionId) {
+          const targetAction = stack.find(a => a.id === action.targetActionId);
+          if (targetAction) {
+              // 처음 올릴 때 속성을 미리 만들어뒀으므로, 이제 여기서 에러 없이 값이 바뀝니다!
+              targetAction.isInvalidated = true;
+          }
+        } 
+        // 3. 막히지 않은 정상 액션이라면?
+        else {
+          if (action.actionType === 'culture_card') {
+             // 🌟 핵심 2: Proxy 파기 에러를 막기 위해 payload를 '깊은 복사'하여 순수 객체로 만듭니다!
+             const payloadClone = JSON.parse(JSON.stringify(action.payload));
+             
+             actionsToExecute.push({
+                 cardId: action.payload.cardId,
+                 payload: { ...payloadClone, sourcePlayerId: action.sourcePlayerId }
+             });
+          }
+        }
+      }
+
+      // 방해받아 낭비된 카드들을 손에서 지우기
+      cardsToDiscard.forEach(({ playerId, cardId }) => {
+        const p = draft.players.find(p => p.id === playerId);
+        if (p && p.cultureEventCards) {
+           const idx = p.cultureEventCards.findIndex(c => c.id === cardId);
+           if (idx !== -1) p.cultureEventCards.splice(idx, 1); 
+        }
+      });
+
+      // 스택과 타이머 초기화 (청소)
+      draft.interruptState.actionStack = [];
       draft.interruptState.currentResponderId = null;
       draft.interruptState.timerEndsAt = null;
     });
 
-    for (let i = stackToResolve.length - 1; i >= 0; i--) {
-      const action = stackToResolve[i];
-      if (action.isInvalidated) continue;
-
-      if (action.targetActionId) {
-        const targetAction = stackToResolve.find(a => a.id === action.targetActionId);
-        if (targetAction) targetAction.isInvalidated = true;
-      } 
-      else {
-        if (action.actionType === 'culture_card') {
-          // 🌟 마지막 진짜 카드 효과 발동!
-          get().executeCultureCard(action.payload.cardId, action.payload);
-        }
-      }
-    }
+    // 🌟 set 블록 밖으로 빠져나왔으므로, 이제 안전하게 복사해둔 객체들로 진짜 능력을 발동시킵니다!
+    actionsToExecute.forEach(actionData => {
+       get().executeCultureCard(actionData.cardId, actionData.payload);
+    });
   }
 });
