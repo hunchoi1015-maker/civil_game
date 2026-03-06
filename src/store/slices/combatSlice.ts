@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
 import { CombatState, Position, CombatType, ArmyCard, Player, getAttackerMaxCards, CITY_CAPITAL_MAX_CARDS, LOOT_MAX_PER_SELECTION, createInitialResources, createInitialLuxuryResources, RewardType } from '../../types';
 import { resolveBattlefields, resolvePairedFight } from '../../engine/CombatResolver';
-import { shuffleArray, getCombatCardBonus } from '../helpers/playerHelpers';
+import { shuffleArray, getCombatCardBonus, hasTechnology } from '../helpers/playerHelpers';
 import { BUILDINGS } from '../../constants/buildings';
 
 export interface CombatSlice {
@@ -72,6 +72,8 @@ const initialCombatState: CombatState = {
 export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never]], [], CombatSlice> = (set, get) => ({
   combatState: initialCombatState,
 
+  // src/store/slices/combatSlice.ts 의 startCombat 함수 전체 교체
+
   startCombat: (moverId: string, targetPosition: Position) => {
     const state = get();
     const mover = state.players.find((p) => p.id === moverId);
@@ -98,13 +100,26 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     let combatType: CombatType = 'field';
     let targetCityId: string | null = null;
     let isWalledCity = false;
-    
+    let willDestroyWall = false; // 🌟 [수정] 쓰기 전용 판정 플래그
+
+    const moverMilitaryUnits = mover.units.filter(u => u.type === 'military' && state.selectedUnits.includes(u.id));
+    const moverSettlerUnits = mover.units.filter(u => u.type === 'settler' && state.selectedUnits.includes(u.id));
+    const isMoverMilitary = moverMilitaryUnits.length > 0 || (mover.units.some(u => u.type === 'military' && u.id === state.selectedUnit));
+    const isMoverSettler = moverSettlerUnits.length > 0 || (mover.units.some(u => u.type === 'settler' && u.id === state.selectedUnit));
+
+    // 도시 공격일 경우
     if (targetTile.cityId) {
       const city = defender.cities.find((c) => c.id === targetTile.cityId);
       if (city) {
         combatType = city.isCapital ? 'capital' : 'city';
         targetCityId = city.id;
-        isWalledCity = city.hasWalls || city.isCapital;
+        isWalledCity = city.hasWalls; // 실제 성벽 존재 여부
+        
+        // 🌟 [수정] 상태를 직접 바꾸지 않고 판정(flag)만 합니다! (읽기 전용 에러 방지)
+        if (hasTechnology(mover, 'combustion') && isMoverMilitary && city.hasWalls) {
+            willDestroyWall = true;
+            isWalledCity = false; // 방어자 이점 즉시 상실
+        }
       }
     }
     
@@ -117,13 +132,8 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       rolesSwapped = true;
     }
 
-    const moverMilitaryUnits = mover.units.filter(u => u.type === 'military' && state.selectedUnits.includes(u.id));
-    const moverSettlerUnits = mover.units.filter(u => u.type === 'settler' && state.selectedUnits.includes(u.id));
     const defenderMilitaryUnits = defender.units.filter(u => targetTile.unitIds.includes(u.id) && u.type === 'military');
     const defenderSettlerUnits = defender.units.filter(u => targetTile.unitIds.includes(u.id) && u.type === 'settler');
-
-    const isMoverMilitary = moverMilitaryUnits.length > 0 || (mover.units.some(u => u.type === 'military' && u.id === state.selectedUnit));
-    const isMoverSettler = moverSettlerUnits.length > 0 || (mover.units.some(u => u.type === 'settler' && u.id === state.selectedUnit));
 
     const isSettlerMassacre = combatType === 'field' && 
                               defenderMilitaryUnits.length === 0 && 
@@ -142,15 +152,10 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       defenderSideMaxCards = CITY_CAPITAL_MAX_CARDS;
     }
 
+    const attackerMaxCards = rolesSwapped ? defenderSideMaxCards : moverMaxCards;
+    const defenderMaxCards = rolesSwapped ? moverMaxCards : defenderSideMaxCards;
     const attackerPlayer = state.players.find((p) => p.id === attackerRoleId)!;
     const defenderPlayer = state.players.find((p) => p.id === defenderRoleId)!;
-
-    // 🌟 [수정] 플레이어별 부대 카드 보너스를 가져와서 더해줍니다!
-    const attackerCardBonus = getCombatCardBonus(attackerPlayer);
-    const defenderCardBonus = getCombatCardBonus(defenderPlayer);
-
-    const attackerMaxCards = (rolesSwapped ? defenderSideMaxCards : moverMaxCards) + attackerCardBonus;
-    const defenderMaxCards = (rolesSwapped ? moverMaxCards : defenderSideMaxCards) + defenderCardBonus;
 
     const prepareCards = (player: Player, max: number, hasSettler: boolean, hasMilitary: boolean) => {
       let cards: ArmyCard[] = [];
@@ -175,7 +180,6 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         rolesSwapped ? isMoverMilitary : (defenderMilitaryUnits.length > 0 || combatType !== 'field')
     );
 
-    // 🌟 [신규 추가] 맵 전체를 스캔하여 플레이어의 '장군' 위인 보너스를 끌어모으는 함수
     const getPlayerGeneralBonus = (playerId: string) => {
       let bonus = 0;
       state.map.tiles.forEach(row => {
@@ -188,19 +192,16 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       return bonus;
     };
 
-    // 🌟 1. 공격자 총 전투 보너스 = (장군 보너스) + (막사 등 순수 전투 보너스)
     let attackerCombatBonus = getPlayerGeneralBonus(attackerPlayer.id);
     for (const city of attackerPlayer.cities) {
         city.buildings.forEach(b => {
             const def = BUILDINGS[b.type as keyof typeof BUILDINGS];
-            // 방어력(cityDefenseBonus)은 철저히 배제하고 전투 보너스(combatBonus)만 더합니다!
             if (def && def.effects && def.effects.combatBonus) {
                 attackerCombatBonus += def.effects.combatBonus;
             }
         });
     }
     
-    // 🌟 2. 방어자 총 전투 보너스 = (장군 보너스) + (막사 등 순수 전투 보너스)
     let defenderCombatBonus = getPlayerGeneralBonus(defenderPlayer.id);
     for (const city of defenderPlayer.cities) {
         city.buildings.forEach(b => {
@@ -211,23 +212,42 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         });
     }
     
-    
     let attackerCityDefenseBonus = 0;
     let defenderCityDefenseBonus = 0;
 
-    
     if (combatType !== 'field' && targetCityId) {
       const city = defender.cities.find((c) => c.id === targetCityId);
       if (city) {
+        // 🌟 [수정] 판정 결과에 따라 방어 보너스를 삭감하여 로컬 변수에 저장
+        let actualDefBonus = city.cityDefenseBonus;
+        if (willDestroyWall) {
+             const wallBonus = BUILDINGS.walls?.effects?.cityDefenseBonus || 6;
+             actualDefBonus = Math.max(0, actualDefBonus - wallBonus);
+        }
+
         if (rolesSwapped) {
-          attackerCityDefenseBonus = city.cityDefenseBonus;
+          attackerCityDefenseBonus = actualDefBonus;
         } else {
-          defenderCityDefenseBonus = city.cityDefenseBonus;
+          defenderCityDefenseBonus = actualDefBonus;
         }
       }
     }
 
     set((s) => {
+      // 🌟 [수정] 쓰기 가능한 draft 상태(s) 내부에서 안전하게 성벽 데이터를 삭제합니다.
+      if (willDestroyWall && targetCityId) {
+          const draftDefender = s.players.find(p => p.id === defenderId);
+          if (draftDefender) {
+              const draftCity = draftDefender.cities.find(c => c.id === targetCityId);
+              if (draftCity) {
+                  draftCity.hasWalls = false;
+                  draftCity.buildings = draftCity.buildings.filter(b => b.type !== 'walls');
+                  const wallBonus = BUILDINGS.walls?.effects?.cityDefenseBonus || 6;
+                  draftCity.cityDefenseBonus = Math.max(0, draftCity.cityDefenseBonus - wallBonus);
+              }
+          }
+      }
+
       s.combatState = {
         isActive: true,
         originalMoverId: moverId,
@@ -265,9 +285,14 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         lootSelections: [],
         maxLootSelections: (isSettlerMassacre || combatType === 'field') ? 1 : (combatType === 'city' ? 2 : 0),
         usedCombatSkills: {},
-        log: [],
+        log: willDestroyWall ? [{ message: `🔥 [연소] 기술로 인해 전투 시작 전 성벽이 파괴되었습니다!` }] : [],
       };
     });
+
+    // 🌟 파괴 완료 후 유저에게 알림
+    if (willDestroyWall) {
+        alert(`🔥 [연소] 기술 발동! 전투 시작 전 대상 도시의 성벽이 파괴되었습니다!`);
+    }
   },
 
   // [추가] 마을 전투 시작 함수

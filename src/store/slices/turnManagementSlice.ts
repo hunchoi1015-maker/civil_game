@@ -2,7 +2,7 @@ import { StateCreator } from 'zustand';
 import { GameStore } from '../types/storeTypes';
 import { GamePhase } from '../../types';
 // 🌟 getPlayerPassives 추가
-import { getPlayerOrder, getPlayerPassives } from '../helpers/playerHelpers';
+import { getPlayerOrder, getPlayerPassives, hasTechnology } from '../helpers/playerHelpers';
 
 export interface TurnManagementSlice {
   nextPhase: () => void;
@@ -175,6 +175,35 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
     const phases: GamePhase[] = ['start', 'trade', 'cityManagement', 'movement', 'research'];
     
     set((state) => {
+      // 🌟 [추가] 연소 기술: 이동 단계 종료 시 적 교외 건물 파괴 검사
+      if (state.currentPhase === 'movement') {
+          const currentPlayer = state.players[state.currentPlayerIndex];
+          if (hasTechnology(currentPlayer, 'combustion')) {
+              let destroyedSomething = false;
+              
+              currentPlayer.units.filter(u => u.type === 'military').forEach(unit => {
+                  const tile = state.map.tiles[unit.position.y][unit.position.x];
+                  
+                  // 내 타일이 아니고, 주인이 있으며, 건물이 있고, 도시 중심(cityId)은 아닐 때
+                  if (tile.ownerId && tile.ownerId !== currentPlayer.id && tile.buildingType && !tile.cityId) {
+                      const enemy = state.players.find(p => p.id === tile.ownerId);
+                      if (enemy) {
+                          enemy.cities.forEach(city => {
+                              const bIdx = city.buildings.findIndex(b => b.tilePosition?.x === unit.position.x && b.tilePosition?.y === unit.position.y);
+                              if (bIdx !== -1) city.buildings.splice(bIdx, 1);
+                          });
+                      }
+                      tile.buildingType = null; // 타일에서 건물 철거
+                      destroyedSomething = true;
+                  }
+              });
+              
+              if (destroyedSomething) {
+                  alert(`🔥 [연소] 기술 효과! ${currentPlayer.name}의 군대가 이동을 마치며 적 교외 건물을 파괴했습니다!`);
+              }
+          }
+      }
+      
       state.phaseComplete[state.currentPlayerIndex] = true;
       const playerOrder = getPlayerOrder(state.firstPlayerIndex, state.players.length);
       const currentOrderIndex = playerOrder.indexOf(state.currentPlayerIndex);
