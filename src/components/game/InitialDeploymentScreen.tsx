@@ -5,6 +5,7 @@ import { useGameStore } from '../../store/gameStore';
 import { Tile, TERRAIN_PROPERTIES, Position } from '../../types';
 import { NATIONS } from '../../types/nation';
 import clsx from 'clsx';
+import { useNavigate } from 'react-router-dom';
 
 const TERRAIN_COLORS: Record<string, string> = {
   grassland: 'bg-green-600',
@@ -15,6 +16,9 @@ const TERRAIN_COLORS: Record<string, string> = {
 };
 
 export function InitialDeploymentScreen() {
+    
+    const navigate = useNavigate();
+
   const {
     map,
     players,
@@ -43,7 +47,10 @@ export function InitialDeploymentScreen() {
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={startGame}
+            onClick={() => {
+              startGame();
+              navigate('/game');
+            }}
             className="px-8 py-3 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-lg text-xl shadow-lg shadow-amber-900/50"
           >
             본 게임 시작하기 🚀
@@ -128,8 +135,8 @@ export function InitialDeploymentScreen() {
 
             {/* 우측 패널: 미니맵 */}
             <div className="flex-1 bg-slate-950 rounded-xl p-6 overflow-auto flex items-center justify-center border border-slate-800 relative">
-                <div className="absolute top-4 left-4 text-sm text-slate-400 bg-black/50 p-2 rounded">
-                    💡 밝게 빛나는 9칸 중 원하는 타일을 클릭하세요.
+                <div className="absolute top-4 left-4 z-50 text-sm text-amber-100 bg-black/80 p-3 rounded-lg shadow-lg border border-slate-700">
+                    💡 밝게 빛나는 도시 주변 9칸 중 원하는 타일을 클릭하세요.
                 </div>
                 <div 
                     className="grid gap-1 shadow-2xl"
@@ -137,6 +144,18 @@ export function InitialDeploymentScreen() {
                 >
                     {map.tiles.map((row, y) =>
                         row.map((tile, x) => {
+                            // 🌟 [추가 2] 전장의 안개 적용! 시야가 없는 곳은 완전한 까만색으로 덮습니다.
+                            if (!tile.isExplored) {
+                                return (
+                                    <div 
+                                        key={tile.id} 
+                                        className="w-12 h-12 rounded-sm bg-black flex items-center justify-center relative shadow-sm"
+                                    >
+                                        <span className="text-gray-800 text-[10px]">?</span>
+                                    </div>
+                                );
+                            }
+
                             const isDeploymentZone = isValidDeploymentTile(x, y);
                             const isCenter = capital.position.x === x && capital.position.y === y;
                             
@@ -152,7 +171,6 @@ export function InitialDeploymentScreen() {
                                     className={clsx(
                                         'w-12 h-12 rounded-sm flex items-center justify-center text-xs transition-all relative',
                                         TERRAIN_COLORS[tile.terrain],
-                                        !tile.isExplored ? 'bg-black opacity-10' : '',
                                         isDeploymentZone 
                                             ? 'cursor-pointer hover:ring-2 hover:ring-amber-400 hover:z-10 shadow-[0_0_10px_rgba(255,255,255,0.2)] brightness-110' 
                                             : 'opacity-30 cursor-not-allowed',

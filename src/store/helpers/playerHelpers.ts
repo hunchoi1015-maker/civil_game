@@ -145,11 +145,6 @@ export function getPlayerPassives(player: Player) {
     }
   });
 
-  // 🌟 [특수 패시브] 컴퓨터(Computers): 화폐 5개당 이벤트 카드 한도 +1
-  if (hasTechnology(player, 'computers')) {
-    cultureCardLimitBonus += Math.floor(player.resources.currency / 5);
-  }
-
   return { 
     maxMovement, 
     stackingLimitBonus, 
@@ -169,4 +164,42 @@ export function getUnlockedGovernments(player: Player): string[] {
     if (tech.unlocksGovernment) unlocked.push(tech.unlocksGovernment);
   });
   return unlocked;
+}
+
+/**
+ * 🌟 [통합] 문화 이벤트 카드 보유 한도 계산기
+ */
+export function getCultureCardLimit(player: Player): number {
+  let limit = 2; // 기본 한도
+
+  // 1. 기술 혜택
+  if (hasTechnology(player, 'pottery')) limit += 1; // 도자기
+  if (hasTechnology(player, 'civil_service')) limit += 1; // 공공서비스
+  if (hasTechnology(player, 'theology')) limit += 1; // 신학
+  
+  if (hasTechnology(player, 'computers')) { // 컴퓨터 (화폐 5개당 +1)
+    limit += Math.floor((player.resources.currency || 0) / 5);
+  }
+
+  // 2. 정치체제 혜택 (민주주의 제거됨)
+  if (player.government === 'monarchy') limit += 1; // 군주제
+
+  return limit;
+}
+
+/**
+ * 🌟 [통합] 부대 카드 사용 한도 보너스 계산기
+ */
+export function getCombatCardBonus(player: Player): number {
+  let bonus = 0;
+  
+  // 1. 정치체제 혜택
+  if (player.government === 'fundamentalism') bonus += 1; // 근본주의
+  
+  // 2. 기술 혜택
+  if (hasTechnology(player, 'computers')) { // 컴퓨터 (화폐 5개당 +1)
+    bonus += Math.floor((player.resources.currency || 0) / 5);
+  }
+
+  return bonus;
 }

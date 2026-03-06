@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
 import { CombatState, Position, CombatType, ArmyCard, Player, getAttackerMaxCards, CITY_CAPITAL_MAX_CARDS, LOOT_MAX_PER_SELECTION, createInitialResources, createInitialLuxuryResources, RewardType } from '../../types';
 import { resolveBattlefields, resolvePairedFight } from '../../engine/CombatResolver';
-import { shuffleArray } from '../helpers/playerHelpers';
+import { shuffleArray, getCombatCardBonus } from '../helpers/playerHelpers';
 import { BUILDINGS } from '../../constants/buildings';
 
 export interface CombatSlice {
@@ -142,10 +142,15 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       defenderSideMaxCards = CITY_CAPITAL_MAX_CARDS;
     }
 
-    const attackerMaxCards = rolesSwapped ? defenderSideMaxCards : moverMaxCards;
-    const defenderMaxCards = rolesSwapped ? moverMaxCards : defenderSideMaxCards;
     const attackerPlayer = state.players.find((p) => p.id === attackerRoleId)!;
     const defenderPlayer = state.players.find((p) => p.id === defenderRoleId)!;
+
+    // 🌟 [수정] 플레이어별 부대 카드 보너스를 가져와서 더해줍니다!
+    const attackerCardBonus = getCombatCardBonus(attackerPlayer);
+    const defenderCardBonus = getCombatCardBonus(defenderPlayer);
+
+    const attackerMaxCards = (rolesSwapped ? defenderSideMaxCards : moverMaxCards) + attackerCardBonus;
+    const defenderMaxCards = (rolesSwapped ? moverMaxCards : defenderSideMaxCards) + defenderCardBonus;
 
     const prepareCards = (player: Player, max: number, hasSettler: boolean, hasMilitary: boolean) => {
       let cards: ArmyCard[] = [];
@@ -296,7 +301,9 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
 
     // 플레이어의 카드 준비 (셔플 후 최대 장수만큼)
     // 야전이므로 유닛 수에 따라 카드 수가 결정됨 (여기서는 단일 유닛 진입이므로 1유닛 -> 최대 2장)
-    const attackerMaxCards = getAttackerMaxCards(1); 
+    const attackerCardBonus = getCombatCardBonus(currentPlayer);
+    const attackerMaxCards = getAttackerMaxCards(1) + attackerCardBonus; 
+    
     const shuffledAttackerCards = shuffleArray(currentPlayer.armyCards);
     const attackerAvailableCards = shuffledAttackerCards.slice(0, attackerMaxCards);
 
