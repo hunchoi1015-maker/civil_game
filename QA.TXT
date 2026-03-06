@@ -18,6 +18,7 @@ https://www.thisisgame.com/articles/415278
 https://gamecollege.com/archives/5314
 https://namu.wiki/w/%EB%A0%88%EB%B2%A8%20%EB%94%94%EC%9E%90%EC%9D%B8
 https://www.reddit.com/r/gamedev/comments/lygftq/how_do_you_balance_your_game/?tl=ko
+https://m.blog.naver.com/PostList.naver?blogId=tepet&categoryName=%EC%97%AD%EA%B8%B0%ED%9A%8D%EC%84%9C%EA%B0%95%EC%9D%98&categoryNo=166&logCode=0&tab=1
 =======================================
 qa ver1
 
@@ -564,7 +565,7 @@ qa ver2
 플레이어 보드 상에 교역과 실제 교역 계산 수치가 다를 때가 있어.
 1개만 지을 수 있는 건물 / 여러개 지을 수 있는 건물
 UX/UI 디테일 폴리싱 (대기 화면 & 로그 강화)
-
+불가사의와 유닛이 같은 타일에 있을 때, 시각적 
 스피너/대기 화면 구현: 기획하셨던 대로, 조건이 안 되는 플레이어나 능력을 처음 발동한 플레이어에게 팝업 전체가 아니라 "상대방의 반응 대기 중... ⏳" 형태의 작은 로딩 스피너나 오버레이만 보여주어 화면 피로도를 줄이는 작업을 마무리합니다.
 
 로그 가시성 개선: 인터럽트 체인이 길어질 때 (예: A 능력 선언 -> B 스파이 개입 -> A 스파이 방어 -> A 능력 최종 발동) 이 숨 막히는 과정이 전투 로그나 알림을 통해 유저에게 더 짜릿하게 전달되도록 텍스트 피드백을 다듬습니다.
