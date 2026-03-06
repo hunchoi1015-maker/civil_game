@@ -172,17 +172,13 @@ export function getUnlockedGovernments(player: Player): string[] {
 export function getCultureCardLimit(player: Player): number {
   let limit = 2; // 기본 한도
 
-  // 1. 기술 혜택
-  if (hasTechnology(player, 'pottery')) limit += 1; // 도자기
-  if (hasTechnology(player, 'civil_service')) limit += 1; // 공공서비스
-  if (hasTechnology(player, 'theology')) limit += 1; // 신학
-  
-  if (hasTechnology(player, 'computers')) { // 컴퓨터 (화폐 5개당 +1)
+  if (hasTechnology(player, 'pottery')) limit += 1;
+  if (hasTechnology(player, 'civil_service')) limit += 1;
+  if (hasTechnology(player, 'theology')) limit += 1;
+  if (hasTechnology(player, 'computers')) {
     limit += Math.floor((player.resources.currency || 0) / 5);
   }
-
-  // 2. 정치체제 혜택 (민주주의 제거됨)
-  if (player.government === 'monarchy') limit += 1; // 군주제
+  if (player.government === 'monarchy') limit += 1;
 
   return limit;
 }
@@ -192,14 +188,9 @@ export function getCultureCardLimit(player: Player): number {
  */
 export function getCombatCardBonus(player: Player): number {
   let bonus = 0;
-  
-  // 1. 정치체제 혜택
-  if (player.government === 'fundamentalism') bonus += 1; // 근본주의
-  
-  // 2. 기술 혜택
-  if (hasTechnology(player, 'computers')) { // 컴퓨터 (화폐 5개당 +1)
+  if (player.government === 'fundamentalism') bonus += 1;
+  if (hasTechnology(player, 'computers')) {
     bonus += Math.floor((player.resources.currency || 0) / 5);
   }
-
   return bonus;
 }

@@ -166,7 +166,7 @@ export function CultureCardInventory() {
                       <div className="text-[11px] text-slate-400 group-hover:text-slate-300 leading-tight">{card.description}</div>
                     </button>
 
-                    {/* 🌟 휴지통 버튼 (언제나 활성화되어 카드를 버릴 수 있음) */}
+                    {/* 🌟 휴지통 버튼 (항상 활성화) */}
                     <button
                       onClick={() => discardCultureCard(card.id)}
                       className="w-10 flex items-center justify-center bg-slate-700 hover:bg-red-600 border border-slate-600 hover:border-red-500 rounded transition-colors text-lg"
@@ -186,7 +186,7 @@ export function CultureCardInventory() {
           )}
         </AnimatePresence>
 
-        {/* 메인 토글 버튼 */}
+        {/* 🌟 메인 토글 버튼 상태 표시 */}
         <button 
           onClick={() => setIsOpen(!isOpen)}
           className={clsx(

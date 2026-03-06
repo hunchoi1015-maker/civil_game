@@ -8,7 +8,6 @@ import { CULTURE_CARD_TEMPLATES } from '../../constants/cultureCards';
 import { TECHNOLOGIES } from '../../constants/technologies';
 import { Position } from '../../types/map';
 import { drawRandomGreatPerson } from '../../constants/greatPerson';
-// 🌟 1. 헬퍼 함수 임포트
 import { getCultureCardLimit } from '../helpers/playerHelpers'; 
 
 export interface CardTargetingState {
@@ -59,7 +58,6 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
         player.unplacedGreatPeople.push(newGreatPerson);
         alert(`🌟 위인이 탄생했습니다! [${newGreatPerson.type}] 위인이 대기열에 합류합니다.`);
       } else {
-        // 🌟 2. 한도 검사 없이 무조건 카드를 발급합니다!
         levelToDraw = getCultureLevel(newTrack) as 1|2|3;
       }
 
@@ -94,7 +92,6 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
   },
 
   discardCultureCard: (cardId: string) => {
-    // 🌟 3. 아주 심플해진 카드 버리기 로직
     set((state) => {
       const player = state.players[state.currentPlayerIndex];
       if (!player.cultureEventCards) return;
@@ -104,11 +101,13 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
   },
 
   startCardTargeting: (cardId: string) => {
+    let executeImmediately = false; 
+    
     set((state) => {
       const player = state.players[state.currentPlayerIndex];
       
-      // 🌟 4. [핵심] 카드 사용 시점에 한도 초과 검사!
-      const currentLimit = getCultureCardLimit(player);
+      // 🌟 [추가] 카드 사용 시점에 한도 초과 검사! 초과 시 실행 불가
+      const currentLimit = getCultureCardLimit(player as any);
       const currentCount = player.cultureEventCards?.length || 0;
       
       if (currentCount > currentLimit) {
@@ -118,9 +117,19 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
 
       const card = player.cultureEventCards?.find(c => c.id === cardId);
       if (!card) return;
+
+      // 타겟팅이 없는 카드는 즉시 실행 플래그 온
+      if (card.targetType === 'none') {
+          executeImmediately = true;
+          return;
+      }
       
       state.activeCardTargeting = { cardId: card.id, templateId: card.templateId, step: 0, data: {} };
     });
+
+    if (executeImmediately) {
+        get().playCultureCard(cardId, {});
+    }
   },
 
   cancelCardTargeting: () => { set((state) => { state.activeCardTargeting = null; }); },
@@ -166,10 +175,20 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
     const state = get();
     const sourcePlayerId = state.players[state.currentPlayerIndex].id;
     let hasMassMedia = false; 
+    let limitExceeded = false; // 🌟 최후 방어막 플래그
 
     set((draft) => {
       const player = draft.players.find(p => p.id === sourcePlayerId);
       if (!player) return;
+
+      // 🌟 [추가] 카드가 발동되는 최후의 순간에도 한도 검사를 수행하여 꼼수 원천 차단
+      const currentLimit = getCultureCardLimit(player as any);
+      const currentCount = player.cultureEventCards?.length || 0;
+      if (currentCount > currentLimit) {
+          limitExceeded = true;
+          return;
+      }
+
       const card = player.cultureEventCards?.find(c => c.id === cardId);
       hasMassMedia = player.technologies.some(t => t.id === 'mass_media');
       
@@ -180,6 +199,11 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
         draft.combatState?.log?.push({ message: `📜 ${player.name}이(가) [${card?.name || '카드'}]을(를) 사용했습니다! (개입 대기 중...)` });
       }
     });
+
+    if (limitExceeded) {
+        alert("⚠️ 카드 보유 한도를 초과하여 시스템에 의해 발동이 차단되었습니다.");
+        return;
+    }
 
     if (hasMassMedia) {
       get().executeCultureCard(cardId, { ...payload, sourcePlayerId });
