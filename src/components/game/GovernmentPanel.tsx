@@ -5,6 +5,7 @@ import { GovernmentType } from '../../types';
 import { GOVERNMENTS } from '../../constants/governments';
 import { TECHNOLOGIES } from '../../constants/technologies';
 import clsx from 'clsx';
+import { hasActiveWonder } from '../../store/helpers/playerHelpers';
 
 const GOVERNMENT_ICONS: Record<GovernmentType, string> = {
   despotism: '👑',
@@ -18,8 +19,12 @@ const GOVERNMENT_ICONS: Record<GovernmentType, string> = {
 };
 
 export function GovernmentPanel() {
-  const { players, currentPlayerIndex, currentPhase, changeGovernment } = useGameStore();
+  const { map, players, currentPlayerIndex, currentPhase, changeGovernment } = useGameStore(); // 🌟 map, players 가져오기
   const currentPlayer = players[currentPlayerIndex];
+  
+  // 🌟 피라미드 보유 확인
+  const hasPyramids = map ? hasActiveWonder(currentPlayer.id, 'pyramids', map, players) : false;
+  
   const [showModal, setShowModal] = useState(false);
 
   const canChangeGovernment = currentPhase === 'start';
@@ -28,9 +33,21 @@ export function GovernmentPanel() {
   const researchedTechIds = currentPlayer.technologies.map(t => t.id);
 
   const isGovUnlocked = (gov: GovernmentType): boolean => {
-    if (gov === 'anarchy') return true; // 무정부는 언제나 열려있음
+    if (gov === 'anarchy' || hasPyramids) return true; // 🌟 피라미드: 기술 무시 모두 해제!
     const govDef = GOVERNMENTS[gov];
     return govDef.requiredTech === null || researchedTechIds.includes(govDef.requiredTech);
+  };
+
+  const getCanSelect = (gov: GovernmentType): boolean => {
+    if (currentGov === gov) return false;
+    if (!isGovUnlocked(gov)) return false;
+
+    // 🌟 피라미드 보유 시 즉시 아무 체제로나 변경 가능!
+    if (hasPyramids || currentGov === 'anarchy' || currentPlayer.freeGovernmentSwitch) {
+      return true;
+    }
+    
+    return gov === 'anarchy';
   };
 
   const getRequiredTechName = (gov: GovernmentType): string | null => {
@@ -38,20 +55,6 @@ export function GovernmentPanel() {
     if (!govDef.requiredTech) return null;
     const tech = TECHNOLOGIES.find(t => t.id === govDef.requiredTech);
     return tech?.name || govDef.requiredTech;
-  };
-
-  // 🌟 핵심 로직: 이 버튼을 클릭할 수 있는가?
-  const getCanSelect = (gov: GovernmentType): boolean => {
-    if (currentGov === gov) return false;
-    if (!isGovUnlocked(gov)) return false;
-
-    // 현재 무정부 상태이거나 무료 전환 기회가 있으면 해금된 아무거나 선택 가능
-    if (currentGov === 'anarchy' || currentPlayer.freeGovernmentSwitch) {
-      return true;
-    }
-    
-    // 일반 상태에서는 오직 '무정부'만 선택 가능 (무정부를 거쳐야만 다른 체제로 갈 수 있음)
-    return gov === 'anarchy';
   };
 
   const handleChangeGovernment = (gov: GovernmentType) => {

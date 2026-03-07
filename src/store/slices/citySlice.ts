@@ -147,10 +147,11 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       
       if (!city || city.hasHarvestedCulture) return;
 
-      // 🌟 [추가] 행동 충돌 방지: 이번 턴에 생산을 했다면 수확 불가
+      // 행동 충돌 방지: 이번 턴에 생산을 했다면 수확 불가
       if (city.actionTypeThisTurn === 'produce' || (city.producedItemsCount || 0) > 0) return;
       
-      let totalCulture = calculateCityCulture(city, state.map) + 1;
+      // 🌟 calculateCityCulture에 state.players를 추가로 넘겨줍니다!
+      let totalCulture = calculateCityCulture(city, state.map, state.players) + 1;
       
       if (city.isCapital) {
           if (player.government === 'monarchy') {
@@ -164,7 +165,6 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
         player.resources.culture = Math.min(player.resources.culture + totalCulture, 50);
         
         city.hasHarvestedCulture = true; 
-        // 🌟 [추가] 수확 행동 타입 확정
         city.actionTypeThisTurn = 'harvest';
         city.hasActedThisTurn = true;
 
@@ -185,6 +185,19 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
 
         const wonderDef = WONDERS[wonderType];
         if (!wonderDef) return;
+
+        // 🌟 전 세계 역사 검사 (불가사의 유일성 보장)
+        let isAlreadyBuilt = false;
+        for (const p of state.players) {
+            if (p.builtWonders && p.builtWonders.includes(wonderType)) {
+                isAlreadyBuilt = true;
+                break;
+            }
+        }
+        if (isAlreadyBuilt) {
+            alert("이 불가사의는 이미 세계 어딘가에 건설되었거나 역사 속으로 사라졌습니다.");
+            return;
+        }
 
         // 🌟 1. 행동 충돌 방지: 수확을 이미 했다면 생산 불가
         if (city.actionTypeThisTurn === 'harvest') return;

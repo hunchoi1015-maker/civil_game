@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
 import { CombatState, Position, CombatType, ArmyCard, Player, getAttackerMaxCards, CITY_CAPITAL_MAX_CARDS, LOOT_MAX_PER_SELECTION, createInitialResources, createInitialLuxuryResources, RewardType } from '../../types';
 import { resolveBattlefields, resolvePairedFight } from '../../engine/CombatResolver';
-import { shuffleArray, getCombatCardBonus, hasTechnology } from '../helpers/playerHelpers';
+import { shuffleArray, getCombatCardBonus, hasTechnology, hasActiveWonder } from '../helpers/playerHelpers';
 import { BUILDINGS } from '../../constants/buildings';
 
 export interface CombatSlice {
@@ -166,11 +166,21 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       return cards;
     };
 
+    const attackerHasHimeji = hasActiveWonder(attackerPlayer.id, 'himeji_castle', state.map, state.players);
+    const defenderHasHimeji = hasActiveWonder(defenderPlayer.id, 'himeji_castle', state.map, state.players);
+
+    // ==============================================================================
+    // 🌟 [수정] prepareCards 뒤에 .map()을 붙여서, 원본 데이터를 훼손하지 않고 
+    // 복사본({ ...c })을 만들며 히메지성이 있을 경우 스탯을 +1/+1 펌핑합니다.
+    // ==============================================================================
     const attackerAvailableCards = prepareCards(
         attackerPlayer, 
         attackerMaxCards, 
         rolesSwapped ? defenderSettlerUnits.length > 0 : isMoverSettler, 
         rolesSwapped ? (defenderMilitaryUnits.length > 0 || combatType !== 'field') : isMoverMilitary
+    ).map(c => attackerHasHimeji 
+        ? { ...c, attack: c.attack + 1, maxHealth: c.maxHealth + 1, health: c.health + 1 }
+        : { ...c }
     );
     
     const defenderAvailableCards = prepareCards(
@@ -178,6 +188,9 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         defenderMaxCards, 
         rolesSwapped ? isMoverSettler : defenderSettlerUnits.length > 0, 
         rolesSwapped ? isMoverMilitary : (defenderMilitaryUnits.length > 0 || combatType !== 'field')
+    ).map(c => defenderHasHimeji 
+        ? { ...c, attack: c.attack + 1, maxHealth: c.maxHealth + 1, health: c.health + 1 }
+        : { ...c }
     );
 
     const getPlayerGeneralBonus = (playerId: string) => {
@@ -913,6 +926,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
           }
 
           // 도시 점령/초토화
+          // 도시 점령/초토화
           if (state.combatState.combatType === 'city' && state.combatState.targetCityId && defenderPlayer) {
             const cityIndex = defenderPlayer.cities.findIndex(
               (c) => c.id === state.combatState.targetCityId
@@ -932,6 +946,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
                       tile.ownerId = null;
                       tile.cityId = null;
                       tile.buildingType = null;
+                      tile.wonder = undefined; // 🌟 [추가] 물리적으로 타일에서 불가사의 완전 제거!
                   }
               });
             }

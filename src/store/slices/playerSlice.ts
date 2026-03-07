@@ -3,7 +3,7 @@ import { GameStore } from '../types/storeTypes';
 import { Resources } from '../../types';
 import { calculateTradeIncome } from '../../engine/GameEngine';
 import { GOVERNMENTS } from '../../constants/governments';
-import { findPlayerById } from '../helpers/playerHelpers';
+import { findPlayerById, hasActiveWonder } from '../helpers/playerHelpers';
 
 export interface PlayerSlice {
   updateResources: (playerId: string, resources: Partial<Resources>) => void;
@@ -94,36 +94,39 @@ export const createPlayerSlice: StateCreator<GameStore, [["zustand/immer", never
       const player = findPlayerById(state.players, playerId);
       if (!player) return;
       const currentGov = player.government;
+
+      // 🌟 피라미드 보유 확인
+      const hasPyramids = hasActiveWonder(playerId, 'pyramids', state.map, state.players);
       
-      // 🌟 1. 봉건제 해제 시 화폐 -1 페널티 (무정부로 갈 때도 적용됨!)
       if (currentGov === 'feudalism' && targetGovernment !== 'feudalism') {
           player.resources.currency = Math.max(0, player.resources.currency - 1);
       }
 
-      // 🌟 2. 타겟 체제 적용 (무정부 또는 해금된 정상 체제)
       if (targetGovernment === 'anarchy') {
+          // 🌟 무정부 면역!
+          if (hasPyramids) {
+              if (!state.combatState.log) state.combatState.log = [];
+              state.combatState.log.push({ message: `🏛️ [피라미드] 효과로 ${player.name}은(는) 무정부 상태에 빠지지 않습니다!` });
+              return;
+          }
           player.government = 'anarchy';
       } else {
-          // 정상 체제로 갈아탈 때
           const govDef = GOVERNMENTS[targetGovernment as keyof typeof GOVERNMENTS];
           if (!govDef) return;
           
-          if (govDef.requiredTech && !player.technologies.some(t => t.id === govDef.requiredTech)) {
+          // 🌟 피라미드가 없다면 기술 검사
+          if (!hasPyramids && govDef.requiredTech && !player.technologies.some(t => t.id === govDef.requiredTech)) {
               alert("해당 체제를 해금하는 기술이 없습니다.");
               return;
           }
 
           player.government = targetGovernment as any;
-
-          // 🌟 봉건제를 새롭게 채택했다면 화폐 +1 보너스!
           if (targetGovernment === 'feudalism' && currentGov !== 'feudalism') {
               player.resources.currency = Math.min(4, player.resources.currency + 1);
           }
       }
 
-      // 체제를 변경했으므로 무료 기회 소모 (만약 썼다면)
       player.freeGovernmentSwitch = false;
-      
       if (!state.combatState.log) state.combatState.log = [];
       state.combatState.log.push({ message: `👑 ${player.name}이(가) 정치체제를 [${targetGovernment === 'anarchy' ? '무정부' : GOVERNMENTS[targetGovernment as keyof typeof GOVERNMENTS]?.name}]로 변경했습니다!` });
     });

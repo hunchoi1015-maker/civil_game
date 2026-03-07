@@ -8,6 +8,7 @@ import {
   LOOT_MAX_PER_SELECTION,
 } from '../../../types';
 import clsx from 'clsx';
+import { hasActiveWonder } from '../../../store/helpers/playerHelpers';
 
 const CARD_ICONS: Record<string, string> = {
   infantry: '🗡️',
@@ -149,13 +150,13 @@ function PlacementPhase() {
     placeCardOnBattlefield,
     passTurn,
     useTechResourceAbility,
-    applyCombatSkill // 🌟 [추가] 스킬 발동 함수
+    applyCombatSkill,
+    map // 🌟 [수정] 신탁 효과(hasActiveWonder) 검사를 위해 map을 반드시 가져와야 합니다.
   } = useGameStore();
 
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [useMetalCastingToggle, setUseMetalCastingToggle] = useState(false);
   
-  // 🌟 [추가] 포인트 분배 모달 상태 관리
   const [skillModal, setSkillModal] = useState<{
     isOpen: boolean;
     skillId: string;
@@ -175,21 +176,22 @@ function PlacementPhase() {
       ? attackerPlayer 
       : (defenderPlayer || { id: 'village', name: '원주민 마을', color: 'gray' } as any);
 
-  // =====================================================================
-  // 🌟 [핵심] 오직 '현재 턴 플레이어의 ID'로만 장부를 엽니다.
-  const usedSkills = cs.usedCombatSkills?.[currentTurnPlayer.id] || [];
+  // 🌟 [추가] 신탁 발동을 위해 상대방 정보 및 카드 식별
+  const opponentPlayer = isAttackerTurn ? defenderPlayer : attackerPlayer;
+  const opponentCards = isAttackerTurn ? cs.defenderAvailableCards : cs.attackerAvailableCards;
   
+  // 🌟 [추가] 현재 턴 플레이어가 '신탁'을 소유하고 있고 봉쇄당하지 않았는지 확인!
+  const hasOracle = map ? hasActiveWonder(currentTurnPlayer.id, 'oracle', map, players) : false;
+
+  const usedSkills = cs.usedCombatSkills?.[currentTurnPlayer.id] || [];
   const hasTech = (techId: string) => currentTurnPlayer.technologies?.some((t: any) => t.id === techId);
   const hasUsedInCombat = (techId: string) => usedSkills.includes(techId); 
 
-  // 금속가공 검사 및 자원 확인
   const hasMetalCasting = hasTech('metal_casting') && !hasUsedInCombat('metal_casting');
   const ironCount = currentTurnPlayer.luxuryResources?.iron || 0;
   const canUseMetalCasting = hasMetalCasting && ironCount >= 1;
-  // =====================================================================
 
   useEffect(() => {
-    // 철이 부족하거나 이미 썼는데 토글이 켜져있으면 강제 해제
     if (!canUseMetalCasting && useMetalCastingToggle) {
       setUseMetalCastingToggle(false);
     }
@@ -202,7 +204,6 @@ function PlacementPhase() {
   const handlePlaceCard = (battlefieldId: string | null) => {
     if (!selectedCard) return;
 
-    // 🌟 금속가공: 카드를 전장에 배치하는 '바로 그 순간' 스킬 발동!
     if (useMetalCastingToggle) {
       applyCombatSkill(currentTurnPlayer.id, 'metal_casting', undefined, selectedCard);
       setUseMetalCastingToggle(false);
@@ -261,7 +262,10 @@ function PlacementPhase() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      {/* 🌟 수정: 2칸(grid-cols-2)에서 3칸(grid-cols-3)으로 레이아웃 확장! */}
+      <div className="grid grid-cols-3 gap-4">
+        
+        {/* 1열: 내 카드 */}
         <div>
           <h3 className={clsx('text-lg font-semibold mb-3', isAttackerTurn ? 'text-red-400' : 'text-blue-400')}>
             {isAttackerTurn ? '⚔️' : '🛡️'} {currentTurnPlayer.name}의 카드
@@ -283,6 +287,7 @@ function PlacementPhase() {
           </div>
         </div>
 
+        {/* 2열: 행동 선택 */}
         <div className="flex flex-col gap-3">
           <h3 className="text-lg font-semibold text-slate-300">행동 선택</h3>
 
@@ -335,9 +340,6 @@ function PlacementPhase() {
             패스
           </button>
 
-          {/* ========================================================= */}
-          {/* 🌟 [추가] 전투 스킬 분배 버튼 영역 */}
-          {/* ========================================================= */}
           {currentTurnPlayer.id !== 'village' && (
             <div className="mt-2 pt-4 border-t border-slate-700">
               <h4 className="text-sm font-bold text-slate-400 mb-2">전투 스킬 (현재 턴)</h4>
@@ -384,9 +386,43 @@ function PlacementPhase() {
             </div>
           )}
         </div>
+
+        {/* ========================================================= */}
+        {/* 🌟 3열: 상대방 패 렌더링 (신탁 여부에 따라 공개/비공개) */}
+        {/* ========================================================= */}
+        <div className="pl-4 border-l border-slate-700">
+          <h3 className="text-lg font-semibold text-slate-400 mb-3 flex items-center gap-2">
+            <span>👀</span>
+            <span className="truncate">{opponentPlayer?.name || '적'}의 남은 패</span>
+            <span className="text-sm bg-slate-800 px-2 py-0.5 rounded-full">{opponentCards.length}장</span>
+          </h3>
+          
+          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+            {opponentCards.map((card, idx) => (
+               hasOracle ? (
+                  // 🌟 신탁 발동: 카드 앞면 공개! (이미 선언된 CardDisplay 컴포넌트 사용)
+                  <CardDisplay key={card.id} card={card} disabled size="small" />
+               ) : (
+                  // 일반 상태: 뒷면 상자만 렌더링
+                  <div key={idx} className="p-3 bg-slate-800 border border-slate-600 rounded-lg flex items-center justify-center h-14 opacity-50">
+                     <span className="text-slate-500 font-bold text-sm">카드 뒷면 (숨겨짐)</span>
+                  </div>
+               )
+            ))}
+            {opponentCards.length === 0 && <p className="text-slate-500 text-sm text-center py-4">남은 카드 없음</p>}
+          </div>
+
+          {/* 신탁 발동 안내 배너 */}
+          {hasOracle && opponentCards.length > 0 && (
+             <div className="mt-3 text-xs text-purple-300 font-bold bg-purple-900/50 p-2 rounded text-center border border-purple-700/50 animate-pulse">
+                👁️ 신탁 효과: 상대 패 강제 공개
+             </div>
+          )}
+        </div>
+
       </div>
 
-      <div className="grid grid-cols-2 gap-4 text-xs">
+      <div className="grid grid-cols-2 gap-4 text-xs mt-6">
         <div className="bg-slate-800 rounded p-2">
           <span className="text-red-400">공격 전투 보너스: +{cs.attackerCombatBonus}</span>
         </div>
@@ -398,9 +434,7 @@ function PlacementPhase() {
         </div>
       </div>
 
-      {/* ========================================================= */}
-      {/* 🌟 [추가] 포인트 분배 모달 UI */}
-      {/* ========================================================= */}
+      {/* 스킬 포인트 분배 모달 (기존 코드 유지) */}
       {skillModal?.isOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[80]">
           <div className="bg-slate-800 border-2 border-amber-500 rounded-xl p-6 w-[450px] shadow-2xl">

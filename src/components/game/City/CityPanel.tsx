@@ -259,7 +259,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
   const actionType = selectedCity?.actionTypeThisTurn || 'none';
 
   const productionDetails = (selectedCity && map && currentPlayer) 
-      ? calculateDetailedCityProduction(selectedCity, map, currentPlayer) 
+      ? calculateDetailedCityProduction(selectedCity, map, currentPlayer, players) 
       : { total: 0, base: 0, buildings: 0, militaryScience: 0, tempBonus: 0 };
 
   const totalCityProduction = productionDetails.total;
@@ -274,7 +274,8 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
 
   let selectedCityCulture = 0;
   if (selectedCity && map) {
-      selectedCityCulture = calculateCityCulture(selectedCity, map) + 1;
+      // 🌟 map 뒤에 players 를 추가하여 봉쇄된 불가사의를 제외하고 문화를 계산하게 합니다.
+      selectedCityCulture = calculateCityCulture(selectedCity, map, players) + 1;
       if (selectedCity.isCapital) {
           if (currentPlayer.government === 'monarchy') {
               selectedCityCulture += 1;
@@ -623,19 +624,42 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
                   const canAfford = availableProduction >= actualCost; 
                   const cityActed = cannotProduce || selectedCity?.isParalyzed;
                   
+                  // 🌟 [신규] 모든 플레이어의 역사를 뒤져 건설 여부 파악
+                  let isAlreadyBuilt = false;
+                  for (const p of players) {
+                      if (p.builtWonders?.includes(wonder.type)) {
+                          isAlreadyBuilt = true;
+                          break;
+                      }
+                  }
+                  
+                  // 이미 지어졌다면 무조건 비활성화
+                  const isDisabled = !canManageCity || !canAfford || cityActed || isAlreadyBuilt;
+                  
                   return (
                     <motion.button 
                       key={wonder.type} 
-                      whileHover={(canManageCity && canAfford && !cityActed) ? { scale: 1.02 } : {}} 
+                      whileHover={!isDisabled ? { scale: 1.02 } : {}} 
                       onClick={() => handleBuildWonder(wonder)} 
-                      disabled={!canManageCity || !canAfford || cityActed} 
-                      className={clsx('p-3 rounded-lg text-left transition-colors border border-indigo-900/50', (canManageCity && canAfford && !cityActed) ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-700 opacity-40 cursor-not-allowed')}
+                      disabled={isDisabled} 
+                      className={clsx(
+                          'p-3 rounded-lg text-left transition-colors border border-indigo-900/50 relative overflow-hidden', 
+                          !isDisabled ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-700 opacity-40 cursor-not-allowed'
+                      )}
                     >
-                      <div className="text-indigo-300 font-bold text-sm flex items-center gap-1">🗽 {wonder.name}</div>
+                      <div className="text-indigo-300 font-bold text-sm flex items-center justify-between gap-1">
+                          <span>🗽 {wonder.name}</span>
+                          {/* 🌟 이미 지어졌을 때 뱃지 표시 */}
+                          {isAlreadyBuilt && (
+                              <span className="text-[10px] text-red-200 bg-red-900/80 px-1.5 py-0.5 rounded border border-red-500">
+                                  역사 속으로
+                              </span>
+                          )}
+                      </div>
                       <div className="text-slate-400 text-xs mt-1">{wonder.description}</div>
                       <div className="text-xs mt-1 text-purple-300">턴당 문화 +{wonder.cultureProduction}</div>
-                      <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>
-                        비용: {actualCost} {canAfford ? "" : "(부족)"}
+                      <div className={clsx("text-xs mt-1 font-bold", isAlreadyBuilt ? "text-slate-500" : canAfford ? "text-amber-400" : "text-red-400")}>
+                        비용: {actualCost} {isAlreadyBuilt ? "" : canAfford ? "" : "(부족)"}
                       </div>
                     </motion.button>
                   );

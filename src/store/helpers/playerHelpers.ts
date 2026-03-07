@@ -1,4 +1,4 @@
-import { Player, ArmyCardType, ArmyTier } from '../../types';
+import { Player, ArmyCardType, ArmyTier ,Tile } from '../../types';
 
 export function getPlayerOrder(firstPlayerIndex: number, playerCount: number): number[] {
   const order: number[] = [];
@@ -193,4 +193,42 @@ export function getCombatCardBonus(player: Player): number {
     bonus += Math.floor((player.resources.currency || 0) / 5);
   }
   return bonus;
+}
+// 불가사의 활성화(봉쇄 및 무효화) 검사기
+export function isWonderActive(tile: Tile, players: Player[]): boolean {
+  if (!tile.wonder || !tile.ownerId) return false;
+
+  // 1. 무효화(Invalidated) 검사 - 화약/군주제로 능력이 영구 파괴되었는가?
+  const owner = players.find(p => p.id === tile.ownerId);
+  if (owner && owner.invalidatedWonders?.includes(tile.wonder.type)) {
+    return false;
+  }
+
+  // 2. 봉쇄(Blockade) 검사 - 적 유닛이 타일을 밟고 있는가?
+  const hasEnemyUnit = players.some(p =>
+    p.id !== tile.ownerId && p.units.some(u => tile.unitIds.includes(u.id))
+  );
+  if (hasEnemyUnit) {
+    return false;
+  }
+
+  return true; // 무효화도 안됐고, 적 유닛도 없으면 정상 작동!
+}
+
+/**
+ * 🌟 [신규] 플레이어가 특정 불가사의를 '정상적으로(봉쇄되지 않고)' 소유 중인지 한 번에 확인합니다.
+ */
+export function hasActiveWonder(playerId: string, wonderType: string, map: any, players: Player[]): boolean {
+  for (let y = 0; y < map.height; y++) {
+    for (let x = 0; x < map.width; x++) {
+      const tile = map.tiles[y][x];
+      // 맵을 뒤져서 내 불가사의를 찾았고, 그게 봉쇄되지도 않았다면 true 반환!
+      if (tile.ownerId === playerId && tile.wonder && tile.wonder.type === wonderType) {
+        if (isWonderActive(tile, players)) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
 }
