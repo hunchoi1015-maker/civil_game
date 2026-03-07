@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../../store/gameStore';
 import { ArmyCard, ARMY_CARD_DEFINITIONS } from '../../types';
 import clsx from 'clsx';
+import { hasActiveWonder } from '../../store/helpers/playerHelpers';
 
 const CARD_ICONS: Record<string, string> = {
   infantry: '🗡️',
@@ -19,14 +20,24 @@ const TIER_COLORS = {
 };
 
 export function ArmyCardsWidget() {
-  const { players, currentPlayerIndex } = useGameStore();
+  const { players, currentPlayerIndex,map } = useGameStore();
   const [isExpanded, setIsExpanded] = useState(false);
 
   const currentPlayer = players[currentPlayerIndex];
-  const armyCards = currentPlayer.armyCards;
+  
+  // 🌟 [추가] 히메지성 보유 여부 판별
+  const hasHimeji = map ? hasActiveWonder(currentPlayer.id, 'himeji_castle', map, players) : false;
 
-  // 타입별로 그룹화
-  const groupedCards = armyCards.reduce((acc, card) => {
+  // 🌟 [수정] 원본 데이터를 훼손하지 않고, 렌더링용 배열에만 오라(버프)를 씌웁니다.
+  // 이 배열을 밑에서 그대로 쓰기 때문에 총 공격력/체력 계산도 자동으로 올라갑니다!
+  const displayArmyCards = currentPlayer.armyCards.map(card => 
+      hasHimeji 
+        ? { ...card, attack: card.attack + 1, maxHealth: card.maxHealth + 1, health: card.health + 1 }
+        : card
+  );
+
+  // 🌟 기존 armyCards 대신 displayArmyCards를 사용하여 그룹화합니다.
+  const groupedCards = displayArmyCards.reduce((acc, card) => {
     if (!acc[card.type]) {
       acc[card.type] = [];
     }
@@ -34,9 +45,9 @@ export function ArmyCardsWidget() {
     return acc;
   }, {} as Record<string, ArmyCard[]>);
 
-  const totalCards = armyCards.length;
-  const totalAttack = armyCards.reduce((sum, c) => sum + c.attack, 0);
-  const totalHealth = armyCards.reduce((sum, c) => sum + c.health, 0);
+  const totalCards = displayArmyCards.length;
+  const totalAttack = displayArmyCards.reduce((sum, c) => sum + c.attack, 0);
+  const totalHealth = displayArmyCards.reduce((sum, c) => sum + c.health, 0);
 
   return (
     <div className="fixed bottom-4 left-4 z-40">

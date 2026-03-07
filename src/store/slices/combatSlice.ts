@@ -343,8 +343,16 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     const attackerMaxCards = getAttackerMaxCards(1) + attackerCardBonus; 
     
     const shuffledAttackerCards = shuffleArray(currentPlayer.armyCards);
-    const attackerAvailableCards = shuffledAttackerCards.slice(0, attackerMaxCards);
+    const attackerHasHimeji = hasActiveWonder(currentPlayer.id, 'himeji_castle', state.map, state.players);
 
+    // 🌟 [수정] 덱에서 카드를 가져올 때 히메지성이 있다면 스탯을 +1/+1 펌핑합니다.
+    const attackerAvailableCards = shuffledAttackerCards.slice(0, attackerMaxCards).map(c => 
+        attackerHasHimeji 
+            ? { ...c, attack: c.attack + 1, maxHealth: c.maxHealth + 1, health: c.health + 1 } 
+            : { ...c }
+    );
+
+    
     let attackerGeneralBonus = 0;
     state.map.tiles.forEach(row => {
       row.forEach(tile => {

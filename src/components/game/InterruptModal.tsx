@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
+import { hasActiveWonder } from '../../store/helpers/playerHelpers';
 
 export const InterruptModal: React.FC = () => {
   const { players, interruptState, passInterrupt, useSpyCounter } = useGameStore();
@@ -27,11 +28,18 @@ export const InterruptModal: React.FC = () => {
 
   // 🌟 [수정] 액션 타입에 따른 개입 조건 분리
   const hasSpy = (currentResponder?.spies || 0) > 0;
+  
+  // 🌟 [추가] 현재 응답자가 UN 방어권을 가지고 있는지 확인
+  const isUnDefense = topAction?.actionType === 'culture_card' 
+                   && topAction.payload?.targetPlayerId === currentResponder?.id
+                   && hasActiveWonder(currentResponder?.id || '', 'un', useGameStore.getState().map, players);
+
   let canCounter = false;
   
   if (topAction.actionType === 'culture_card') {
       const hasCivilService = currentResponder?.technologies.some(t => t.id === 'civil_service') ?? false;
-      canCounter = hasCivilService && hasSpy;
+      // UN 방어가 가능하거나, (공공서비스+스파이)가 있거나!
+      canCounter = isUnDefense || (hasCivilService && hasSpy);
   } else if (topAction.actionType === 'resource_ability') {
       const hasMassMedia = currentResponder?.technologies.some(t => t.id === 'mass_media') ?? false;
       const hasUsedMassMedia = currentResponder?.hasUsedMassMediaThisTurn ?? false;
@@ -65,9 +73,10 @@ export const InterruptModal: React.FC = () => {
           {canCounter && (
             <button
               onClick={() => useSpyCounter(currentResponder!.id, topAction.id)}
-              className="px-4 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg shadow-lg flex items-center gap-2 transition-colors"
+              // 🌟 UN 방어일 때는 파란색 버튼, 아닐 때는 빨간색 버튼으로 다르게 보여줍니다.
+              className={`px-4 py-3 ${isUnDefense ? 'bg-blue-600 hover:bg-blue-500' : 'bg-red-600 hover:bg-red-500'} text-white font-bold rounded-lg shadow-lg flex items-center gap-2 transition-colors`}
             >
-              🕵️ 스파이 파견하여 막기 (-1)
+              {isUnDefense ? '🌐 국제연합 거부권 행사 (무료)' : '🕵️ 스파이 파견하여 막기 (-1)'}
             </button>
           )}
           

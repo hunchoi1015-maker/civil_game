@@ -3,6 +3,7 @@
 import { StateCreator } from 'zustand';
 import { GameStore } from '../types/storeTypes';
 import { StackAction } from '../../types/game';
+import { hasActiveWonder } from '../helpers/playerHelpers';
 
 export interface InterruptSlice {
   pushActionToStack: (action: StackAction) => void;
@@ -24,17 +25,32 @@ export const createInterruptSlice: StateCreator<GameStore, [["zustand/immer", ne
       });
       
       // 🌟 액션 타입에 따라 개입할 수 있는 플레이어를 지능적으로 걸러냅니다! (조건부 렌더링)
-      const responders = state.players.filter(p => {
+      let responders: string[] = [];
+
+      // 1순위: 문화 카드의 타겟이 나이고, 내가 국제연합을 가지고 있다면 무조건 0순위 개입 권한 획득 (스파이/기술 무관!)
+      if (action.actionType === 'culture_card' && action.payload?.targetPlayerId) {
+          const targetId = action.payload.targetPlayerId;
+          const targetPlayer = state.players.find(p => p.id === targetId);
+          if (targetPlayer && hasActiveWonder(targetId, 'un', state.map, state.players)) {
+              responders.push(targetId);
+          }
+      }
+
+      // 2순위: 기존의 기술+스파이 개입자들 추가
+      const standardResponders = state.players.filter(p => {
           if (p.id === action.sourcePlayerId) return false;
+          // 방금 1순위로 들어간 사람은 중복으로 넣지 않음
+          if (responders.includes(p.id)) return false; 
+          
           if (action.actionType === 'culture_card') {
-              // 문화 카드는 공공서비스 + 스파이 필요
               return p.technologies.some(t => t.id === 'civil_service') && p.spies > 0;
           } else if (action.actionType === 'resource_ability') {
-              // 자원 능력은 대중매체 + 스파이 + 이번 턴 미사용 필요
               return p.technologies.some(t => t.id === 'mass_media') && p.spies > 0 && !p.hasUsedMassMediaThisTurn;
           }
           return false;
       }).map(p => p.id);
+
+      responders = [...responders, ...standardResponders];
         
       state.interruptState.respondersQueue = responders;
       
@@ -73,19 +89,34 @@ export const createInterruptSlice: StateCreator<GameStore, [["zustand/immer", ne
     const player = state.players.find(p => p.id === responderId);
     const targetAction = state.interruptState.actionStack.find(a => a.id === targetActionId);
 
-    if (!player || player.spies < 1 || !targetAction) return;
+    if (!player || !targetAction) return;
+
+    // 🌟 [추가] 내가 문화 카드의 타겟이고 국제연합이 있는가?
+    const isUnDefense = targetAction.actionType === 'culture_card' 
+                     && targetAction.payload?.targetPlayerId === responderId 
+                     && hasActiveWonder(responderId, 'un', state.map, state.players);
+
+    // 스파이가 없고 UN 방어도 아니라면 불가!
+    if (player.spies < 1 && !isUnDefense) return;
 
     set((draft) => {
       const draftPlayer = draft.players.find(p => p.id === responderId);
       if (draftPlayer) {
-          draftPlayer.spies -= 1;
-          // 🌟 자원 능력(대중매체)을 방어하기 위해 사용했다면 1회 제한을 소모시킴!
+          // 🌟 UN 방어가 아닐 때만 스파이 차감!
+          if (!isUnDefense) draftPlayer.spies -= 1;
+          
           if (targetAction.actionType === 'resource_ability') {
               draftPlayer.hasUsedMassMediaThisTurn = true;
           }
       }
       if (draft.combatState && !draft.combatState.log) draft.combatState.log = [];
-      draft.combatState?.log?.push({ message: `🕵️ ${draftPlayer?.name || '누군가'}이(가) 스파이를 파견하여 개입했습니다!` });
+      
+      // 로그도 다르게 출력
+      if (isUnDefense) {
+          draft.combatState?.log?.push({ message: `🌐 [국제연합] ${draftPlayer?.name || '누군가'}이(가) 거부권을 행사하여 이벤트를 무효화했습니다!` });
+      } else {
+          draft.combatState?.log?.push({ message: `🕵️ ${draftPlayer?.name || '누군가'}이(가) 스파이를 파견하여 개입했습니다!` });
+      }
     });
 
     // 🌟 방어 액션을 다시 스택에 올립니다. 이때 actionType을 타겟과 동일하게 맞춰, '방어의 방어'도 같은 룰을 따르게 합니다.
