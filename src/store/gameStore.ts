@@ -26,7 +26,7 @@ import { canPerformActionInPhase } from './helpers/validationHelpers';
 const createInitialState = () => ({
   id: '',
   turn: 0,
-  // [핵심 수정] 리터럴 'start'가 아닌 GamePhase 타입임을 명시
+  // 리터럴 'start'가 아닌 GamePhase 타입임을 명시
   currentPhase: 'start' as GamePhase, 
   currentPlayerIndex: 0,
   firstPlayerIndex: 0,
@@ -41,6 +41,12 @@ const createInitialState = () => ({
     respondersQueue: [],
     currentResponderId: null,
     timerEndsAt: null,
+  },
+  marketResources: {
+    spice: 0,
+    wheat: 0,
+    silk: 0,
+    iron: 0,
   },
 });
 

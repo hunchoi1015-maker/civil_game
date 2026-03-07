@@ -15,6 +15,12 @@ export interface Resources {
   combatBonus: number;
 }
 
+export interface SecretResource {
+  id: string;
+  type: Exclude<ResourceType, 'none'>;
+  source: 'hut' | 'village';
+}
+
 export interface Player {
   id: string;
   name: string;
@@ -33,6 +39,8 @@ export interface Player {
   hasCollectedTrade: boolean;   // 이번 턴에 교역 수령 여부
   hasResearchedThisTurn: boolean; // 이번 턴 연구 여부
   luxuryResources: Record<Exclude<ResourceType, 'none'>, number>;
+  secretResources: SecretResource[];
+  
   spies: number;          // 스파이 (상대에게 안 보임)
   greatPeople: number;    // 위인 (공개)
   unplacedGreatPeople: GreatPerson[]; // 배치하지 않은 위인 
@@ -45,6 +53,8 @@ export interface Player {
   freeGovernmentSwitch?: boolean; //갓 연구하여 무정부 없이 체제를 바꿀 수 있는 1턴의 기회 플래그
   hasUsedEngineeringThisTurn?: boolean;
   hasUsedMassMediaThisTurn?: boolean;
+  hasUsedAngkorWatThisTurn?: boolean;
+  anarchyTurnsLeft?: number;
 }
 
 export type PlayerColor = 'red' | 'blue' | 'green' | 'yellow';
@@ -69,8 +79,8 @@ export function createInitialResources(): Resources {
   };
 }
 export const createInitialLuxuryResources = (): Record<Exclude<ResourceType, 'none'>, number> => ({
-  spice: 3,
-  wheat: 3,
-  silk: 3,
-  iron: 30,
+  spice: 0,
+  wheat: 0,
+  silk: 0,
+  iron: 0,
 });

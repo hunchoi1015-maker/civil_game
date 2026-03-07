@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
 import { CombatState, Position, CombatType, ArmyCard, Player, getAttackerMaxCards, CITY_CAPITAL_MAX_CARDS, LOOT_MAX_PER_SELECTION, createInitialResources, createInitialLuxuryResources, RewardType } from '../../types';
 import { resolveBattlefields, resolvePairedFight } from '../../engine/CombatResolver';
-import { shuffleArray, getCombatCardBonus, hasTechnology, hasActiveWonder } from '../helpers/playerHelpers';
+import { shuffleArray, getCombatCardBonus, hasTechnology, hasActiveWonder, hasEnoughLuxuryResource, consumeLuxuryResource } from '../helpers/playerHelpers';
 import { BUILDINGS } from '../../constants/buildings';
 
 export interface CombatSlice {
@@ -559,8 +559,9 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       // 💥 수학/탄도학 (철 1 소모): 적 전장 부대에 데미지 분배
       // ==========================================
       if (skillId === 'mathematics' || skillId === 'ballistics') {
-        if (player.luxuryResources.iron >= 1) {
-          player.luxuryResources.iron -= 1; 
+        // 일반+비밀 철이 충분한지 확인하고 자동 결제 엔진을 돌립니다.
+        if (hasEnoughLuxuryResource(player, 'iron', 1)) {
+          consumeLuxuryResource(player, state.marketResources, 'iron', 1);
           
           if (allocations) {
             Object.entries(allocations).forEach(([bfId, damage]) => {
@@ -616,8 +617,9 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       // 🔨 금속가공 (철 1 소모): 손패 카드를 전장에 낼 때 공격력 영구 버프
       // ==========================================
       if (skillId === 'metal_casting' && targetCardId) {
-        if (player.luxuryResources.iron >= 1) {
-          player.luxuryResources.iron -= 1; 
+        // 🌟 수정: 철 지불 엔진 연결!
+        if (hasEnoughLuxuryResource(player, 'iron', 1)) {
+          consumeLuxuryResource(player, state.marketResources, 'iron', 1); 
           
           // 1. 원본 덱 카드 버프 부여 (전투 종료 시 롤백을 위함)
           const baseCard = player.armyCards.find(c => c.id === targetCardId);
@@ -844,10 +846,13 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
             
             // 보상 지급
             if (reward.type === 'resource') {
-              if (!mover.luxuryResources) mover.luxuryResources = createInitialLuxuryResources();
-              if (mover.luxuryResources[reward.resource] !== undefined) {
-                mover.luxuryResources[reward.resource] += 1;
-              }
+              // 🌟 신규: 비밀 자원(마을)으로 추가!
+              if (!mover.secretResources) mover.secretResources = [];
+              mover.secretResources.push({
+                  id: uuidv4(),
+                  type: reward.resource as any,
+                  source: 'village'
+              });
             } else if (reward.type === 'spy') {
               mover.spies += 1;
             } else if (reward.type === 'greatPerson') {
@@ -1006,6 +1011,8 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
                 pendingGreatPerson: false,
                 pendingCardDraw: 0,
                 unplacedGreatPeople:[],
+                secretResources: [],
+
             });
         }
         if (!state.players.find(p => p.id === devDefenderId)) {
@@ -1019,6 +1026,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
                 pendingGreatPerson: false,
                 pendingCardDraw: 0,
                 unplacedGreatPeople:[],
+                secretResources: [],
 
             });
         }

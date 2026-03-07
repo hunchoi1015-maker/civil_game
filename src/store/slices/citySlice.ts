@@ -4,7 +4,7 @@ import { GameStore } from '../types/storeTypes';
 import { Position, createCity, createInitialLuxuryResources } from '../../types';
 import { BUILDINGS } from '../../constants/buildings';
 import { calculateDetailedCityProduction, calculateCityCulture } from '../../engine/ResourceCalculator';
-import { findPlayerById } from '../helpers/playerHelpers';
+import { findPlayerById,hasActiveWonder } from '../helpers/playerHelpers';
 import { setAdjacentTilesOwner } from '../helpers/mapHelpers';
 import { ResourceType } from '../../types/map';
 import { WonderType, WONDERS } from '../../types/wonder';
@@ -300,14 +300,33 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
         player.luxuryResources = createInitialLuxuryResources();
       }
 
-      // 자원 획득
-      if (player.luxuryResources[targetResource] !== undefined) {
-        player.luxuryResources[targetResource] += 1;
-        
-        // 🌟 [추가] 수확 상태 업데이트
-        city.actionTypeThisTurn = 'harvest';
-        city.hasActedThisTurn = true;
+      // 🌟 [수정] 앙코르와트 2배 수확 및 시장 유통 한도 락아웃(Lock-out) 적용!
+      const hasAngkorWat = hasActiveWonder(player.id, 'angkor_wat', state.map, state.players);
+      const canUseAngkorWat = hasAngkorWat && !player.hasUsedAngkorWatThisTurn;
+      
+      // 앙코르와트면 2개를 가져오고 싶어함
+      const requestedAmount = canUseAngkorWat ? 2 : 1;
+      
+      // 하지만 시장 재고가 허락하는 만큼만 가져올 수 있음
+      const actualAmount = Math.min(requestedAmount, state.marketResources[targetResource]);
+
+      if (actualAmount === 0) {
+          alert(`시장에 [${targetResource}] 재고가 고갈되어 아무도 이 자원을 수확할 수 없습니다!`);
+          return;
       }
+
+      state.marketResources[targetResource] -= actualAmount; // 시장에서 빼고
+      player.luxuryResources[targetResource] += actualAmount; // 내 주머니에 넣음
+      
+      // 앙코르와트 2배 혜택을 온전히(2개) 누렸다면 턴당 1회 능력을 소모함!
+      if (canUseAngkorWat && actualAmount > 1) {
+          player.hasUsedAngkorWatThisTurn = true;
+          if (!state.combatState.log) state.combatState.log = [];
+          state.combatState.log.push({ message: `🌿 [앙코르와트] ${player.name}이(가) 시장에서 ${targetResource} 2개를 수확했습니다!` });
+      }
+
+      city.actionTypeThisTurn = 'harvest';
+      city.hasActedThisTurn = true;
     });
   },
 

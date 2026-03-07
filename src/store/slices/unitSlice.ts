@@ -178,10 +178,13 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
                     const u = p?.units.find(un => un.id === unitId);
                     if (p && u) {
                         if (obj.reward.type === 'resource') {
-                            if (!p.luxuryResources) p.luxuryResources = createInitialLuxuryResources();
-                            if (p.luxuryResources[obj.reward.resource] !== undefined) {
-                                p.luxuryResources[obj.reward.resource] += 1;
-                            }
+                            // 🌟 신규: 일반 주머니가 아닌 비밀 자원(오두막) 주머니에 추가!
+                            if (!p.secretResources) p.secretResources = [];
+                            p.secretResources.push({
+                                id: uuidv4(),
+                                type: obj.reward.resource as any,
+                                source: 'hut'
+                            });
                         } else if (obj.reward.type === 'spy') p.spies += 1;
                         else if (obj.reward.type === 'greatPerson') p.greatPeople += 1;
                         else if (obj.reward.type === 'nuclear') p.nuclearMaterial += 1;
@@ -343,10 +346,13 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
           const player = state.players.find(p => p.id === playerId);
           if (!player) return;
           if (reward.type === 'resource') {
-              if (!player.luxuryResources) player.luxuryResources = createInitialLuxuryResources();
-              if (player.luxuryResources[reward.resource] !== undefined) {
-                  player.luxuryResources[reward.resource] += 1;
-              }
+              // 🌟 신규: 비밀 자원(오두막)으로 추가!
+              if (!player.secretResources) player.secretResources = [];
+              player.secretResources.push({
+                  id: uuidv4(),
+                  type: reward.resource as any,
+                  source: 'hut'
+              });
           } else if (reward.type === 'spy') player.spies += 1;
           else if (reward.type === 'greatPerson') player.greatPeople += 1;
           else if (reward.type === 'nuclear') player.nuclearMaterial += 1;

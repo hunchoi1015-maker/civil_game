@@ -26,25 +26,25 @@ export const InterruptModal: React.FC = () => {
 
   if (!interruptState.currentResponderId || !topAction) return null;
 
-  // 🌟 [수정] 액션 타입에 따른 개입 조건 분리
+  // 🌟 [수정] 방어권(UN, 빵과 서커스, 스파이) 여부를 각각 분리해서 계산
   const hasSpy = (currentResponder?.spies || 0) > 0;
+  const isTargetMe = topAction?.actionType === 'culture_card' && topAction.payload?.targetPlayerId === currentResponder?.id;
   
-  // 🌟 [추가] 현재 응답자가 UN 방어권을 가지고 있는지 확인
-  const isUnDefense = topAction?.actionType === 'culture_card' 
-                   && topAction.payload?.targetPlayerId === currentResponder?.id
-                   && hasActiveWonder(currentResponder?.id || '', 'un', useGameStore.getState().map, players);
-
-  let canCounter = false;
+  const canUnDefense = isTargetMe && hasActiveWonder(currentResponder?.id || '', 'un', useGameStore.getState().map, players);
+  const canBreadDefense = isTargetMe && (currentResponder?.cultureEventCards?.some(c => c.templateId === 'bread_and_circuses') ?? false);
   
+  let canSpyDefense = false;
   if (topAction.actionType === 'culture_card') {
       const hasCivilService = currentResponder?.technologies.some(t => t.id === 'civil_service') ?? false;
-      // UN 방어가 가능하거나, (공공서비스+스파이)가 있거나!
-      canCounter = isUnDefense || (hasCivilService && hasSpy);
+      canSpyDefense = hasCivilService && hasSpy;
   } else if (topAction.actionType === 'resource_ability') {
       const hasMassMedia = currentResponder?.technologies.some(t => t.id === 'mass_media') ?? false;
       const hasUsedMassMedia = currentResponder?.hasUsedMassMediaThisTurn ?? false;
-      canCounter = hasMassMedia && hasSpy && !hasUsedMassMedia;
+      canSpyDefense = hasMassMedia && hasSpy && !hasUsedMassMedia;
   }
+
+  // 셋 중 하나라도 가능하면 방어 권한 획득
+  const canCounter = canUnDefense || canBreadDefense || canSpyDefense;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -69,20 +69,30 @@ export const InterruptModal: React.FC = () => {
         </div>
         <div className="text-4xl font-mono text-amber-400 mb-8">{timeLeft}초</div>
 
-        <div className="flex gap-4 justify-center">
-          {canCounter && (
-            <button
-              onClick={() => useSpyCounter(currentResponder!.id, topAction.id)}
-              // 🌟 UN 방어일 때는 파란색 버튼, 아닐 때는 빨간색 버튼으로 다르게 보여줍니다.
-              className={`px-4 py-3 ${isUnDefense ? 'bg-blue-600 hover:bg-blue-500' : 'bg-red-600 hover:bg-red-500'} text-white font-bold rounded-lg shadow-lg flex items-center gap-2 transition-colors`}
-            >
-              {isUnDefense ? '🌐 국제연합 거부권 행사 (무료)' : '🕵️ 스파이 파견하여 막기 (-1)'}
+        {/* 🌟 [수정] 여러 방어 버튼이 세로로 깔끔하게 정렬되도록 변경 */}
+        <div className="flex flex-col gap-3 justify-center mt-4">
+          
+          {canUnDefense && (
+            <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'un')} className="px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors">
+              🌐 국제연합 거부권 행사 (무료)
+            </button>
+          )}
+          
+          {canBreadDefense && (
+            <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'bread')} className="px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors">
+              🍞 '빵과 서커스' 카드 사용하여 막기
+            </button>
+          )}
+
+          {canSpyDefense && (
+            <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'spy')} className="px-4 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors">
+              🕵️ 스파이 파견하여 막기 (-1)
             </button>
           )}
           
           <button
             onClick={() => passInterrupt()}
-            className="px-4 py-3 bg-slate-600 hover:bg-slate-500 text-white font-bold rounded-lg shadow-lg transition-colors"
+            className="px-4 py-3 bg-slate-600 hover:bg-slate-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center transition-colors"
           >
             ⏭️ 개입하지 않음 (통과)
           </button>

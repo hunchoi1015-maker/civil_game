@@ -1,4 +1,4 @@
-import { Player, ArmyCardType, ArmyTier ,Tile } from '../../types';
+import { Player, ArmyCardType, ArmyTier ,Tile,ResourceType } from '../../types';
 
 export function getPlayerOrder(firstPlayerIndex: number, playerCount: number): number[] {
   const order: number[] = [];
@@ -215,9 +215,9 @@ export function isWonderActive(tile: Tile, players: Player[]): boolean {
   return true; // 무효화도 안됐고, 적 유닛도 없으면 정상 작동!
 }
 
-/**
- * 🌟 [신규] 플레이어가 특정 불가사의를 '정상적으로(봉쇄되지 않고)' 소유 중인지 한 번에 확인합니다.
- */
+
+ // 플레이어가 특정 불가사의를 '정상적으로(봉쇄되지 않고)' 소유 중인지 한 번에 확인합니다.
+
 export function hasActiveWonder(playerId: string, wonderType: string, map: any, players: Player[]): boolean {
   for (let y = 0; y < map.height; y++) {
     for (let x = 0; x < map.width; x++) {
@@ -231,4 +231,47 @@ export function hasActiveWonder(playerId: string, wonderType: string, map: any, 
     }
   }
   return false;
+}
+
+// 모든 자원(일반+비밀)의 총합을 계산합니다.
+export function getTotalLuxuryResource(player: Player, resourceType: Exclude<ResourceType, 'none'>): number {
+  const normal = player.luxuryResources[resourceType] || 0;
+  const secret = player.secretResources?.filter(r => r.type === resourceType).length || 0;
+  return normal + secret;
+}
+
+export function hasEnoughLuxuryResource(player: Player, resourceType: Exclude<ResourceType, 'none'>, amount: number): boolean {
+  return getTotalLuxuryResource(player, resourceType) >= amount;
+}
+
+// 자원 지불 로직 (일반 우선 -> 시장 반환 / 비밀 차순 -> 영구 소멸)
+export function consumeLuxuryResource(
+  player: Player,
+  market: Record<Exclude<ResourceType, 'none'>, number>,
+  resourceType: Exclude<ResourceType, 'none'>,
+  amount: number
+): boolean {
+  let remaining = amount;
+  
+  // 1. 일반 자원 먼저 소모 (쓴 만큼 시장에 +1 반환)
+  const normalAvailable = player.luxuryResources[resourceType] || 0;
+  const normalToConsume = Math.min(normalAvailable, remaining);
+  if (normalToConsume > 0) {
+    player.luxuryResources[resourceType] -= normalToConsume;
+    market[resourceType] += normalToConsume; // 🌟 시장으로 돌아감!
+    remaining -= normalToConsume;
+  }
+
+  // 2. 일반 자원이 부족하면 비밀 자원을 찢어서 소모 (영구 증발, 반환 안 함!)
+  if (remaining > 0 && player.secretResources) {
+    for (let i = player.secretResources.length - 1; i >= 0; i--) {
+      if (player.secretResources[i].type === resourceType) {
+        player.secretResources.splice(i, 1); // 🌟 배열에서 영구 삭제
+        remaining -= 1;
+        if (remaining <= 0) break;
+      }
+    }
+  }
+
+  return remaining === 0;
 }

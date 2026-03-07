@@ -27,6 +27,24 @@ export function PlayerPanel() {
         const isMe = index === currentPlayerIndex;
         const govEffect = player.government ? GOVERNMENTS[player.government] : null;
 
+        // ====================================================================
+        // 🌟 [신규] 비밀 자원 그룹화 로직 (내 것은 내용 공개, 남의 것은 ? 처리)
+        // ====================================================================
+        const groupedSecret = isMe ? player.secretResources?.reduce((acc, res) => {
+          const k = `${res.type}-${res.source}`;
+          if (!acc[k]) acc[k] = { type: res.type, source: res.source, count: 0 };
+          acc[k].count++;
+          return acc;
+        }, {} as Record<string, { type: string, source: string, count: number }>) : null;
+
+        const obfuscatedSecret = !isMe ? player.secretResources?.reduce((acc, res) => {
+          acc[res.source] = (acc[res.source] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>) : null;
+
+        const hasAnyResource = !Object.values(player.luxuryResources).every(c => c === 0) || (player.secretResources && player.secretResources.length > 0);
+        // ====================================================================
+
         return (
           <div
             key={player.id}
@@ -101,7 +119,25 @@ export function PlayerPanel() {
                     </div>
                   );
                 })}
-                {Object.values(player.luxuryResources).every(c => c === 0) && (
+                
+                {/* 🌟 비밀 자원 렌더링 🌟 */}
+                {isMe && groupedSecret && Object.values(groupedSecret).map(group => (
+                  <div key={`${group.type}-${group.source}`} className={`flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border ${group.source === 'hut' ? 'bg-green-900/50 border-green-600/50 text-green-200' : 'bg-red-900/50 border-red-600/50 text-red-200'}`} title={group.source === 'hut' ? '오두막 발견 자원' : '마을 토벌 자원'}>
+                    <span>{RESOURCE_ICONS[group.type]}</span>
+                    <span>{group.count}</span>
+                    <span className="text-[10px] ml-0.5 opacity-70">({group.source === 'hut' ? '오두막' : '마을'})</span>
+                  </div>
+                ))}
+                
+                {!isMe && obfuscatedSecret && Object.entries(obfuscatedSecret).map(([source, count]) => (
+                  <div key={source} className={`flex items-center gap-1 text-xs px-1.5 py-0.5 rounded border ${source === 'hut' ? 'bg-green-900/30 border-green-700/50 text-green-400' : 'bg-red-900/30 border-red-700/50 text-red-400'}`} title="정체불명의 자원">
+                    <span>❓</span>
+                    <span>{count}</span>
+                    <span className="text-[10px] ml-0.5 opacity-70">({source === 'hut' ? '오두막' : '마을'})</span>
+                  </div>
+                ))}
+
+                {!hasAnyResource && (
                   <span className="text-xs text-slate-600">- 없음 -</span>
                 )}
               </div>

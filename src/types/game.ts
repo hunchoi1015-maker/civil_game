@@ -1,6 +1,6 @@
 import { Player } from './player';
 import { GameMap } from './map';
-
+import {ResourceType} from './map'
 export type GamePhase = 'start' | 'trade' | 'cityManagement' | 'movement' | 'research';
 
 export interface GameState {
@@ -16,6 +16,7 @@ export interface GameState {
   isGameOver: boolean;
   phaseComplete: boolean[];
   interruptState: InterruptState;
+  marketResources: Record<Exclude<ResourceType, 'none'>, number>;
 }
 
 export type WinCondition = 'science' | 'culture' | 'military' | 'economic';
@@ -33,7 +34,14 @@ export interface TurnAction {
   timestamp: number;
 }
 
-export type CultureCardTargetType = 'enemy_unit' | 'my_city' | 'none';
+export type CultureCardTargetType = 
+  | 'enemy_unit' 
+  | 'my_city' 
+  | 'none'
+  | 'player'
+  | 'tile'
+  | 'enemy_unit_in_range'
+  | 'enemy_city_in_range';
 
 export interface CultureEventCard {
   id: string;

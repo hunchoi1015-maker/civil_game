@@ -9,8 +9,7 @@ import { TECH_COSTS } from '../../types';
 import { Position } from '../../types/map'; 
 import { GOVERNMENTS } from '../../constants/governments';
 import { ARMY_CARD_TEMPLATES } from '../../constants/armyCards';
-// 🌟 [추가] 패시브(배치 한도 등)를 가져오기 위한 헬퍼 함수 임포트
-import { getPlayerPassives } from '../helpers/playerHelpers';
+import { getPlayerPassives, hasEnoughLuxuryResource, consumeLuxuryResource } from '../helpers/playerHelpers';
 
 // 🌟 [피라미드 검증 헬퍼 함수]
 export function canResearchPyramid(player: Player, targetTechId: string): { canResearch: boolean, reason?: string } {
@@ -61,7 +60,8 @@ export interface TechSlice {
   setShowResearchResults: (show: boolean) => void;
   clearResearchResults: () => void;
   steamPowerSource: Position | null; 
-  setSteamPowerSource: (pos: Position | null) => void; 
+  setSteamPowerSource: (pos: Position | null) => void;
+  grantFreeTech: (playerId: string, techId: string) => void; 
 }
 
 export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]], [], TechSlice> = (set, get) => ({
@@ -203,17 +203,27 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
         case 'printing_press':
         case 'democracy':
           if (tech.tokensOnCard >= (tech.resourceAbility.maxTokens || 4)) {
-              alert("이 기술 카드에 더 이상 화폐 토큰을 올릴 수 없습니다.");
-              return;
+              alert("이 기술 카드에 더 이상 화폐 토큰을 올릴 수 없습니다."); return;
           }
           if (techId === 'pottery' && payload?.consumedResources) {
               let total = 0;
+              let canPay = true;
+              // 🌟 1. 먼저 자원이 모두 충분한지 안전 검사!
+              Object.entries(payload.consumedResources).forEach(([res, amount]) => {
+                  const num = amount as number;
+                  if (res === 'spies') { if (player.spies < num) canPay = false; }
+                  else if (res === 'nuclearMaterial') { if (player.nuclearMaterial < num) canPay = false; }
+                  else { if (!hasEnoughLuxuryResource(player, res as any, num)) canPay = false; }
+              });
+              if (!canPay) { alert("자원이 부족합니다."); return; }
+
+              // 🌟 2. 실제로 지불 처리
               Object.entries(payload.consumedResources).forEach(([res, amount]) => {
                   const num = amount as number;
                   total += num;
                   if (res === 'spies') player.spies -= num;
                   else if (res === 'nuclearMaterial') player.nuclearMaterial -= num;
-                  else player.luxuryResources[res as keyof typeof player.luxuryResources] -= num;
+                  else consumeLuxuryResource(player, state.marketResources, res as any, num);
               });
               if (total < 2) { alert("자원이 부족합니다."); return; }
               costPaid = true;
@@ -232,62 +242,64 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
         case 'currency':
         case 'chivalry':
         case 'metallurgy':
-          if (player.luxuryResources.spice >= 1) { player.luxuryResources.spice -= 1; costPaid = true; } else { alert("향료가 부족합니다."); return; }
+          // 🌟 수정: 향료 결제
+          if (hasEnoughLuxuryResource(player, 'spice', 1)) { consumeLuxuryResource(player, state.marketResources, 'spice', 1); costPaid = true; } else { alert("향료가 부족합니다."); return; }
           break;
 
         case 'animal_husbandry':
         case 'construction':
         case 'finance':
-          if (player.luxuryResources.wheat >= 1) { player.luxuryResources.wheat -= 1; costPaid = true; } else { alert("밀이 부족합니다."); return; }
+          // 🌟 수정: 밀 결제
+          if (hasEnoughLuxuryResource(player, 'wheat', 1)) { consumeLuxuryResource(player, state.marketResources, 'wheat', 1); costPaid = true; } else { alert("밀이 부족합니다."); return; }
           break;
 
-        // 🌟 [수정] 스팀파워 분리
         case 'horseback_riding':
         case 'monarchy':
-          if (player.luxuryResources.silk >= 1) { player.luxuryResources.silk -= 1; costPaid = true; } else { alert("비단이 부족합니다."); return; }
+          // 🌟 수정: 비단 결제
+          if (hasEnoughLuxuryResource(player, 'silk', 1)) { consumeLuxuryResource(player, state.marketResources, 'silk', 1); costPaid = true; } else { alert("비단이 부족합니다."); return; }
           break;
 
-        // 🌟 [신규] 스팀파워 전용 케이스 (도착지 한도 검사 포함)
         case 'steam_power':
-          if (player.luxuryResources.silk >= 1 && state.steamPowerSource && payload?.x !== undefined && payload?.y !== undefined) {
+          if (hasEnoughLuxuryResource(player, 'silk', 1) && state.steamPowerSource && payload?.x !== undefined && payload?.y !== undefined) {
               const targetTile = state.map.tiles[payload.y][payload.x];
               if (targetTile.terrain !== 'water') { 
                   alert("도착지는 반드시 물 타일이어야 합니다."); 
-                  state.steamPowerSource = null;
-                  return; 
+                  state.steamPowerSource = null; return; 
               }
-              
               const sourceUnits = player.units.filter(u => u.position.x === state.steamPowerSource!.x && u.position.y === state.steamPowerSource!.y);
-              
-              // 🌟 타일 배치 한도 검사!
               const passives = getPlayerPassives(player);
               const stackingLimit = 2 + passives.stackingLimitBonus;
               const myUnitsOnTarget = targetTile.unitIds.filter(id => player.units.some(u => u.id === id)).length;
-              
               if (myUnitsOnTarget + sourceUnits.length > stackingLimit) {
                   alert(`도착지 타일의 배치 한도(${stackingLimit}개)가 초과되어 순간이동할 수 없습니다.`);
-                  state.steamPowerSource = null;
-                  return; // 발동 취소 (비단도 안 깎임)
+                  state.steamPowerSource = null; return; 
               }
-
-              player.luxuryResources.silk -= 1; 
+              
+              // 🌟 수정: 비단 결제
+              consumeLuxuryResource(player, state.marketResources, 'silk', 1); 
               costPaid = true; 
           } else { 
               alert("비단이 부족하거나 출발지/도착지가 올바르지 않습니다."); 
-              state.steamPowerSource = null; 
-              return;
+              state.steamPowerSource = null; return;
           }
           break;
 
         case 'gunpowder':
           if (payload?.consumedResources) {
-              let total = 0;
+              let total = 0; let canPay = true;
+              Object.entries(payload.consumedResources).forEach(([res, amount]) => {
+                  const num = amount as number;
+                  if (res === 'spies') { if (player.spies < num) canPay = false; }
+                  else if (res === 'nuclearMaterial') { if (player.nuclearMaterial < num) canPay = false; }
+                  else { if (!hasEnoughLuxuryResource(player, res as any, num)) canPay = false; }
+              });
+              if (!canPay) { alert("자원이 부족합니다."); return; }
               Object.entries(payload.consumedResources).forEach(([res, amount]) => {
                   const num = amount as number;
                   total += num;
                   if (res === 'spies') player.spies -= num;
                   else if (res === 'nuclearMaterial') player.nuclearMaterial -= num;
-                  else player.luxuryResources[res as keyof typeof player.luxuryResources] -= num;
+                  else consumeLuxuryResource(player, state.marketResources, res as any, num);
               });
               if (total < 2) { alert("자원이 부족합니다."); return; }
               costPaid = true;
@@ -307,11 +319,16 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
 
         case 'philosophy':
             if (payload?.consumedResources) {
-                let total = 0;
+                let total = 0; let canPay = true;
+                Object.entries(payload.consumedResources).forEach(([res, amount]) => {
+                    const num = amount as number;
+                    if (!hasEnoughLuxuryResource(player, res as any, num)) canPay = false;
+                });
+                if (!canPay) { alert("자원이 부족합니다."); return; }
                 Object.entries(payload.consumedResources).forEach(([res, amount]) => {
                     const num = amount as number;
                     total += num;
-                    player.luxuryResources[res as keyof typeof player.luxuryResources] -= num;
+                    consumeLuxuryResource(player, state.marketResources, res as any, num);
                 });
                 if (total < 3) { alert("자원이 부족합니다."); return; }
                 costPaid = true;
@@ -431,5 +448,28 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
             state.combatState?.log?.push({ message: `✅ ${player.name}의 [${tech?.name}] 능력이 성공적으로 발동되었습니다!` });
         } else if (techId === 'steam_power') { state.steamPowerSource = null; }
     });
-  }
+  },
+  // 
+  grantFreeTech: (playerId: string, techId: string) => {
+    set((state) => {
+      const player = state.players.find(p => p.id === playerId);
+      if (!player) return;
+
+      const techDef = TECHNOLOGIES.find(t => t.id === techId);
+      if (!techDef) return;
+
+      if (player.technologies.some(t => t.id === techId)) return; // 이미 있으면 무시
+
+      // 🌟 자원 검사 없이 기술 목록에 꽂아 넣습니다.
+      player.technologies.push({
+        ...techDef,
+        tokensOnCard: 0,
+        abilityUsedThisTurn: false,
+        usedPhases: []
+      });
+
+      if (!state.combatState.log) state.combatState.log = [];
+      state.combatState.log.push({ message: `🗽 [자유의 여신상] ${player.name}이(가) '${techDef.name}' 기술을 무료로 획득했습니다!` });
+    });
+  },
 });

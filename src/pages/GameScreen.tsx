@@ -21,12 +21,14 @@ import { TechAbilityWidget } from '../components/game/TechAbilityWidget';
 import { ResearchResultsModal } from '../components/game/ResearchResultsModal';
 import { ResourceSelectionModal } from '../components/game/ResourceSelectionModal';
 import { InterruptModal } from '../components/game/InterruptModal';
+import { WonderActionModal } from '../components/game/WonderActionModal';
+import { CultureTrackWidget } from '../components/game/CultureTrackWidget';
 
 type PanelView = 'map' | 'tech' | 'city' | 'units';
 
 export function GameScreen() {
   const navigate = useNavigate();
-  const { players, turn, isGameOver, winner, currentPlayerIndex, combatState, setupState } = useGameStore();
+  const { players, turn, isGameOver, winner, currentPlayerIndex, combatState, setupState, marketResources } = useGameStore();
   const [activeView, setActiveView] = useState<PanelView>('map');
   const [showPlayerTransition, setShowPlayerTransition] = useState(false);
   const [previousPlayerIndex, setPreviousPlayerIndex] = useState(currentPlayerIndex);
@@ -79,7 +81,7 @@ export function GameScreen() {
   }
 
   return (
-    <div className="relative w-full h-screen bg-slate-950 overflow-hidden text-slate-100">
+    <div className="relative w-full h-screen bg-slate-950 flex flex-col overflow-hidden text-slate-100">
       {/* 상단 바 */}
       <header className="bg-slate-800 border-b border-slate-700 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -100,7 +102,29 @@ export function GameScreen() {
           </div>
         </div>
       </header>
-
+      <div className="bg-slate-900/80 border-b border-slate-700 px-4 py-2 flex justify-center items-center gap-6 shadow-md z-10 text-sm">
+        <div className="font-bold text-slate-300 flex items-center gap-2">
+          <span>⚖️</span> 공용 시장 재고
+        </div>
+        <div className="flex gap-4">
+          <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1 rounded border border-slate-700 shadow-inner">
+            <span>🏺 향료</span>
+            <span className="font-mono font-bold text-amber-400">{marketResources?.spice ?? 0}</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1 rounded border border-slate-700 shadow-inner">
+            <span>🌾 밀</span>
+            <span className="font-mono font-bold text-amber-400">{marketResources?.wheat ?? 0}</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1 rounded border border-slate-700 shadow-inner">
+            <span>🧣 비단</span>
+            <span className="font-mono font-bold text-amber-400">{marketResources?.silk ?? 0}</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1 rounded border border-slate-700 shadow-inner">
+            <span>⛏️ 철</span>
+            <span className="font-mono font-bold text-amber-400">{marketResources?.iron ?? 0}</span>
+          </div>
+        </div>
+      </div>
       {/* 메인 컨텐츠 */}
       <div className="flex-1 flex overflow-hidden">
         {/* 왼쪽 패널 - 플레이어 정보 */}
@@ -170,6 +194,10 @@ export function GameScreen() {
       </div>
 
       <div className="fixed bottom-6 right-6 z-40 flex items-end gap-4 pointer-events-none">
+        {/* 문화 트랙 상시 확인 위젯 */}
+        <div className="pointer-events-auto">
+          <CultureTrackWidget />
+        </div>
         
         {/* pointer-events-auto를 줘서 버튼 클릭이 가능하게 합니다 */}
         <div className="pointer-events-auto">
@@ -178,7 +206,7 @@ export function GameScreen() {
         </div>
 
         <div className="pointer-events-auto">
-          {/* 새로 추가한 문화 이벤트 카드 인벤토리 */}
+          {/* 문화 이벤트 카드 인벤토리 */}
           <CultureCardInventory />
         </div>
         
@@ -197,6 +225,9 @@ export function GameScreen() {
 
       {/* 연구 결과 모달 */}
       <ResearchResultsModal />
+      
+      {/*불가사의 모달 */}
+      <WonderActionModal />
     </div>
   );
 }

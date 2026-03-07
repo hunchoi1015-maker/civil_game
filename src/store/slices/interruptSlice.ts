@@ -7,8 +7,8 @@ import { hasActiveWonder } from '../helpers/playerHelpers';
 
 export interface InterruptSlice {
   pushActionToStack: (action: StackAction) => void;
+  useSpyCounter: (responderId: string, targetActionId: string, defenseType?: 'spy' | 'un' | 'bread') => void;
   passInterrupt: () => void;
-  useSpyCounter: (responderId: string, targetActionId: string) => void;
   resolveStack: () => void;
 }
 
@@ -27,12 +27,17 @@ export const createInterruptSlice: StateCreator<GameStore, [["zustand/immer", ne
       // 🌟 액션 타입에 따라 개입할 수 있는 플레이어를 지능적으로 걸러냅니다! (조건부 렌더링)
       let responders: string[] = [];
 
-      // 1순위: 문화 카드의 타겟이 나이고, 내가 국제연합을 가지고 있다면 무조건 0순위 개입 권한 획득 (스파이/기술 무관!)
       if (action.actionType === 'culture_card' && action.payload?.targetPlayerId) {
           const targetId = action.payload.targetPlayerId;
           const targetPlayer = state.players.find(p => p.id === targetId);
-          if (targetPlayer && hasActiveWonder(targetId, 'un', state.map, state.players)) {
-              responders.push(targetId);
+          if (targetPlayer) {
+              const hasUn = hasActiveWonder(targetId, 'un', state.map, state.players);
+              const hasBreadCard = targetPlayer.cultureEventCards?.some(c => c.templateId === 'bread_and_circuses');
+              
+              // 나를 향한 공격일 때, UN이 있거나 빵과 서커스가 있다면 0순위 개입 가능!
+              if (hasUn || hasBreadCard) {
+                  responders.push(targetId);
+              }
           }
       }
 
@@ -84,38 +89,46 @@ export const createInterruptSlice: StateCreator<GameStore, [["zustand/immer", ne
   },
 
   // 3. 스파이 파견 (방어 & 방해)
-  useSpyCounter: (responderId, targetActionId) => {
+  useSpyCounter: (responderId, targetActionId, defenseType = 'spy') => {
     const state = get();
     const player = state.players.find(p => p.id === responderId);
     const targetAction = state.interruptState.actionStack.find(a => a.id === targetActionId);
 
     if (!player || !targetAction) return;
 
-    // 🌟 [추가] 내가 문화 카드의 타겟이고 국제연합이 있는가?
-    const isUnDefense = targetAction.actionType === 'culture_card' 
-                     && targetAction.payload?.targetPlayerId === responderId 
-                     && hasActiveWonder(responderId, 'un', state.map, state.players);
+    // 🌟 방어 타입 판별
+    const isUnDefense = defenseType === 'un';
+    const isBreadDefense = defenseType === 'bread';
 
-    // 스파이가 없고 UN 방어도 아니라면 불가!
-    if (player.spies < 1 && !isUnDefense) return;
+    // 조건 미달 시 차단
+    if (defenseType === 'spy' && player.spies < 1) return;
+    if (isBreadDefense && !player.cultureEventCards?.some(c => c.templateId === 'bread_and_circuses')) return;
 
     set((draft) => {
       const draftPlayer = draft.players.find(p => p.id === responderId);
-      if (draftPlayer) {
-          // 🌟 UN 방어가 아닐 때만 스파이 차감!
-          if (!isUnDefense) draftPlayer.spies -= 1;
-          
+      if (!draftPlayer) return;
+
+      // 🌟 비용 지불 처리
+      if (defenseType === 'spy') {
+          draftPlayer.spies -= 1;
           if (targetAction.actionType === 'resource_ability') {
               draftPlayer.hasUsedMassMediaThisTurn = true;
           }
+      } else if (isBreadDefense) {
+          // 빵과 서커스 카드 소모!
+          const cardIdx = draftPlayer.cultureEventCards!.findIndex(c => c.templateId === 'bread_and_circuses');
+          if (cardIdx !== -1) draftPlayer.cultureEventCards!.splice(cardIdx, 1);
       }
+      
       if (draft.combatState && !draft.combatState.log) draft.combatState.log = [];
       
-      // 로그도 다르게 출력
+      // 로그 출력
       if (isUnDefense) {
-          draft.combatState?.log?.push({ message: `🌐 [국제연합] ${draftPlayer?.name || '누군가'}이(가) 거부권을 행사하여 이벤트를 무효화했습니다!` });
+          draft.combatState?.log?.push({ message: `🌐 [국제연합] ${draftPlayer.name}이(가) 거부권을 행사하여 이벤트를 무효화했습니다!` });
+      } else if (isBreadDefense) {
+          draft.combatState?.log?.push({ message: `🍞 [빵과 서커스] ${draftPlayer.name}이(가) 카드를 사용하여 이벤트를 무효화했습니다!` });
       } else {
-          draft.combatState?.log?.push({ message: `🕵️ ${draftPlayer?.name || '누군가'}이(가) 스파이를 파견하여 개입했습니다!` });
+          draft.combatState?.log?.push({ message: `🕵️ ${draftPlayer.name}이(가) 스파이를 파견하여 개입했습니다!` });
       }
     });
 

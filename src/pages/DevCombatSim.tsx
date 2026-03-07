@@ -4,7 +4,7 @@ import { useGameStore } from '../store/gameStore';
 import {CombatPanel} from '../components/game/Combat/CombatPanel';
 import { ArmyCard, ArmyCardType, ArmyTier } from '../types';
 
-const UNIT_TYPES: ArmyCardType[] = ['infantry', 'cavalry', 'artillery', 'airforce', 'settler'];
+const UNIT_TYPES: ArmyCardType[] = ['infantry', 'cavalry', 'artillery', 'airforce'];
 const TIERS: ArmyTier[] = [1, 2, 3, 4];
 
 export default function DevCombatSim() {
@@ -35,7 +35,6 @@ export default function DevCombatSim() {
       attack: selectedAtk,
       health: selectedHp,
       maxHealth: selectedHp,
-      isDeployed:false
     };
     if (side === 'attacker') setAttCards([...attCards, newCard]);
     else setDefCards([...defCards, newCard]);

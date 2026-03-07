@@ -6,6 +6,7 @@ import { GameStore, GameSetupState } from '../types/storeTypes';
 import { NationType, Position, Player, createInitialResources, createCity, createUnit, getStartPositionOptions, UnitType } from '../../types';
 import { generateMap, setAdjacentTilesOwner } from '../helpers/mapHelpers';
 import { createInitialLuxuryResources } from '../../types/player';
+import { TECHNOLOGIES } from '../../constants/technologies';
 
 export interface GameSetupSlice {
   setupState: GameSetupState;
@@ -59,6 +60,8 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
         cultureEventCards: [],
         pendingGreatPerson: false,
         pendingCardDraw: 0,
+        secretResources: [],
+        hasUsedAngkorWatThisTurn: false, 
       });
     }
     const capitalOptions: Position[][] = [];
@@ -69,6 +72,15 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
       state.id = uuidv4();
       state.players = players;
       state.map = map;
+
+      // 시장 자원 
+      state.marketResources = {
+        spice: playerCount,
+        wheat: playerCount,
+        silk: playerCount,
+        iron: playerCount,
+      };
+
       state.setupState = {
         phase: 'capitalSelect', // 테스트 끝나면 nationSelect로 돌리기
         currentSetupPlayer: 0,
@@ -205,6 +217,19 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
       state.currentPlayerIndex = 0;
       state.firstPlayerIndex = 0;
       state.phaseComplete = new Array(state.players.length).fill(false);
+
+      // 🌟 [추가] 게임 시작 시 각 플레이어에게 국가 고유(시작) 기술을 무료로 지급합니다!
+      state.players.forEach(player => {
+          const startingTechDef = TECHNOLOGIES.find(t => t.isStartingTechFor === player.nation);
+          if (startingTechDef && !player.technologies.some(t => t.id === startingTechDef.id)) {
+              player.technologies.push({
+                  ...startingTechDef,
+                  tokensOnCard: 0,
+                  abilityUsedThisTurn: false,
+                  usedPhases: []
+              });
+          }
+      });
     });
   },
 });
