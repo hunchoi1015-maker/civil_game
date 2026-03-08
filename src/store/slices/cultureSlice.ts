@@ -124,7 +124,9 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
           level: randomTemplate.level,
           name: randomTemplate.name,
           description: randomTemplate.description,
-          targetType: randomTemplate.targetType
+          targetType: randomTemplate.targetType,
+          allowedPhase: randomTemplate.allowedPhase,
+
       });
     });
   },
@@ -156,9 +158,22 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
       const card = player.cultureEventCards?.find(c => c.id === cardId);
       if (!card) return;
 
-      // 빵과 서커스는 인벤토리에서 직접 클릭해서 쓸 수 없습니다!
-      if (card.templateId === 'bread_and_circuses') {
-          alert("이 카드는 나를 향한 이벤트 방어(개입) 창에서만 즉시 사용할 수 있습니다.");
+      // 빵과 서커스 & 마상시합
+      if (card.templateId === 'bread_and_circuses' || card.templateId === 'jousting') {
+          alert("이 카드는 이벤트 방어(개입) 창에서만 사용할 수 있습니다.");
+          return;
+      }
+
+      // 카드의 허용 단계(Phase) 검사 로직
+      if (card.allowedPhase !== 'any' && card.allowedPhase !== state.currentPhase) {
+          const phaseNames: Record<string, string> = {
+              'start': '차례 시작',
+              'trade': '교역',
+              'cityManagement': '도시 경영',
+              'movement': '이동',
+              'research': '기술 연구'
+          };
+          alert(`⚠️ 이 카드는 [${phaseNames[card.allowedPhase]}] 단계에만 사용할 수 있습니다. (현재: ${phaseNames[state.currentPhase]})`);
           return;
       }
 
@@ -189,67 +204,69 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
       const player = state.players[state.currentPlayerIndex];
       const tile = state.map.tiles[position.y][position.x];
 
-      // 🌟 [신규] 맨해튼 거리 4칸 이내 판별 헬퍼 함수
-      const isWithin4Tiles = (targetPos: Position) => {
-          return player.units.some(u => Math.abs(u.position.x - targetPos.x) + Math.abs(u.position.y - targetPos.y) <= 4) ||
-                 player.cities.some(c => Math.abs(c.position.x - targetPos.x) + Math.abs(c.position.y - targetPos.y) <= 4);
+      // 🌟 [수정] 거리 판별 헬퍼 (인자로 최대 거리 maxDist를 받음)
+      const isWithinDistance = (targetPos: Position, maxDist: number) => {
+          return player.units.some(u => Math.abs(u.position.x - targetPos.x) + Math.abs(u.position.y - targetPos.y) <= maxDist) ||
+                 player.cities.some(c => Math.abs(c.position.x - targetPos.x) + Math.abs(c.position.y - targetPos.y) <= maxDist);
       };
 
       if (targeting.templateId === 'exile') {
           if (targeting.step === 0) {
-              let targetUnitId = null;
-              let targetOwnerId = null;
+              let targetUnitId = null; let targetOwnerId = null;
               for (const p of state.players) {
                   if (p.id === player.id) continue;
                   const unit = p.units.find(u => u.position.x === position.x && u.position.y === position.y);
                   if (unit) { targetUnitId = unit.id; targetOwnerId = p.id; break; }
               }
-              if (targetUnitId) {
-                  targeting.step = 1;
-                  targeting.data = { unitId: targetUnitId, targetPlayerId: targetOwnerId, originalPos: { ...position } };
-              } else alert("선택한 타일에 상대방의 유닛이 없습니다.");
+              if (targetUnitId) { targeting.step = 1; targeting.data = { unitId: targetUnitId, targetPlayerId: targetOwnerId, originalPos: { ...position } }; } 
+              else alert("선택한 타일에 상대방의 유닛이 없습니다.");
           } else if (targeting.step === 1) {
               const orig = targeting.data.originalPos;
               const manhattan = Math.abs(position.x - orig.x) + Math.abs(position.y - orig.y); 
-              // 🌟 [수정] 망명 거리가 4칸에서 2칸 이내로 축소되었습니다.
               if (manhattan > 2) { alert("원래 위치에서 2칸 이내의 타일이어야 합니다."); return; }
               if (tile.terrain === 'water' || tile.terrain === 'mountain') { alert("물이나 산으로는 이동시킬 수 없습니다."); return; }
               if (tile.cityId || tile.buildingType || tile.unitIds.length > 0) { alert("완전히 비어있는 타일로만 이동시킬 수 있습니다."); return; }
+              cardToExecute = targeting.cardId; executePayload = { unitId: targeting.data.unitId, targetPlayerId: targeting.data.targetPlayerId, targetPos: position }; state.activeCardTargeting = null;
+          }
+      } 
+      // 🌟 [신규] 여왕의 날 / 독재자의 날 (내 도시 클릭)
+      else if (targeting.templateId === 'queens_day' || targeting.templateId === 'dictators_day') {
+          const city = player.cities.find(c => c.position.x === position.x && c.position.y === position.y);
+          if (!city) { alert("자신의 도시를 선택해야 합니다."); return; }
+          cardToExecute = targeting.cardId; executePayload = { cityId: city.id }; state.activeCardTargeting = null;
+      }
+      // 🌟 [신규] 산림 벌채 (숲 개간)
+      else if (targeting.templateId === 'deforestation') {
+          if (tile.terrain !== 'forest') { alert("숲 칸만 선택할 수 있습니다."); return; }
+          if (tile.buildingType || tile.wonder || tile.cityId) { alert("건물, 불가사의, 도시가 있는 숲은 벌채할 수 없습니다."); return; }
+          cardToExecute = targeting.cardId; executePayload = { targetPos: position }; state.activeCardTargeting = null;
+      }
+      // 🌟 [신규] 실종 (상대 유닛 무리 이동, 최대 3칸)
+      else if (targeting.templateId === 'disappearance') {
+          if (targeting.step === 0) {
+              const enemyUnits = tile.unitIds.filter(id => { const owner = state.players.find(p => p.units.some(u => u.id === id)); return owner && owner.id !== player.id; });
+              if (enemyUnits.length === 0) { alert("선택한 타일에 상대방의 유닛이 없습니다."); return; }
+              targeting.step = 1; targeting.data = { originalPos: { ...position } };
+          } else if (targeting.step === 1) {
+              const orig = targeting.data.originalPos;
+              const manhattan = Math.abs(position.x - orig.x) + Math.abs(position.y - orig.y); 
+              if (manhattan > 3) { alert("원래 위치에서 3칸 이내의 타일이어야 합니다."); return; }
+              if (tile.terrain === 'water' || tile.terrain === 'mountain') { alert("물이나 산으로는 이동시킬 수 없습니다."); return; }
+              if (tile.cityId || tile.buildingType || tile.unitIds.length > 0) { alert("완전히 비어있는 타일로만 이동시킬 수 있습니다."); return; }
+              cardToExecute = targeting.cardId; 
+              // 🌟 [수정] 프록시 객체(orig)가 아니라, 값만 복사해서 안전한 새 객체로 만듭니다!
+              executePayload = { 
+                  originalPos: { x: orig.x, y: orig.y }, 
+                  targetPos: position 
+              }; 
               
-              cardToExecute = targeting.cardId;
-              executePayload = { unitId: targeting.data.unitId, targetPlayerId: targeting.data.targetPlayerId, targetPos: position };
               state.activeCardTargeting = null;
           }
-      } 
-      // 🌟 [신규] 가뭄 타겟팅 로직
-      else if (targeting.templateId === 'drought') {
-          if (tile.terrain === 'mountain' || tile.buildingType || tile.wonder || tile.cityId) {
-              alert("산, 건물, 불가사의, 도시가 있는 칸에는 가뭄을 사용할 수 없습니다."); return;
-          }
-          cardToExecute = targeting.cardId;
-          executePayload = { targetPos: position };
-          state.activeCardTargeting = null;
-      } 
-      // 🌟 [신규] 혼란 타겟팅 로직
-      else if (targeting.templateId === 'confusion') {
-          if (!isWithin4Tiles(position)) { alert("내 유닛이나 도시에서 4칸 이내여야 합니다."); return; }
-          
-          let targetUnitId = null;
-          let targetOwnerId = null;
-          for (const p of state.players) {
-              if (p.id === player.id) continue;
-              const unit = p.units.find(u => u.position.x === position.x && u.position.y === position.y);
-              if (unit) { targetUnitId = unit.id; targetOwnerId = p.id; break; }
-          }
-          if (!targetUnitId) { alert("선택한 칸에 상대 유닛이 없습니다."); return; }
-          
-          cardToExecute = targeting.cardId;
-          executePayload = { unitId: targetUnitId, targetPlayerId: targetOwnerId };
-          state.activeCardTargeting = null;
-      } 
-      // 🌟 [신규] 사보타주 타겟팅 로직
-      else if (targeting.templateId === 'sabotage') {
-          if (!isWithin4Tiles(position)) { alert("내 유닛이나 도시에서 4칸 이내여야 합니다."); return; }
+      }
+      // 🌟 [신규] 재앙 (6칸 건물 파괴) & 사보타주 (4칸 건물 파괴)
+      else if (targeting.templateId === 'disaster' || targeting.templateId === 'sabotage') {
+          const dist = targeting.templateId === 'disaster' ? 60 : 60;
+          if (!isWithinDistance(position, dist)) { alert(`내 유닛이나 도시에서 ${dist}칸 이내여야 합니다.`); return; }
           if (tile.ownerId === player.id) { alert("자신의 건물은 파괴할 수 없습니다."); return; }
           if (!tile.ownerId) { alert("주인이 없는 타일입니다."); return; }
           
@@ -258,17 +275,24 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
           if (tile.cityId) {
               const owner = state.players.find(p => p.id === tile.ownerId);
               const city = owner?.cities.find(c => c.id === tile.cityId);
-              if (city?.hasWalls) hasTarget = true; // 성벽도 파괴 대상!
+              if (city?.hasWalls) hasTarget = true; 
           }
-          
           if (!hasTarget) { alert("이 타일에는 파괴할 건물이나 성벽이 없습니다."); return; }
-
-          cardToExecute = targeting.cardId;
-          executePayload = { targetPos: position, targetPlayerId: tile.ownerId };
-          state.activeCardTargeting = null;
+          cardToExecute = targeting.cardId; executePayload = { targetPos: position, targetPlayerId: tile.ownerId }; state.activeCardTargeting = null;
+      }
+      // 가뭄, 혼란 유지
+      else if (targeting.templateId === 'drought') {
+          if (tile.terrain === 'mountain' || tile.buildingType || tile.wonder || tile.cityId) { alert("산, 건물, 불가사의, 도시가 있는 칸에는 가뭄을 사용할 수 없습니다."); return; }
+          cardToExecute = targeting.cardId; executePayload = { targetPos: position }; state.activeCardTargeting = null;
+      } 
+      else if (targeting.templateId === 'confusion') {
+          if (!isWithinDistance(position, 60)) { alert("내 유닛이나 도시에서 4칸 이내여야 합니다."); return; }
+          let targetUnitId = null; let targetOwnerId = null;
+          for (const p of state.players) { if (p.id === player.id) continue; const unit = p.units.find(u => u.position.x === position.x && u.position.y === position.y); if (unit) { targetUnitId = unit.id; targetOwnerId = p.id; break; } }
+          if (!targetUnitId) { alert("선택한 칸에 상대 유닛이 없습니다."); return; }
+          cardToExecute = targeting.cardId; executePayload = { unitId: targetUnitId, targetPlayerId: targetOwnerId }; state.activeCardTargeting = null;
       }
     });
-
     if (executePayload && cardToExecute) get().playCultureCard(cardToExecute, executePayload);
   },
 
@@ -309,7 +333,9 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
     if (hasMassMedia) {
       get().executeCultureCard(cardId, { ...payload, sourcePlayerId });
     } else {
-      get().pushActionToStack({ id: Date.now().toString(), sourcePlayerId: sourcePlayerId, actionType: 'culture_card', payload: { cardId, ...payload } });
+      get().pushActionToStack({ id: Date.now().toString(),
+         sourcePlayerId: sourcePlayerId, 
+         actionType: 'culture_card', payload: { cardId, ...payload } });
     }
   },
 
@@ -428,6 +454,18 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
               draft.combatState.log.push({ message: `🔥 ${targetPlayer.name}의 문명에 시민 봉기가 일어나 무정부 상태에 빠졌습니다!` });
           }
       } 
+      // 🌟 [추가] 풍족한 선물 효과 
+      else if (card.templateId === 'bountiful_gift') {
+          const { resourceType } = payload;
+          if (resourceType === 'spy') {
+              player.spies += 1;
+          } else {
+              if (!player.secretResources) player.secretResources = [];
+              player.secretResources.push({ id: Date.now().toString(), type: resourceType, source: 'hut' });
+          }
+          if (!draft.combatState.log) draft.combatState.log = [];
+          draft.combatState.log.push({ message: `🎁 ${player.name}이(가) [풍족한 선물] 카드를 사용해 즉시 보상을 획득했습니다!` });
+      }
       // 🌟 [신규] 멀리서 온 선물 효과
       else if (card.templateId.startsWith('gift_from_afar')) {
           const { targetPlayerId, resourceType } = payload;
@@ -449,8 +487,110 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
           if (!draft.combatState.log) draft.combatState.log = [];
           draft.combatState.log.push({ message: `🎁 ${player.name}이(가) 일회성 자원을 획득하고, ${targetPlayer?.name}에게 화폐 1개를 주었습니다!` });
       }
+      else if (card.templateId === 'queens_day' || card.templateId === 'dictators_day') {
+          const { cityId } = payload;
+          const city = player.cities.find(c => c.id === cityId);
+          if (city) {
+               const bonus = card.templateId === 'queens_day' ? 6 : 4;
+               city.tempProductionBonus = (city.tempProductionBonus || 0) + bonus;
+               if (!draft.combatState.log) draft.combatState.log = [];
+               draft.combatState.log.push({ message: `👑 [${card.name}] ${city.name}의 생산력이 이번 턴 동안 +${bonus} 증가합니다.` });
+          }
+      }
+      // 🌟 [신규] 산림 벌채 (자원은 보존)
+      else if (card.templateId === 'deforestation') {
+          const { targetPos } = payload;
+          const tile = draft.map.tiles[targetPos.y][targetPos.x];
+          tile.terrain = 'grassland'; // 자원(resource)과 마을(object)은 건드리지 않음
+          if (!draft.combatState.log) draft.combatState.log = [];
+          draft.combatState.log.push({ message: `🪓 산림 벌채! 타일(${targetPos.x}, ${targetPos.y})이 초원으로 개간되었습니다.` });
+      }
+      // 🌟 [신규] 실종 (무리 단위 이동)
+      else if (card.templateId === 'disappearance') {
+          const { originalPos, targetPos } = payload;
+          const oldTile = draft.map.tiles[originalPos.y][originalPos.x];
+          const newTile = draft.map.tiles[targetPos.y][targetPos.x];
+          
+          const unitsToMove: string[] = [];
+          for (const p of draft.players) {
+              if (p.id === playerId) continue; // 내 것은 안 옮김
+              const enemyUnitsHere = p.units.filter(u => u.position.x === originalPos.x && u.position.y === originalPos.y);
+              enemyUnitsHere.forEach(u => {
+                  u.position = { ...targetPos };
+                  unitsToMove.push(u.id);
+              });
+          }
+          oldTile.unitIds = oldTile.unitIds.filter(id => !unitsToMove.includes(id));
+          newTile.unitIds.push(...unitsToMove);
+
+          if (!draft.combatState.log) draft.combatState.log = [];
+          draft.combatState.log.push({ message: `👻 실종 발생! 상대방의 유닛 무리가 흔적도 없이 다른 곳으로 밀려났습니다!` });
+      }
+      // 🌟 [신규] 재앙 (사보타주 로직과 사실상 동일하므로 합침)
+      else if (card.templateId === 'disaster' || card.templateId === 'sabotage') {
+          const { targetPos, targetPlayerId } = payload;
+          const tile = draft.map.tiles[targetPos.y][targetPos.x];
+          const targetPlayer = draft.players.find(p => p.id === targetPlayerId);
+          if (targetPlayer) {
+              let destroyed = false;
+              for (const city of targetPlayer.cities) {
+                  if (city.position.x === targetPos.x && city.position.y === targetPos.y && city.hasWalls) {
+                      city.hasWalls = false;
+                      city.cityDefenseBonus = Math.max(0, city.cityDefenseBonus - 2);
+                      destroyed = true;
+                      if (!draft.combatState.log) draft.combatState.log = [];
+                      draft.combatState.log.push({ message: `💥 [${card.name}] ${city.name}의 성벽이 파괴되었습니다!` });
+                      break;
+                  }
+                  if (!destroyed && tile.buildingType) {
+                      const bIdx = city.buildings.findIndex(b => b.type === tile.buildingType);
+                      if (bIdx !== -1) {
+                          city.buildings.splice(bIdx, 1);
+                          tile.buildingType = null;
+                          destroyed = true;
+                          if (!draft.combatState.log) draft.combatState.log = [];
+                          draft.combatState.log.push({ message: `💥 [${card.name}] 상대방의 건물이 파괴되었습니다!` });
+                          break;
+                      }
+                  }
+              }
+          }
+      }
+      // 🌟 [신규] 집단 망명 (최대 2개 제거)
+      else if (card.templateId === 'mass_exile') {
+          const { targetUnitIds } = payload;
+          for (const unitId of targetUnitIds) {
+              for (const p of draft.players) {
+                  if (p.id === playerId) continue;
+                  
+                  // 1. 일반 유닛 제거 시도
+                  const uIdx = p.units.findIndex(u => u.id === unitId);
+                  if (uIdx !== -1) {
+                      const u = p.units[uIdx];
+                      const tile = draft.map.tiles[u.position.y][u.position.x];
+                      tile.unitIds = tile.unitIds.filter(id => id !== unitId);
+                      p.units.splice(uIdx, 1);
+                      if (!draft.combatState.log) draft.combatState.log = [];
+                      draft.combatState.log.push({ message: `🌪️ 집단 망명! ${p.name}의 유닛이 맵에서 제거되었습니다.` });
+                      continue;
+                  }
+                  
+                  // 2. 만약 위인을 타일에 배치하는 별도 배열(placedGreatPeople 등)이 있다면 여기서 제거!
+                  // (유저님의 위인 맵 배치 로직에 따라 이 부분은 자동 대응되도록 안전하게 작성합니다)
+                  if ((p as any).placedGreatPeople) {
+                      const gpIdx = (p as any).placedGreatPeople.findIndex((gp:any) => gp.id === unitId);
+                      if (gpIdx !== -1) {
+                          (p as any).placedGreatPeople.splice(gpIdx, 1);
+                          if (!draft.combatState.log) draft.combatState.log = [];
+                          draft.combatState.log.push({ message: `🌪️ 집단 망명! ${p.name}의 위인이 맵에서 제거되었습니다.` });
+                      }
+                  }
+              }
+          }
+      }
 
       player.cultureEventCards.splice(cardIdx, 1);
     });
   }
+  
 });

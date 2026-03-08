@@ -79,7 +79,8 @@ export function MapGrid() {
     // 카드 타겟팅 처리
     if (
       activeCardTargeting && 
-      ['exile', 'drought', 'confusion', 'sabotage'].includes(activeCardTargeting.templateId)
+      ['exile', 'drought', 'confusion', 'sabotage', 
+        'deforestation', 'disappearance', 'disaster', 'queens_day', 'dictators_day'].includes(activeCardTargeting.templateId)
     ) {
       handleCardMapClick({ x, y });
       return; 

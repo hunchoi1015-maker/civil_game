@@ -26,12 +26,17 @@ export const InterruptModal: React.FC = () => {
 
   if (!interruptState.currentResponderId || !topAction) return null;
 
-  // 🌟 [수정] 방어권(UN, 빵과 서커스, 스파이) 여부를 각각 분리해서 계산
+  // 🌟 [수정] 방어권(UN, 빵과 서커스, 스파이, 마상시합) 여부를 각각 분리해서 계산
   const hasSpy = (currentResponder?.spies || 0) > 0;
-  const isTargetMe = topAction?.actionType === 'culture_card' && topAction.payload?.targetPlayerId === currentResponder?.id;
+  const isTargetMe = topAction?.actionType === 'culture_card' && 
+                     (topAction.payload?.targetPlayerId === currentResponder?.id || 
+                      topAction.payload?.opponentId === currentResponder?.id);
   
   const canUnDefense = isTargetMe && hasActiveWonder(currentResponder?.id || '', 'un', useGameStore.getState().map, players);
   const canBreadDefense = isTargetMe && (currentResponder?.cultureEventCards?.some(c => c.templateId === 'bread_and_circuses') ?? false);
+  
+  // 🌟 [추가] 마상시합은 타겟이 내가 아니어도(문화 카드 대상이기만 하면) 사용 가능!
+  const canJoustingDefense = topAction?.actionType === 'culture_card' && (currentResponder?.cultureEventCards?.some(c => c.templateId === 'jousting') ?? false);
   
   let canSpyDefense = false;
   if (topAction.actionType === 'culture_card') {
@@ -43,8 +48,8 @@ export const InterruptModal: React.FC = () => {
       canSpyDefense = hasMassMedia && hasSpy && !hasUsedMassMedia;
   }
 
-  // 셋 중 하나라도 가능하면 방어 권한 획득
-  const canCounter = canUnDefense || canBreadDefense || canSpyDefense;
+  // 🌟 [수정] 넷 중 하나라도 가능하면 방어 권한 획득
+  const canCounter = canUnDefense || canBreadDefense || canSpyDefense || canJoustingDefense;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -81,6 +86,12 @@ export const InterruptModal: React.FC = () => {
           {canBreadDefense && (
             <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'bread')} className="px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors">
               🍞 '빵과 서커스' 카드 사용하여 막기
+            </button>
+          )}
+
+          {canJoustingDefense && (
+            <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'jousting')} className="px-4 py-3 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors">
+              🏇 '마상시합' 카드 사용하여 막기
             </button>
           )}
 
