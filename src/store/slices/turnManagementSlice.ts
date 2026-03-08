@@ -31,8 +31,10 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
       }
   }),
   nextPhase: () => {
+    
     const phases: GamePhase[] = ['start', 'trade', 'cityManagement', 'movement', 'research'];
     set((state) => {
+      state.activeCardTargeting = null;
       const currentIndex = phases.indexOf(state.currentPhase);
       if (currentIndex < phases.length - 1) {
         // 페이즈 넘어가기 전 체크 사항
@@ -302,7 +304,9 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
     const phases: GamePhase[] = ['start', 'trade', 'cityManagement', 'movement', 'research'];
     
     set((state) => {
-      // 🌟 [추가] 연소 기술: 이동 단계 종료 시 적 교외 건물 파괴 검사
+      
+      state.activeCardTargeting = null;
+      // 연소 기술: 이동 단계 종료 시 적 교외 건물 파괴 검사
       if (state.currentPhase === 'movement') {
           const currentPlayer = state.players[state.currentPlayerIndex];
           if (hasTechnology(currentPlayer, 'combustion')) {

@@ -23,6 +23,7 @@ import { ResourceSelectionModal } from '../components/game/ResourceSelectionModa
 import { InterruptModal } from '../components/game/InterruptModal';
 import { WonderActionModal } from '../components/game/WonderActionModal';
 import { CultureTrackWidget } from '../components/game/CultureTrackWidget';
+import { CultureCardTargetModal } from '../components/game/CultureCardTargetModal';
 
 type PanelView = 'map' | 'tech' | 'city' | 'units';
 
@@ -228,6 +229,9 @@ export function GameScreen() {
       
       {/*불가사의 모달 */}
       <WonderActionModal />
+      
+      {/* 문화 카드 타겟 모달*/}
+      <CultureCardTargetModal />
     </div>
   );
 }
