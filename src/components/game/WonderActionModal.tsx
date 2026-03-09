@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { useGameStore } from '../../store/gameStore';
-import { TECHNOLOGIES } from '../../constants/technologies';
 import { validateTechResearch } from '../../engine/TechValidator';
 
 export const WonderActionModal: React.FC = () => {

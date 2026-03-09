@@ -1,5 +1,6 @@
 import { Technology, TechLevel, PlayerTechnology } from '../types/tech'; 
 import { TECHNOLOGIES } from '../constants/technologies';
+import { getEffectiveTechLevel } from '../store/helpers/validationHelpers'; // 🌟 추가
 
 export interface TechValidationResult {
   isValid: boolean;
@@ -11,13 +12,9 @@ export function getTechById(techId: string): Technology | undefined {
   return TECHNOLOGIES.find(t => t.id === techId);
 }
 
-// 🌟 변경점: 플레이어 국가 정보를 인자로 받아 비교합니다!
+// 🌟 [수정] 중복 코드를 지우고 통합 헬퍼를 호출합니다!
 export function getPyramidLevel(techId: string, playerNation?: string): TechLevel {
-  const def = getTechById(techId);
-  if (!def) return 1;
-  // 내 국가의 고유 기술일 때만 1레벨로 취급! 다른 국가면 원래 레벨(2, 3 등)로 취급!
-  if (def.isStartingTechFor && def.isStartingTechFor === playerNation) return 1;
-  return def.level as TechLevel;
+  return getEffectiveTechLevel(playerNation, techId) as TechLevel;
 }
 
 export function countTechsByLevel(techs: (Technology | PlayerTechnology)[], playerNation?: string): Record<TechLevel, number> {

@@ -431,31 +431,36 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
           if (city) city.tempProductionBonus = (city.tempProductionBonus || 0) + 4;
       } 
       else if (card.templateId === 'idea_share' || card.templateId === 'knowledge_sharing' || card.templateId === 'think_tank') {
-          const { opponentId, techId } = payload;
+          // techId: 내가 배울 기술, opponentTechId: 상대가 배울 기술
+          const { opponentId, techId, opponentTechId } = payload;
           const opponent = draft.players.find(p => p.id === opponentId);
-          if (opponent && techId) {
-              const targetTechDef = TECHNOLOGIES.find(t => t.id === techId);
-              if (targetTechDef && !player.technologies.some(t => t.id === techId)) {
-                  // 1. 상대의 기술을 내가 배움
-                  player.technologies.push({ ...targetTechDef, tokensOnCard: 0, abilityUsedThisTurn: false });
-                  
-                  // 2. 내 기술 중 상대방이 없는 것을 랜덤으로 넘겨줌
-                  // (발상의공유: 1단계, 지식공유: 2단계이하, 싱크탱크: 3단계이하)
-                  const maxLevel = card.templateId === 'think_tank' ? 3 : (card.templateId === 'knowledge_sharing' ? 2 : 1);
-                  const myValidTechs = player.technologies.filter(t => {
-                      const td = TECHNOLOGIES.find(x => x.id === t.id);
-                      return td && td.level <= maxLevel;
-                  });
-                  const validToGive = myValidTechs.filter(t => !opponent.technologies.some(ot => ot.id === t.id));
-                  
-                  if (validToGive.length > 0) {
-                      const randomTech = validToGive[Math.floor(Math.random() * validToGive.length)];
-                      const rTechDef = TECHNOLOGIES.find(t => t.id === randomTech.id);
-                      if (rTechDef) opponent.technologies.push({ ...rTechDef, tokensOnCard: 0, abilityUsedThisTurn: false });
+          
+          if (opponent) {
+              let learnedSomething = false;
+              
+              // 1. 내가 선택한 기술 획득 (스킵하지 않았다면)
+              if (techId && !player.technologies.some(t => t.id === techId)) {
+                  const tDef = TECHNOLOGIES.find(t => t.id === techId);
+                  if (tDef) {
+                      player.technologies.push({ ...tDef, tokensOnCard: 0, abilityUsedThisTurn: false });
+                      learnedSomething = true;
                   }
-
-                  if (!draft.combatState.log) draft.combatState.log = [];
-                  draft.combatState.log.push({ message: `💡 [${card.name}] ${player.name}이(가) 기술을 교환했습니다!` });
+              }
+              
+              // 2. 상대방이 선택한 기술 획득 (스킵하지 않았다면)
+              if (opponentTechId && !opponent.technologies.some(t => t.id === opponentTechId)) {
+                  const tDef = TECHNOLOGIES.find(t => t.id === opponentTechId);
+                  if (tDef) {
+                      opponent.technologies.push({ ...tDef, tokensOnCard: 0, abilityUsedThisTurn: false });
+                      learnedSomething = true;
+                  }
+              }
+              
+              if (!draft.combatState.log) draft.combatState.log = [];
+              if (learnedSomething) {
+                  draft.combatState.log.push({ message: `💡 [${card.name}] ${player.name}와(과) ${opponent.name}이(가) 과학 동맹으로 지식을 교환했습니다!` });
+              } else {
+                  draft.combatState.log.push({ message: `💡 [${card.name}] 서로 조건이 맞지 않아 아무 지식도 얻지 못했습니다.` });
               }
           }
       }

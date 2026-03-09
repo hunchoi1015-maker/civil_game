@@ -13,7 +13,7 @@ import { createCombatSlice } from './slices/combatSlice';
 import { createTechSlice } from './slices/techSlice';
 import { createUISlice } from './slices/uiSlice';
 import { createCultureSlice } from './slices/cultureSlice';
-import { createInterruptSlice, InterruptSlice } from './slices/interruptSlice';
+import { createInterruptSlice } from './slices/interruptSlice';
 
 // Helpers Import
 import { getTileSafe } from './helpers/mapHelpers';

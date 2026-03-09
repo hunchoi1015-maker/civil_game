@@ -3,7 +3,7 @@
 import { StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
-import { Position, UnitType, createUnit, BASE_STACKING_LIMIT, createInitialLuxuryResources, RewardType, UNIT_DEFINITIONS } from '../../types';
+import { Position, UnitType, createUnit, BASE_STACKING_LIMIT, RewardType, UNIT_DEFINITIONS } from '../../types';
 import { findPlayerById } from '../helpers/playerHelpers';
 import { getPlayerPassives } from '../helpers/playerHelpers';
 import { calculateDetailedCityProduction } from '../../engine/ResourceCalculator';

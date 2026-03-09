@@ -3,54 +3,15 @@
 import { StateCreator } from 'zustand';
 import { GameStore } from '../types/storeTypes';
 import { TECHNOLOGIES } from '../../constants/technologies';
-import { Player } from '../../types/player';
 import { PlayerTechnology } from '../../types/tech';
 import { TECH_COSTS } from '../../types';
 import { Position } from '../../types/map'; 
 import { GOVERNMENTS } from '../../constants/governments';
 import { ARMY_CARD_TEMPLATES } from '../../constants/armyCards';
 import { getPlayerPassives, hasEnoughLuxuryResource, consumeLuxuryResource } from '../helpers/playerHelpers';
+import { canLearnTechInPyramid } from '../helpers/validationHelpers';
 
-// 🌟 [피라미드 검증 헬퍼 함수]
-export function canResearchPyramid(player: Player, targetTechId: string): { canResearch: boolean, reason?: string } {
-  const targetTechDef = TECHNOLOGIES.find(t => t.id === targetTechId);
-  if (!targetTechDef) return { canResearch: false, reason: "존재하지 않는 기술입니다." };
-
-  if (player.technologies.some(t => t.id === targetTechId)) {
-    return { canResearch: false, reason: "이미 연구한 기술입니다." };
-  }
-
-  const getPyramidLevel = (techId: string) => {
-    const def = TECHNOLOGIES.find(t => t.id === techId);
-    if (!def) return 1;
-    if (def.isStartingTechFor) return 1; 
-    return def.level;
-  };
-
-  const targetPyramidLevel = getPyramidLevel(targetTechId);
-
-  if (targetPyramidLevel === 1) return { canResearch: true };
-
-  const levelCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  player.technologies.forEach(tech => {
-    const pLevel = getPyramidLevel(tech.id);
-    levelCounts[pLevel] = (levelCounts[pLevel] || 0) + 1;
-  });
-
-  const requiredLowerTechCount = levelCounts[targetPyramidLevel - 1] || 0;
-  const currentTargetLevelCount = levelCounts[targetPyramidLevel] || 0;
-
-  if (requiredLowerTechCount > currentTargetLevelCount) {
-    return { canResearch: true };
-  } else {
-    return { 
-      canResearch: false, 
-      reason: `피라미드 조건 부족: ${targetPyramidLevel}레벨 기술을 연구하려면 ${targetPyramidLevel - 1}레벨 기술이 더 필요합니다.` 
-    };
-  }
-}
-
-// 🌟 [스토어 슬라이스 정의]
+//  [스토어 슬라이스 정의]
 export interface TechSlice {
   researchTech: (techId: string) => void;
   useTechResourceAbility: (techId: string, payload?: any) => void; 
@@ -78,7 +39,7 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
       const techDef = TECHNOLOGIES.find(t => t.id === techId);
       if (!techDef) return;
 
-      const check = canResearchPyramid(player, techId);
+      const check = canLearnTechInPyramid(player, techId);
       if (!check.canResearch) {
           alert(check.reason);
           return;

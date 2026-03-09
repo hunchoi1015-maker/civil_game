@@ -1,7 +1,7 @@
 import { StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
-import { CombatState, Position, CombatType, ArmyCard, Player, getAttackerMaxCards, CITY_CAPITAL_MAX_CARDS, LOOT_MAX_PER_SELECTION, createInitialResources, createInitialLuxuryResources, RewardType } from '../../types';
+import { CombatState, Position, CombatType, ArmyCard, Player, getAttackerMaxCards, CITY_CAPITAL_MAX_CARDS, LOOT_MAX_PER_SELECTION, createInitialResources, createInitialLuxuryResources } from '../../types';
 import { resolveBattlefields, resolvePairedFight } from '../../engine/CombatResolver';
 import { shuffleArray, getCombatCardBonus, hasTechnology, hasActiveWonder, hasEnoughLuxuryResource, consumeLuxuryResource } from '../helpers/playerHelpers';
 import { BUILDINGS } from '../../constants/buildings';

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useGameStore } from '../../store/gameStore';
+import { getEffectiveTechLevel, canLearnTechInPyramid } from '../../store/helpers/validationHelpers';
 
 export const CultureCardTargetModal: React.FC = () => {
   const { players, currentPlayerIndex, activeCardTargeting, cancelCardTargeting, playCultureCard } = useGameStore();
@@ -10,6 +11,8 @@ export const CultureCardTargetModal: React.FC = () => {
   const [selectedTechId, setSelectedTechId] = useState<string | null>(null);
   const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
   const [selectedCityId, setSelectedCityId] = useState<string | null>(null);
+  const [ideaShareStep, setIdeaShareStep] = useState<number>(0);
+  const [opponentSelectedTechId, setOpponentSelectedTechId] = useState<string | null>(null);
 
   useEffect(() => {
     setSelectedPlayerId(null);
@@ -17,6 +20,8 @@ export const CultureCardTargetModal: React.FC = () => {
     setSelectedTechId(null);
     setSelectedUnitIds([]);
     setSelectedCityId(null);
+    setIdeaShareStep(0);
+    setOpponentSelectedTechId(null);
   }, [activeCardTargeting?.cardId]);
 
   if (!activeCardTargeting) return null;
@@ -98,11 +103,8 @@ export const CultureCardTargetModal: React.FC = () => {
       if (!selectedResource) return alert("자원을 선택해주세요.");
       playCultureCard(activeCardTargeting.cardId, { targetPlayerId: selectedPlayerId, resourceType: selectedResource });
       cancelCardTargeting();
-    } else if (isIdeaShare) {
-      if (!selectedPlayerId || !selectedTechId) return alert("대상과 빼앗을 기술을 모두 선택해주세요.");
-      playCultureCard(activeCardTargeting.cardId, { opponentId: selectedPlayerId, techId: selectedTechId });
-      cancelCardTargeting();
-    } else if (isMassExile) {
+    } 
+    else if (isMassExile) {
       if (selectedUnitIds.length === 0) return alert("제거할 대상을 1~2개 선택해주세요.");
       playCultureCard(activeCardTargeting.cardId, { targetUnitIds: selectedUnitIds });
       cancelCardTargeting();
@@ -150,9 +152,25 @@ export const CultureCardTargetModal: React.FC = () => {
 
   const selectedOpponent = players.find(p => p.id === selectedPlayerId);
   const myTechIds = currentPlayer.technologies.map(t => t.id);
+  // 카드별 최대 허용 레벨
   const maxTechLevel = templateId === 'think_tank' ? 3 : (templateId === 'knowledge_sharing' ? 2 : 1);
-  const opponentLevelTechs = selectedOpponent 
-    ? selectedOpponent.technologies.filter(t => t.level <= maxTechLevel && !myTechIds.includes(t.id))
+
+  // 🌟 1. 내가 상대방에게서 배울 수 있는 기술 (내 국가 기준 레벨 및 피라미드 검증)
+  const myValidPicks = selectedOpponent 
+    ? selectedOpponent.technologies.filter(t => {
+        const effectiveLv = getEffectiveTechLevel(currentPlayer.nation, t.id);
+        const validation = canLearnTechInPyramid(currentPlayer, t.id);
+        return effectiveLv <= maxTechLevel && validation.canResearch;
+      })
+    : [];
+
+  // 🌟 2. 상대방이 나에게서 배울 수 있는 기술 (상대방 국가 기준 레벨 및 피라미드 검증)
+  const opponentValidPicks = selectedOpponent
+    ? currentPlayer.technologies.filter(t => {
+        const effectiveLv = getEffectiveTechLevel(selectedOpponent.nation, t.id);
+        const validation = canLearnTechInPyramid(selectedOpponent, t.id);
+        return effectiveLv <= maxTechLevel && validation.canResearch;
+      })
     : [];
 
   let massExileTargets: { id: string, name: string, ownerName: string, icon: string }[] = [];
@@ -235,29 +253,63 @@ export const CultureCardTargetModal: React.FC = () => {
         {/* 💡 기술 교환 UI */}
         {isIdeaShare && (
           <>
-            <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-2"><span>💡</span> 지식 교환</h2>
-            <p className="text-slate-300 mb-4 text-sm">기술을 빼앗아올 상대를 선택하세요. (내 기술 1개가 무작위로 넘어갑니다)</p>
-            <div className="space-y-2 mb-4 max-h-32 overflow-y-auto pr-1">
-               {otherPlayers.map(p => (
-                <button key={p.id} onClick={() => handlePlayerSelect(p.id)} className={`w-full p-2 rounded-lg text-left font-bold transition-colors ${selectedPlayerId === p.id ? 'bg-blue-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}>
-                  {p.name}
-                </button>
-              ))}
-            </div>
-            {selectedPlayerId && (
+            <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-2"><span>💡</span> 과학 동맹 ({templateId === 'think_tank' ? '싱크탱크' : '지식 공유'})</h2>
+            
+            {ideaShareStep === 0 && (
               <>
-                <h3 className="text-amber-400 font-bold mb-2 text-sm">훔쳐올 기술 (상대방의 1~{maxTechLevel}단계 기술)</h3>
-                <div className="grid grid-cols-2 gap-2 mb-6 max-h-40 overflow-y-auto pr-1">
-                  {opponentLevelTechs.length > 0 ? (
-                    opponentLevelTechs.map(t => (
-                      <button key={t.id} onClick={() => setSelectedTechId(t.id)} className={`p-2 rounded-lg text-sm font-bold transition-colors border ${selectedTechId === t.id ? 'bg-amber-600 border-amber-400 text-white shadow-inner' : 'bg-slate-700 border-slate-600 hover:bg-slate-600 text-slate-300'}`}>
+                <p className="text-slate-300 mb-4 text-sm">지식을 교환할 상대를 선택하세요.</p>
+                <div className="space-y-2 mb-4 max-h-32 overflow-y-auto pr-1">
+                   {otherPlayers.map(p => (
+                    <button key={p.id} onClick={() => { setSelectedPlayerId(p.id); setIdeaShareStep(1); }} className="w-full p-2 rounded-lg text-left font-bold transition-colors bg-slate-700 hover:bg-slate-600 text-slate-300">
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {ideaShareStep === 1 && selectedOpponent && (
+              <>
+                <h3 className="text-blue-400 font-bold mb-2 text-sm">Step 1: {currentPlayer.name}님의 선택 (최대 {maxTechLevel}단계)</h3>
+                <p className="text-xs text-slate-400 mb-2">상대방의 기술 중 내 피라미드 조건에 맞는 기술만 나타납니다.</p>
+                <div className="grid grid-cols-2 gap-2 mb-4 max-h-40 overflow-y-auto pr-1">
+                  {myValidPicks.length > 0 ? (
+                    myValidPicks.map(t => (
+                      <button key={t.id} onClick={() => setSelectedTechId(t.id)} className={`p-2 rounded-lg text-sm font-bold transition-colors border ${selectedTechId === t.id ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-700 border-slate-600 hover:bg-slate-600 text-slate-300'}`}>
                          {t.name}
                       </button>
                     ))
                   ) : (
-                    <div className="col-span-2 text-sm text-slate-400 text-center py-2 bg-slate-700/50 rounded-lg">상대방에게 내가 모르는 {maxTechLevel}단계 이하 기술이 없습니다.</div>
+                    <div className="col-span-2 text-sm text-slate-400 text-center py-2 bg-slate-700/50 rounded-lg">배울 수 있는 상대방 기술이 없습니다.</div>
                   )}
                 </div>
+                <button onClick={() => setIdeaShareStep(2)} className="w-full py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg transition-colors">
+                  {selectedTechId ? "결정 완료 (다음 사람 선택으로)" : "배울 기술 없음 (스킵)"}
+                </button>
+              </>
+            )}
+
+            {ideaShareStep === 2 && selectedOpponent && (
+              <>
+                <h3 className="text-red-400 font-bold mb-2 text-sm">Step 2: {selectedOpponent.name}님의 선택 (최대 {maxTechLevel}단계)</h3>
+                <p className="text-xs text-slate-400 mb-2">내 기술 중 상대방 피라미드 조건에 맞는 기술만 나타납니다.</p>
+                <div className="grid grid-cols-2 gap-2 mb-4 max-h-40 overflow-y-auto pr-1">
+                  {opponentValidPicks.length > 0 ? (
+                    opponentValidPicks.map(t => (
+                      <button key={t.id} onClick={() => setOpponentSelectedTechId(t.id)} className={`p-2 rounded-lg text-sm font-bold transition-colors border ${opponentSelectedTechId === t.id ? 'bg-red-600 border-red-400 text-white' : 'bg-slate-700 border-slate-600 hover:bg-slate-600 text-slate-300'}`}>
+                         {t.name}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="col-span-2 text-sm text-slate-400 text-center py-2 bg-slate-700/50 rounded-lg">상대방이 배울 수 있는 기술이 없습니다.</div>
+                  )}
+                </div>
+                <button onClick={() => {
+                   playCultureCard(activeCardTargeting.cardId, { opponentId: selectedPlayerId, techId: selectedTechId, opponentTechId: opponentSelectedTechId });
+                   cancelCardTargeting();
+                }} className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg transition-colors">
+                  교환 확정 (카드 발동)
+                </button>
               </>
             )}
           </>

@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../../../store/gameStore';
 import { TECHNOLOGIES } from '../../../constants/technologies';
-import { validateTechResearch } from '../../../engine/TechValidator';
 import { Technology, TechLevel } from '../../../types/tech'; 
 import clsx from 'clsx';
-import { getTechCountsByLevel } from '../../../store/helpers/playerHelpers';
-import {TECH_COSTS} from '../../../types'
+// 🌟 통합 헬퍼 함수 임포트
+import { canLearnTechInPyramid, getEffectiveTechLevel } from '../../../store/helpers/validationHelpers';
+import { TECH_COSTS } from '../../../types';
 
 const LEVEL_COLORS: Record<TechLevel, string> = {
   1: 'border-emerald-500 bg-emerald-900/30 text-emerald-100',
@@ -28,7 +28,7 @@ const LEVEL_NAMES: Record<TechLevel, string> = {
 const getTechsByLevel = (level: TechLevel) => TECHNOLOGIES.filter(t => t.level === level);
 
 export function TechTree() {
-  const { players, currentPlayerIndex, currentPhase, researchTech,endPhaseForCurrentPlayer } = useGameStore();
+  const { players, currentPlayerIndex, currentPhase, researchTech, endPhaseForCurrentPlayer } = useGameStore();
   const currentPlayer = players[currentPlayerIndex];
   const [selectedTech, setSelectedTech] = useState<Technology | null>(null);
 
@@ -39,20 +39,19 @@ export function TechTree() {
   const handleResearch = (techId: string) => {
     if (!selectedTech) return;
 
-    // 🌟 1. UI에서 먼저 교역 토큰이 충분한지 계산합니다.
+    // 1. UI에서 먼저 교역 토큰이 충분한지 계산합니다.
     const cost = TECH_COSTS[selectedTech.level] || 0;
     const availableTrade = Math.max(0, currentPlayer.resources.trade - currentPlayer.resources.currency);
 
-    // 🌟 2. 모자라다면 경고창을 띄우고 함수를 그 자리에서 종료(return)합니다!
+    // 2. 모자라다면 경고창을 띄우고 함수를 그 자리에서 종료(return)합니다!
     if (availableTrade < cost) {
       alert(`사용 가능한 교역 토큰이 부족합니다. (비용: ${cost}, 사용 가능: ${availableTrade})`);
-      return; // ⛔ 여기서 멈추기 때문에 다음 사람 턴으로 넘어가지 않습니다!
+      return; 
     }
 
-    // 🌟 3. 충분할 때만 실제 연구를 진행하고 차례를 마칩니다.
+    // 3. 충분할 때만 실제 연구를 진행하고 차례를 마칩니다.
     researchTech(techId);
     setSelectedTech(null);
-    //endPhaseForCurrentPlayer();
   };
 
   return (
@@ -84,7 +83,11 @@ export function TechTree() {
       <div className="space-y-6 flex flex-col items-center">
         {([5, 4, 3, 2, 1] as TechLevel[]).map((level) => {
           const techs = getTechsByLevel(level);
-          const techCounts = getTechCountsByLevel(currentPlayer);
+          
+          // 🌟 현재 플레이어 국가 기준으로 이 단계의 기술을 몇 개 가졌는지 정확히 계산
+          const currentLevelCount = currentPlayer.technologies.filter(
+              t => getEffectiveTechLevel(currentPlayer.nation, t.id) === level
+          ).length;
 
               return (
                 <div key={level} className="w-full max-w-5xl bg-slate-800/50 rounded-xl p-4 border border-slate-700">
@@ -92,8 +95,8 @@ export function TechTree() {
                     {LEVEL_NAMES[level]}
                     {level > 1 && (
                       <span className="text-xs font-normal text-slate-500 ml-2">
-                        {/* 🌟 수정: 조건 텍스트를 정확한 개수(+2)로 표시합니다. */}
-                        (조건: {level - 1}단계 기술 {techCounts[level] + 2}개 이상 필요)
+                        {/* 🌟 내 국가 기준으로 정확한 개수 표기 */}
+                        (조건: {level - 1}단계 기술 {currentLevelCount + 2}개 이상 필요)
                       </span>
                     )}
                   </h3>
@@ -102,7 +105,9 @@ export function TechTree() {
                 {techs.map((tech) => {
                   const playerTech = currentPlayer.technologies.find(t => t.id === tech.id);
                   const isResearched = researchedIds.has(tech.id);
-                  const validation = validateTechResearch(tech.id, currentPlayer.technologies,0);
+                  
+                  // 🌟 국가 정보를 아는 통합 함수가 클릭 가능 여부를 판별
+                  const validation = canLearnTechInPyramid(currentPlayer, tech.id);
 
                   return (
                     <motion.button
@@ -113,8 +118,8 @@ export function TechTree() {
                         'w-40 p-3 rounded-xl border-2 text-left transition-all relative shadow-md flex flex-col justify-between h-24',
                         LEVEL_COLORS[level],
                         isResearched && 'opacity-100 ring-2 ring-amber-400 scale-95 border-amber-500', // 연구 완료 강조
-                        !isResearched && validation.isValid && 'hover:brightness-125 cursor-pointer',
-                        !isResearched && !validation.isValid && 'opacity-40 grayscale cursor-not-allowed',
+                        !isResearched && validation.canResearch && 'hover:brightness-125 cursor-pointer',
+                        !isResearched && !validation.canResearch && 'opacity-40 grayscale cursor-not-allowed',
                         selectedTech?.id === tech.id && 'ring-4 ring-white z-10'
                       )}
                     >
@@ -122,7 +127,7 @@ export function TechTree() {
                       
                       {isResearched ? (
                         <div className="text-xs font-bold text-amber-300 mt-auto text-right">✓ 보유중</div>
-                      ) : !validation.isValid ? (
+                      ) : !validation.canResearch ? (
                         <div className="text-[10px] text-slate-300 mt-auto text-right">🔒 조건 부족</div>
                       ) : (
                         <div className="text-[10px] font-bold text-green-300 mt-auto text-right">✨ 연구 가능</div>
@@ -190,12 +195,13 @@ export function TechTree() {
               ) : (
                 <button
                   onClick={() => handleResearch(selectedTech.id)}
-                  disabled={!canResearch || !validateTechResearch(selectedTech.id, currentPlayer.technologies,0).isValid}
+                  // 🌟 통합 검증 함수의 결과(.canResearch)로 비활성화 여부 판별
+                  disabled={!canResearch || !canLearnTechInPyramid(currentPlayer, selectedTech.id).canResearch}
                   className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 disabled:from-slate-700 disabled:to-slate-600 disabled:text-slate-500 text-white font-bold rounded-xl shadow-lg transition-all"
                 >
                   {!canResearch 
                     ? '현재 연구 가능한 단계가 아닙니다' 
-                    : !validateTechResearch(selectedTech.id, currentPlayer.technologies,0).isValid
+                    : !canLearnTechInPyramid(currentPlayer, selectedTech.id).canResearch
                       ? '피라미드 하위 조건이 부족합니다'
                       : '🔬 이 기술 연구하기'}
                 </button>
