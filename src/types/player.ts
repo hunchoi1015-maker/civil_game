@@ -4,7 +4,7 @@ import { ArmyCard } from './combat';
 import { PlayerTechnology } from './tech';
 import { NationType } from './nation';
 import {ResourceType} from './map';
-import { CultureEventCard } from './game';
+import { CultureEventCard } from './cultureCard';
 import { GreatPerson } from './greatPerson';
 
 export interface Resources {

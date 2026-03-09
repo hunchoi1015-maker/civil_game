@@ -3,15 +3,14 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../../store/gameStore';
-import { TECHNOLOGIES } from '../../constants/technologies';
 import clsx from 'clsx';
 import { getCultureCardLimit } from '../../store/helpers/playerHelpers'; 
 
 export function CultureCardInventory() {
   const { 
     players, currentPlayerIndex, 
-    activeCardTargeting, startCardTargeting, cancelCardTargeting, 
-    discardCultureCard, playCultureCard 
+    startCardTargeting,
+    discardCultureCard 
   } = useGameStore();
 
   const player = players[currentPlayerIndex];
@@ -22,98 +21,9 @@ export function CultureCardInventory() {
   const currentCount = player.cultureEventCards?.length || 0;
   const isOverLimit = currentCount > currentLimit;
 
-  // === 모달 1: 독재자의 날 ===
-  const renderDictatorModal = () => {
-    if (activeCardTargeting?.templateId !== 'dictators_day') return null;
-    return (
-      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]">
-        <div className="bg-slate-800 p-6 rounded-lg border border-purple-500 w-96">
-          <h3 className="text-xl font-bold text-white mb-4">🏛️ 대상 도시 선택</h3>
-          <p className="text-sm text-slate-300 mb-4">이번 턴에 생산력 보너스(+4)를 받을 내 도시를 선택하세요.</p>
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {player.cities.map(city => (
-              <button 
-                key={city.id}
-                onClick={() => {
-                  playCultureCard(activeCardTargeting.cardId, { cityId: city.id });
-                  cancelCardTargeting();
-                }}
-                className="w-full p-3 bg-slate-700 hover:bg-slate-600 rounded text-left text-white font-bold transition-colors flex justify-between"
-              >
-                <span>{city.name}</span>
-                <span className="text-xs text-amber-400">생산력 +4</span>
-              </button>
-            ))}
-            {player.cities.length === 0 && <p className="text-slate-500 py-2">도시가 없습니다.</p>}
-          </div>
-          <button onClick={cancelCardTargeting} className="mt-4 w-full p-2 bg-slate-600 hover:bg-slate-500 text-white rounded">취소</button>
-        </div>
-      </div>
-    );
-  };
-
-  // === 모달 2: 발상의 공유 ===
-  const renderIdeaShareModal = () => {
-    if (activeCardTargeting?.templateId !== 'idea_share') return null;
-    const opponents = players.filter(p => p.id !== player.id);
-    const availableTechsToSteal: { oppName: string, oppId: string, tech: any }[] = [];
-    
-    opponents.forEach(opp => {
-      const oppTier1Techs = opp.technologies.filter(t => TECHNOLOGIES.find(td => td.id === t.id)?.level === 1);
-      oppTier1Techs.forEach(t => {
-        if (!player.technologies.some(myT => myT.id === t.id)) {
-          availableTechsToSteal.push({ oppName: opp.name, oppId: opp.id, tech: t });
-        }
-      });
-    });
-
-    return (
-      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]">
-        <div className="bg-slate-800 p-6 rounded-lg border border-purple-500 w-[500px]">
-          <h3 className="text-xl font-bold text-white mb-4">💡 기술 교환 대상 선택</h3>
-          <p className="text-sm text-slate-300 mb-4">뺏어올 상대의 1단계 기술을 선택하세요. (대신 내 기술 1개가 무작위로 넘어갑니다)</p>
-          <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-            {availableTechsToSteal.map((item, idx) => (
-              <button 
-                key={idx}
-                onClick={() => {
-                  playCultureCard(activeCardTargeting.cardId, { opponentId: item.oppId, techId: item.tech.id });
-                  cancelCardTargeting();
-                }}
-                className="w-full p-3 bg-slate-700 hover:bg-slate-600 flex justify-between rounded text-white transition-colors"
-              >
-                <span className="font-bold">{item.tech.name}</span>
-                <span className="text-slate-400 text-sm">from {item.oppName}</span>
-              </button>
-            ))}
-          </div>
-          {availableTechsToSteal.length === 0 && (
-            <div className="mt-2 p-3 bg-red-900/30 border border-red-500 rounded text-center">
-                <p className="text-amber-400 text-sm mb-3">뺏어올 수 있는 기술이 없어 카드가 낭비됩니다.</p>
-                <button 
-                  onClick={() => { playCultureCard(activeCardTargeting.cardId, { opponentId: null, techId: null }); cancelCardTargeting(); }}
-                  className="w-full p-2 bg-red-600 hover:bg-red-500 text-white rounded font-bold"
-                >그냥 사용하기 (낭비)</button>
-            </div>
-          )}
-          <button onClick={cancelCardTargeting} className="mt-4 w-full p-2 bg-slate-600 hover:bg-slate-500 text-white rounded">취소</button>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <>
-      {renderDictatorModal()}
-      {renderIdeaShareModal()}
-
-      {activeCardTargeting?.templateId === 'exile' && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 bg-amber-500 text-black px-6 py-3 rounded-full font-bold shadow-xl z-40 animate-pulse flex items-center gap-4">
-          <span>{activeCardTargeting.step === 0 ? "🎯 망명: 맵에서 밀어낼 유닛을 클릭" : "🗺️ 망명: 유닛이 이동할 빈 타일 클릭"}</span>
-          <button onClick={cancelCardTargeting} className="bg-black/20 hover:bg-black/40 px-3 py-1 rounded-full text-sm">취소</button>
-        </div>
-      )}
-
+      
       {/* 하단 우측 플로팅 인벤토리 */}
       <div className="relative flex flex-col items-end">
         <AnimatePresence>

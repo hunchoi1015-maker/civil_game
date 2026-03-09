@@ -292,6 +292,61 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
           if (!targetUnitId) { alert("선택한 칸에 상대 유닛이 없습니다."); return; }
           cardToExecute = targeting.cardId; executePayload = { unitId: targetUnitId, targetPlayerId: targetOwnerId }; state.activeCardTargeting = null;
       }
+      // 🌟 지휘권 붕괴 (4칸 실종)
+      else if (targeting.templateId === 'command_collapse') {
+          if (targeting.step === 0) {
+              const enemyUnits = tile.unitIds.filter(id => { const owner = state.players.find(p => p.units.some(u => u.id === id)); return owner && owner.id !== player.id; });
+              if (enemyUnits.length === 0) { alert("상대 유닛이 없습니다."); return; }
+              targeting.step = 1; targeting.data = { originalPos: { ...position } };
+          } else if (targeting.step === 1) {
+              const orig = targeting.data.originalPos;
+              const manhattan = Math.abs(position.x - orig.x) + Math.abs(position.y - orig.y); 
+              if (manhattan > 4) { alert("4칸 이내여야 합니다."); return; } // 4칸!
+              if (tile.terrain === 'water' || tile.terrain === 'mountain' || tile.cityId || tile.buildingType || tile.unitIds.length > 0) { 
+                  alert("완전히 비어있는 평지/숲/사막으로만 이동시킬 수 있습니다."); return; 
+              }
+              cardToExecute = targeting.cardId; executePayload = { originalPos: {x: orig.x, y: orig.y}, targetPos: position }; state.activeCardTargeting = null;
+          }
+      }
+      // 🌟 대규모 망명 (직접 2개 클릭)
+      else if (targeting.templateId === 'mass_asylum') {
+          const targets = targeting.data?.targets || [];
+          let found = false;
+          for (const p of state.players) {
+              if (p.id === player.id) continue;
+              if (p.units.some(u => u.position.x === position.x && u.position.y === position.y)) found = true;
+              if ((p as any).placedGreatPeople?.some((gp:any) => gp.position && gp.position.x === position.x && gp.position.y === position.y)) found = true;
+          }
+          if (!found) { alert("해당 칸에 상대방의 유닛이나 위인이 없습니다."); return; }
+          
+          const newTargets = [...targets, { x: position.x, y: position.y }];
+          if (newTargets.length === 2) {
+              cardToExecute = targeting.cardId; executePayload = { targets: newTargets }; state.activeCardTargeting = null;
+          } else {
+              targeting.data = { targets: newTargets }; // 1개 담고 다음 클릭 대기
+          }
+      }
+      // 🌟 대재앙 (직접 건물 2개 클릭)
+      else if (targeting.templateId === 'cataclysm') {
+          const targets = targeting.data?.targets || [];
+          if (tile.ownerId === player.id) { alert("자신의 건물은 파괴 불가!"); return; }
+          if (!tile.ownerId) { alert("주인이 없는 타일입니다."); return; }
+          
+          let hasTarget = false;
+          if (tile.buildingType) hasTarget = true;
+          if (tile.cityId) {
+              const owner = state.players.find(p => p.id === tile.ownerId);
+              if (owner?.cities.find(c => c.id === tile.cityId)?.hasWalls) hasTarget = true;
+          }
+          if (!hasTarget) { alert("이곳엔 파괴할 상대 건물/성벽이 없습니다."); return; }
+          
+          const newTargets = [...targets, { x: position.x, y: position.y, targetPlayerId: tile.ownerId }];
+          if (newTargets.length === 2) {
+              cardToExecute = targeting.cardId; executePayload = { targets: newTargets }; state.activeCardTargeting = null;
+          } else {
+              targeting.data = { targets: newTargets };
+          }
+      }
     });
     if (executePayload && cardToExecute) get().playCultureCard(cardToExecute, executePayload);
   },
@@ -587,6 +642,103 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
                   }
               }
           }
+      }
+      // 🌟 대통령의 날, 여왕의 날, 독재자의 날 (통합)
+      else if (card.templateId === 'presidents_day' || card.templateId === 'queens_day' || card.templateId === 'dictators_day') {
+          const { cityId } = payload;
+          const city = player.cities.find(c => c.id === cityId);
+          if (city) {
+               const bonus = card.templateId === 'presidents_day' ? 8 : (card.templateId === 'queens_day' ? 6 : 4);
+               city.tempProductionBonus = (city.tempProductionBonus || 0) + bonus;
+               if (!draft.combatState.log) draft.combatState.log = [];
+               draft.combatState.log.push({ message: `👑 [${card.name}] ${city.name}의 생산력이 이번 턴 동안 +${bonus} 증가합니다.` });
+          }
+      }
+      // 🌟 고귀한 선물, 풍족한 선물 (통합)
+      else if (card.templateId === 'bountiful_gift' || card.templateId === 'noble_gift') {
+          const { resourceType } = payload;
+          
+          if (resourceType === 'spy') {
+              player.spies += 1;
+          } else if (resourceType === 'nuclearMaterial') {
+              // 🌟 우라늄을 선택하면 전용 핵 자원(nuclearMaterial) 증가!
+              player.nuclearMaterial = (player.nuclearMaterial || 0) + 1;
+          } else {
+              if (!player.secretResources) player.secretResources = [];
+              // 다른 자원들은 기존처럼 secretResources 배열에 들어감
+              player.secretResources.push({ id: Date.now().toString(), type: resourceType, source: 'hut' });
+          }
+          
+          if (!draft.combatState.log) draft.combatState.log = [];
+          draft.combatState.log.push({ message: `🎁 ${player.name}이(가) [${card.name}]을 사용해 비밀 자원을 획득했습니다!` });
+      }
+      // 🌟 지휘권 붕괴 (4칸 무리 이동)
+      else if (card.templateId === 'command_collapse') {
+          const { originalPos, targetPos } = payload;
+          const oldTile = draft.map.tiles[originalPos.y][originalPos.x];
+          const newTile = draft.map.tiles[targetPos.y][targetPos.x];
+          const unitsToMove: string[] = [];
+          
+          for (const p of draft.players) {
+              if (p.id === playerId) continue;
+              const enemyUnitsHere = p.units.filter(u => u.position.x === originalPos.x && u.position.y === originalPos.y);
+              enemyUnitsHere.forEach(u => { u.position = { ...targetPos }; unitsToMove.push(u.id); });
+          }
+          oldTile.unitIds = oldTile.unitIds.filter(id => !unitsToMove.includes(id));
+          newTile.unitIds.push(...unitsToMove);
+          if (!draft.combatState.log) draft.combatState.log = [];
+          draft.combatState.log.push({ message: `📡 [지휘권 붕괴] 적 부대가 강제로 멀리 이동당했습니다!` });
+      }
+      // 🌟 대규모 망명
+      else if (card.templateId === 'mass_asylum') {
+          const { targets } = payload;
+          targets.forEach((pos: any) => {
+              for (const p of draft.players) {
+                  if (p.id === playerId) continue;
+                  const uIdx = p.units.findIndex(u => u.position.x === pos.x && u.position.y === pos.y);
+                  if (uIdx !== -1) {
+                      const u = p.units[uIdx];
+                      const tile = draft.map.tiles[u.position.y][u.position.x];
+                      tile.unitIds = tile.unitIds.filter(id => id !== u.id);
+                      p.units.splice(uIdx, 1);
+                      draft.combatState.log?.push({ message: `🌪️ [대규모 망명] ${p.name}의 유닛이 제거되었습니다!` });
+                      continue; // 타일당 하나씩만 제거
+                  }
+                  if ((p as any).placedGreatPeople) {
+                      const gpIdx = (p as any).placedGreatPeople.findIndex((gp:any) => gp.position && gp.position.x === pos.x && gp.position.y === pos.y);
+                      if (gpIdx !== -1) {
+                          (p as any).placedGreatPeople.splice(gpIdx, 1);
+                          draft.combatState.log?.push({ message: `🌪️ [대규모 망명] ${p.name}의 위인이 제거되었습니다!` });
+                      }
+                  }
+              }
+          });
+      }
+      // 🌟 대재앙
+      else if (card.templateId === 'cataclysm') {
+          const { targets } = payload;
+          targets.forEach((target: any) => {
+              const tile = draft.map.tiles[target.y][target.x];
+              const targetPlayer = draft.players.find(p => p.id === target.targetPlayerId);
+              if (targetPlayer) {
+                  let destroyed = false;
+                  for (const city of targetPlayer.cities) {
+                      if (city.position.x === target.x && city.position.y === target.y && city.hasWalls) {
+                          city.hasWalls = false; city.cityDefenseBonus = Math.max(0, city.cityDefenseBonus - 2);
+                          destroyed = true; draft.combatState.log?.push({ message: `🌋 [대재앙] ${city.name}의 성벽이 무너졌습니다!` });
+                          break;
+                      }
+                      if (!destroyed && tile.buildingType) {
+                          const bIdx = city.buildings.findIndex(b => b.type === tile.buildingType);
+                          if (bIdx !== -1) {
+                              city.buildings.splice(bIdx, 1); tile.buildingType = null;
+                              destroyed = true; draft.combatState.log?.push({ message: `🌋 [대재앙] 건물이 파괴되었습니다!` });
+                              break;
+                          }
+                      }
+                  }
+              }
+          });
       }
 
       player.cultureEventCards.splice(cardIdx, 1);

@@ -79,8 +79,11 @@ export function MapGrid() {
     // 카드 타겟팅 처리
     if (
       activeCardTargeting && 
-      ['exile', 'drought', 'confusion', 'sabotage', 
-        'deforestation', 'disappearance', 'disaster', 'queens_day', 'dictators_day'].includes(activeCardTargeting.templateId)
+      [
+        'exile', 'drought', 'confusion', 'sabotage', 'deforestation', 'disappearance',  // 1단계 
+        'disaster', 'queens_day', 'dictators_day',  // 2단계 
+        'command_collapse', 'mass_asylum', 'cataclysm' // 3단계 
+      ].includes(activeCardTargeting.templateId)
     ) {
       handleCardMapClick({ x, y });
       return; 

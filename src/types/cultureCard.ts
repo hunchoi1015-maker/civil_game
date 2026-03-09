@@ -8,7 +8,9 @@ export type CultureCardTargetType =
   | 'enemy_city_in_range' // 👈 신규 (사보타주)
   | 'self_resource'                   // 🌟 신규: 풍족한 선물 (나만 자원 획득)
   | 'enemy_unit_group'                // 🌟 신규: 실종 (해당 타일의 유닛 무리 전체)
-  | 'up_to_two_enemy_units_in_range';
+  | 'up_to_two_enemy_units_in_range'
+  | 'map_up_to_two';
+
 
 export type CultureCardAllowedPhase = 'start' | 'trade' | 'cityManagement' | 'movement' | 'research' | 'any';
 

@@ -9,7 +9,7 @@ export interface InterruptSlice {
   pushActionToStack: (action: StackAction) => void;
   passInterrupt: () => void;
   resolveStack: () => void;
-  useSpyCounter: (responderId: string, targetActionId: string, defenseType?: 'spy' | 'un' | 'bread' | 'jousting') => void;
+  useSpyCounter: (responderId: string, targetActionId: string, defenseType?: 'spy' | 'un' | 'bread' | 'jousting'| 'prime_time_tv') => void;
 }
 
 export const createInterruptSlice: StateCreator<GameStore, [["zustand/immer", never]], [], InterruptSlice> = (set, get) => ({
@@ -33,6 +33,12 @@ export const createInterruptSlice: StateCreator<GameStore, [["zustand/immer", ne
           if (p.id === action.sourcePlayerId) return; // 자신이 쓴 카드에 개입할 수 없음
 
           let canRespond = false;
+
+          if (action.actionType === 'culture_card' || action.actionType === 'resource_ability') {
+              if (p.cultureEventCards?.some(c => c.templateId === 'prime_time_tv')) {
+                  canRespond = true;
+              }
+          }
 
           if (action.actionType === 'culture_card') {
               // 🌟 [수정] targetPlayerId 뿐만 아니라 opponentId도 나를 향한 공격으로 간주!
@@ -118,18 +124,20 @@ export const createInterruptSlice: StateCreator<GameStore, [["zustand/immer", ne
     // 🌟 방어 타입 판별
     const isUnDefense = defenseType === 'un';
     const isBreadDefense = defenseType === 'bread';
-    const isJoustingDefense = defenseType === 'jousting'; // 🌟 [신규] 마상시합 판별
+    const isJoustingDefense = defenseType === 'jousting'; // 🌟 마상시합 판별
+    const isPrimeTimeDefense = defenseType === 'prime_time_tv'; // 황금시간대 tv
 
     // 조건 미달 시 차단
     if (defenseType === 'spy' && player.spies < 1) return;
     if (isBreadDefense && !player.cultureEventCards?.some(c => c.templateId === 'bread_and_circuses')) return;
-    if (isJoustingDefense && !player.cultureEventCards?.some(c => c.templateId === 'jousting')) return; // 🌟 [신규] 카드 보유 확인
+    if (isJoustingDefense && !player.cultureEventCards?.some(c => c.templateId === 'jousting')) return; 
+    if (isPrimeTimeDefense && !player.cultureEventCards?.some(c => c.templateId === 'prime_time_tv')) return;
 
     set((draft) => {
       const draftPlayer = draft.players.find(p => p.id === responderId);
       if (!draftPlayer) return;
 
-      // 🌟 비용/카드 지불 처리
+      // 비용/카드 지불 처리
       if (defenseType === 'spy') {
           draftPlayer.spies -= 1;
           if (targetAction.actionType === 'resource_ability') {
@@ -140,8 +148,12 @@ export const createInterruptSlice: StateCreator<GameStore, [["zustand/immer", ne
           const cardIdx = draftPlayer.cultureEventCards!.findIndex(c => c.templateId === 'bread_and_circuses');
           if (cardIdx !== -1) draftPlayer.cultureEventCards!.splice(cardIdx, 1);
       } else if (isJoustingDefense) {
-          // 🌟 [신규] 마상시합 카드 소모!
+          // 마상시합 카드 소모!
           const cardIdx = draftPlayer.cultureEventCards!.findIndex(c => c.templateId === 'jousting');
+          if (cardIdx !== -1) draftPlayer.cultureEventCards!.splice(cardIdx, 1);
+      } else if (isPrimeTimeDefense) {
+          // 황금시간대 TV 카드 소모!
+          const cardIdx = draftPlayer.cultureEventCards!.findIndex(c => c.templateId === 'prime_time_tv');
           if (cardIdx !== -1) draftPlayer.cultureEventCards!.splice(cardIdx, 1);
       }
       
@@ -153,8 +165,9 @@ export const createInterruptSlice: StateCreator<GameStore, [["zustand/immer", ne
       } else if (isBreadDefense) {
           draft.combatState?.log?.push({ message: `🍞 [빵과 서커스] ${draftPlayer.name}이(가) 카드를 사용하여 이벤트를 무효화했습니다!` });
       } else if (isJoustingDefense) {
-          // 🌟 [신규] 마상시합 로그!
           draft.combatState?.log?.push({ message: `🏇 [마상시합] ${draftPlayer.name}이(가) 난입하여 이벤트를 무효화했습니다!` });
+      } else if (isPrimeTimeDefense) {
+          draft.combatState?.log?.push({ message: `📺 [황금시간대 TV] ${draftPlayer.name}이(가) 능력을 즉시 취소시켰습니다!` });
       } else {
           draft.combatState?.log?.push({ message: `🕵️ ${draftPlayer.name}이(가) 스파이를 파견하여 개입했습니다!` });
       }

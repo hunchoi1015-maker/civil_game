@@ -155,5 +155,45 @@ queens_day: {
     description: '아무 문화 이벤트 1개를 즉시 무효화합니다. (자신을 향한 공격이 아니어도 개입 방어 창에서 사용 가능)',
     targetType: 'none', 
     allowedPhase: 'any',
+  },
+
+  // ==========================================
+  // 🌟 [3단계 문화 이벤트 카드]
+  // ==========================================
+  presidents_day: {
+    id: 'presidents_day', level: 3, name: '대통령의 날', 
+    description: '이번 차례에 내 도시 1곳의 생산력(노동력)이 +8 증가합니다.', 
+    targetType: 'my_city', allowedPhase: 'cityManagement'
+  },
+  noble_gift: {
+    id: 'noble_gift', level: 3, name: '고귀한 선물', 
+    description: '이 카드를 [철, 밀, 비단, 향료, 스파이, 우라늄] 중 하나로 일회성 사용(비밀 자원 획득)합니다.', 
+    targetType: 'self_resource', allowedPhase: 'any'
+  },
+  think_tank: {
+    id: 'think_tank', level: 3, name: '싱크탱크', 
+    description: '상대를 지정해 1~3단계 기술 1개를 공짜로 배우고, 내 1~3단계 기술 1개가 무작위로 넘어갑니다.', 
+    targetType: 'player', allowedPhase: 'start'
+  },
+  command_collapse: {
+    id: 'command_collapse', level: 3, name: '지휘권 붕괴', 
+    description: '상대방 유닛이 있는 칸을 선택해, 해당 칸의 모든 상대 유닛을 최대 4칸 이내의 빈 곳으로 물러나게 합니다.', 
+    targetType: 'enemy_unit_group', allowedPhase: 'cityManagement'
+  },
+  mass_asylum: {
+    id: 'mass_asylum', level: 3, name: '대규모 망명', 
+    description: '맵 전체에서 칸을 클릭해 유닛이나 위인을 최대 2개까지 제거합니다. (맵을 직접 클릭하세요)', 
+    targetType: 'map_up_to_two', allowedPhase: 'movement'
+  },
+  cataclysm: {
+    id: 'cataclysm', level: 3, name: '대재앙', 
+    description: '맵 전체에서 다른 사람의 건물(성벽 포함)을 최대 2개까지 클릭해 파괴합니다.', 
+    targetType: 'map_up_to_two', allowedPhase: 'start'
+  },
+  prime_time_tv: {
+    id: 'prime_time_tv', level: 3, name: '황금시간대 TV', 
+    description: '문화 이벤트나 자원 능력 1개를 무조건 취소시킵니다. (자원 능력을 막아도 사용된 자원은 반환되지 않음)', 
+    targetType: 'none', allowedPhase: 'any'
   }
+
 };

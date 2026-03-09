@@ -37,7 +37,9 @@ export const InterruptModal: React.FC = () => {
   
   // 🌟 [추가] 마상시합은 타겟이 내가 아니어도(문화 카드 대상이기만 하면) 사용 가능!
   const canJoustingDefense = topAction?.actionType === 'culture_card' && (currentResponder?.cultureEventCards?.some(c => c.templateId === 'jousting') ?? false);
-  
+  const canPrimeTimeDefense = (topAction?.actionType === 'culture_card' || topAction?.actionType === 'resource_ability') && 
+                              (currentResponder?.cultureEventCards?.some(c => c.templateId === 'prime_time_tv') ?? false);
+
   let canSpyDefense = false;
   if (topAction.actionType === 'culture_card') {
       const hasCivilService = currentResponder?.technologies.some(t => t.id === 'civil_service') ?? false;
@@ -49,7 +51,7 @@ export const InterruptModal: React.FC = () => {
   }
 
   // 🌟 [수정] 넷 중 하나라도 가능하면 방어 권한 획득
-  const canCounter = canUnDefense || canBreadDefense || canSpyDefense || canJoustingDefense;
+  const canCounter = canUnDefense || canBreadDefense || canSpyDefense || canJoustingDefense|| canPrimeTimeDefense;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -92,6 +94,12 @@ export const InterruptModal: React.FC = () => {
           {canJoustingDefense && (
             <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'jousting')} className="px-4 py-3 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors">
               🏇 '마상시합' 카드 사용하여 막기
+            </button>
+          )}
+
+          {canPrimeTimeDefense && (
+            <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'prime_time_tv')} className="px-4 py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors">
+              📺 '황금시간대 TV'로 무조건 막기
             </button>
           )}
 
