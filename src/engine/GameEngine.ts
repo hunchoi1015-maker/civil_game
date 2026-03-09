@@ -155,7 +155,7 @@ export function checkVictoryConditions(state: GameState): {
     }
 
     // 문화 승리
-    if (player.cultureTrack >= 20) {
+    if (player.cultureTrack >= 21) {
       return { winner: player.id, condition: 'culture' };
     }
   }

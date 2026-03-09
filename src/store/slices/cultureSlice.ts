@@ -158,9 +158,9 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
       const card = player.cultureEventCards?.find(c => c.id === cardId);
       if (!card) return;
 
-      // 빵과 서커스 & 마상시합
-      if (card.templateId === 'bread_and_circuses' || card.templateId === 'jousting') {
-          alert("이 카드는 이벤트 방어(개입) 창에서만 사용할 수 있습니다.");
+      // 빵과 서커스 & 마상시합&황금시간대 TV
+      if (card.templateId === 'bread_and_circuses' || card.templateId === 'jousting' || card.templateId === 'prime_time_tv') {
+          alert("이 카드는 상대가 능력을 썼을 때 방어(개입) 창에서만 사용할 수 있습니다.");
           return;
       }
 
@@ -209,7 +209,7 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
           return player.units.some(u => Math.abs(u.position.x - targetPos.x) + Math.abs(u.position.y - targetPos.y) <= maxDist) ||
                  player.cities.some(c => Math.abs(c.position.x - targetPos.x) + Math.abs(c.position.y - targetPos.y) <= maxDist);
       };
-
+      // 망명
       if (targeting.templateId === 'exile') {
           if (targeting.step === 0) {
               let targetUnitId = null; let targetOwnerId = null;
@@ -265,7 +265,7 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
       }
       // 🌟 [신규] 재앙 (6칸 건물 파괴) & 사보타주 (4칸 건물 파괴)
       else if (targeting.templateId === 'disaster' || targeting.templateId === 'sabotage') {
-          const dist = targeting.templateId === 'disaster' ? 60 : 60;
+          const dist = targeting.templateId === 'disaster' ? 6 : 4;
           if (!isWithinDistance(position, dist)) { alert(`내 유닛이나 도시에서 ${dist}칸 이내여야 합니다.`); return; }
           if (tile.ownerId === player.id) { alert("자신의 건물은 파괴할 수 없습니다."); return; }
           if (!tile.ownerId) { alert("주인이 없는 타일입니다."); return; }
@@ -286,7 +286,7 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
           cardToExecute = targeting.cardId; executePayload = { targetPos: position }; state.activeCardTargeting = null;
       } 
       else if (targeting.templateId === 'confusion') {
-          if (!isWithinDistance(position, 60)) { alert("내 유닛이나 도시에서 4칸 이내여야 합니다."); return; }
+          if (!isWithinDistance(position, 4)) { alert("내 유닛이나 도시에서 4칸 이내여야 합니다."); return; }
           let targetUnitId = null; let targetOwnerId = null;
           for (const p of state.players) { if (p.id === player.id) continue; const unit = p.units.find(u => u.position.x === position.x && u.position.y === position.y); if (unit) { targetUnitId = unit.id; targetOwnerId = p.id; break; } }
           if (!targetUnitId) { alert("선택한 칸에 상대 유닛이 없습니다."); return; }
@@ -321,7 +321,10 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
           
           const newTargets = [...targets, { x: position.x, y: position.y }];
           if (newTargets.length === 2) {
-              cardToExecute = targeting.cardId; executePayload = { targets: newTargets }; state.activeCardTargeting = null;
+              cardToExecute = targeting.cardId; 
+              // 🌟 [핵심 수정] 프록시 에러 방지를 위해 값을 복사해서 넘깁니다!
+              executePayload = { targets: newTargets.map(t => ({ x: t.x, y: t.y })) }; 
+              state.activeCardTargeting = null;
           } else {
               targeting.data = { targets: newTargets }; // 1개 담고 다음 클릭 대기
           }
@@ -342,7 +345,10 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
           
           const newTargets = [...targets, { x: position.x, y: position.y, targetPlayerId: tile.ownerId }];
           if (newTargets.length === 2) {
-              cardToExecute = targeting.cardId; executePayload = { targets: newTargets }; state.activeCardTargeting = null;
+              cardToExecute = targeting.cardId; 
+              // 🌟 [핵심 수정] 프록시 에러 방지를 위해 값을 복사!
+              executePayload = { targets: newTargets.map(t => ({ x: t.x, y: t.y, targetPlayerId: t.targetPlayerId })) }; 
+              state.activeCardTargeting = null;
           } else {
               targeting.data = { targets: newTargets };
           }
@@ -424,23 +430,36 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
           const city = player.cities.find(c => c.id === cityId);
           if (city) city.tempProductionBonus = (city.tempProductionBonus || 0) + 4;
       } 
-      else if (card.templateId === 'idea_share') {
+      else if (card.templateId === 'idea_share' || card.templateId === 'knowledge_sharing' || card.templateId === 'think_tank') {
           const { opponentId, techId } = payload;
           const opponent = draft.players.find(p => p.id === opponentId);
           if (opponent && techId) {
               const targetTechDef = TECHNOLOGIES.find(t => t.id === techId);
               if (targetTechDef && !player.technologies.some(t => t.id === techId)) {
+                  // 1. 상대의 기술을 내가 배움
                   player.technologies.push({ ...targetTechDef, tokensOnCard: 0, abilityUsedThisTurn: false });
-                  const myTier1Techs = player.technologies.filter(t => TECHNOLOGIES.find(td => td.id === t.id)?.level === 1);
-                  const validToGive = myTier1Techs.filter(t => !opponent.technologies.some(ot => ot.id === t.id));
+                  
+                  // 2. 내 기술 중 상대방이 없는 것을 랜덤으로 넘겨줌
+                  // (발상의공유: 1단계, 지식공유: 2단계이하, 싱크탱크: 3단계이하)
+                  const maxLevel = card.templateId === 'think_tank' ? 3 : (card.templateId === 'knowledge_sharing' ? 2 : 1);
+                  const myValidTechs = player.technologies.filter(t => {
+                      const td = TECHNOLOGIES.find(x => x.id === t.id);
+                      return td && td.level <= maxLevel;
+                  });
+                  const validToGive = myValidTechs.filter(t => !opponent.technologies.some(ot => ot.id === t.id));
+                  
                   if (validToGive.length > 0) {
                       const randomTech = validToGive[Math.floor(Math.random() * validToGive.length)];
                       const rTechDef = TECHNOLOGIES.find(t => t.id === randomTech.id);
                       if (rTechDef) opponent.technologies.push({ ...rTechDef, tokensOnCard: 0, abilityUsedThisTurn: false });
                   }
+
+                  if (!draft.combatState.log) draft.combatState.log = [];
+                  draft.combatState.log.push({ message: `💡 [${card.name}] ${player.name}이(가) 기술을 교환했습니다!` });
               }
           }
-      }// 🌟 [신규] 가뭄 효과
+      }
+      // 🌟 [신규] 가뭄 효과
       else if (card.templateId === 'drought') {
           const { targetPos } = payload;
           const tile = draft.map.tiles[targetPos.y][targetPos.x];
