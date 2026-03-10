@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { useGameStore } from '../../store/gameStore';
-import { validateTechResearch } from '../../engine/TechValidator';
+// 🌟 낡은 함수 대신 통합된 피라미드 검증 엔진을 가져옵니다.
+import { canLearnTechInPyramid } from '../../store/helpers/validationHelpers';
 
 export const WonderActionModal: React.FC = () => {
   const { 
@@ -19,7 +20,6 @@ export const WonderActionModal: React.FC = () => {
   // 2. 자유의 여신상 대기열 확인
   const isStatuePending = pendingStatueOfLibertyIds?.includes(currentPlayer.id);
 
-  // 시드니 오페라 하우스 처리 함수
   const handleSydneyAdvance = () => {
       advanceCultureTrackFree();
       consumePendingWonder(currentPlayer.id, 'sydney');
@@ -29,7 +29,7 @@ export const WonderActionModal: React.FC = () => {
       consumePendingWonder(currentPlayer.id, 'sydney');
   };
 
-  // 자유의 여신상 처리 로직 (다른 플레이어들이 가진 기술 중 내가 없는 기술 추출)
+  // 🗽 자유의 여신상 처리 로직 (상대 기술 중 피라미드 조건을 만족하는 것만 추출)
   const getAvailableTechsToSteal = () => {
       const myTechIds = new Set(currentPlayer.technologies.map(t => t.id));
       const availableTechs = new Map<string, any>();
@@ -38,11 +38,10 @@ export const WonderActionModal: React.FC = () => {
           if (p.id === currentPlayer.id) return;
           p.technologies.forEach(tech => {
               if (!myTechIds.has(tech.id)) {
-                  // 🌟 [추가] 피라미드 룰 검사! (내 국가 기준으로 이 기술을 배울 자격이 있는지 확인)
-                  const validation = validateTechResearch(tech.id, currentPlayer.technologies, 0, currentPlayer.nation);
+                  // 🌟 [핵심] 내 국가 기준 피라미드 룰 검사를 통과한 기술만 모달에 표시합니다!
+                  const validation = canLearnTechInPyramid(currentPlayer, tech.id);
                   
-                  // 조건(isValid)을 통과한 기술만 목록에 추가합니다.
-                  if (validation.isValid) {
+                  if (validation.canResearch) {
                       availableTechs.set(tech.id, tech);
                   }
               }
@@ -61,7 +60,6 @@ export const WonderActionModal: React.FC = () => {
       consumePendingWonder(currentPlayer.id, 'statue');
   };
 
-  // 아무 대기열에도 없으면 아무것도 그리지 않음
   if (!isSydneyPending && !isStatuePending) return null;
 
   // 🎵 시드니 오페라 하우스 렌더링
@@ -102,12 +100,12 @@ export const WonderActionModal: React.FC = () => {
             <div className="text-center mb-6">
               <h2 className="text-3xl mb-4">🗽</h2>
               <h2 className="text-2xl font-bold text-white mb-2">자유의 여신상</h2>
-              <p className="text-slate-300">상대방의 기술 중 하나를 선택해 무료로 배울 수 있습니다!</p>
+              <p className="text-slate-300">상대방의 기술 중 내 피라미드 조건에 맞는 기술을 무료로 배울 수 있습니다!</p>
             </div>
 
             {availableTechs.length === 0 ? (
                 <div className="text-center">
-                    <p className="text-red-400 mb-6">현재 상대방들에게서 배울 수 있는 새로운 기술이 없습니다.</p>
+                    <p className="text-red-400 mb-6">현재 피라미드 조건에 맞아 새롭게 배울 수 있는 상대방의 기술이 없습니다.</p>
                     <button 
                         onClick={handleStatueSkip}
                         className="px-6 py-3 bg-slate-600 hover:bg-slate-500 text-white font-bold rounded-lg transition-colors"
