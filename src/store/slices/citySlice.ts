@@ -5,7 +5,7 @@ import { Position, createCity, createInitialLuxuryResources } from '../../types'
 import { BUILDINGS } from '../../constants/buildings';
 import { calculateDetailedCityProduction, calculateCityCulture } from '../../engine/ResourceCalculator';
 import { findPlayerById,hasActiveWonder } from '../helpers/playerHelpers';
-import { setAdjacentTilesOwner } from '../helpers/mapHelpers';
+import { setAdjacentTilesOwner, isTileBlockedByEnemy } from '../helpers/mapHelpers';
 import { ResourceType } from '../../types/map';
 import { WonderType, WONDERS } from '../../types/wonder';
 
@@ -279,22 +279,34 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       const cx = city.position.x;
       const cy = city.position.y;
 
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const nx = cx + dx;
-          const ny = cy + dy;
-          if (nx >= 0 && nx < state.map.width && ny >= 0 && ny < state.map.height) {
-            const tile = state.map.tiles[ny][nx];
-            if (tile.resource === targetResource) {
-              resourceFound = true;
-              break; 
+      if (city.pioneerLinkedLuxuries && city.pioneerLinkedLuxuries.includes(targetResource)) {
+        resourceFound = true;
+      } else {
+        // 2단계: 개척자가 안 보내줬다면 기본 교외지역(9칸) 검색
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = cx + dx;
+            const ny = cy + dy;
+            if (nx >= 0 && nx < state.map.width && ny >= 0 && ny < state.map.height) {
+              const tile = state.map.tiles[ny][nx];
+              if (tile.resource === targetResource) {
+                // 🌟 [수정 3] 이 타일을 적 유닛이 밟고 있다면 수확 불가(무시)
+                if (!isTileBlockedByEnemy(state.players, player.id, nx, ny)) {
+                  resourceFound = true;
+                  break; 
+                }
+              }
             }
           }
+          if (resourceFound) break;
         }
-        if (resourceFound) break;
       }
 
-      if (!resourceFound) return;
+      // 수확할 자원이 아예 없거나 적이 막고 있으면 거부
+      if (!resourceFound) {
+          alert(`[${targetResource}] 자원을 수확할 수 없습니다. (주변에 없거나 적 유닛이 차단 중입니다.)`);
+          return;
+      }
 
       if (!player.luxuryResources) {
         player.luxuryResources = createInitialLuxuryResources();

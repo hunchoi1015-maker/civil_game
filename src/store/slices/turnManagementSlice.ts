@@ -93,6 +93,10 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
             city.actionTypeThisTurn = 'none';
             city.usedProductionThisTurn = 0;
             city.producedItemsCount = 0;
+
+            city.pioneerProductionBonus = 0;
+            city.pioneerTradeBonus = 0;
+            city.pioneerLinkedLuxuries = [];
           });
         });
       } else {
@@ -174,6 +178,10 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
           city.actionTypeThisTurn = 'none';
           city.usedProductionThisTurn = 0;
           city.producedItemsCount = 0;
+
+          city.pioneerProductionBonus = 0;
+          city.pioneerTradeBonus = 0;
+          city.pioneerLinkedLuxuries = [];
         });
       });
 

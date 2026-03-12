@@ -1,4 +1,4 @@
-import { Position } from './map';
+import { Position, ResourceType } from './map';
 
 export interface City {
   id: string;
@@ -20,6 +20,10 @@ export interface City {
   actionTypeThisTurn?: 'none' | 'harvest' | 'produce'; 
   usedProductionThisTurn?: number; // 이번 턴에 사용한 생산력
   producedItemsCount?: number;     // 이번 턴에 생산한 물품 개수
+
+  pioneerProductionBonus?: number;
+  pioneerTradeBonus?: number;
+  pioneerLinkedLuxuries?: ResourceType[];
 }
 
 export interface Building {

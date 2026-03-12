@@ -1,4 +1,5 @@
 import { GameMap, Tile, TerrainType, ResourceType, Position, RewardType } from '../../types';
+import { Player } from '../../types/player';
 
 export function generateMap(width: number, height: number): GameMap {
   const resources: ResourceType[] = ['spice', 'wheat', 'silk', 'iron', 'none'];
@@ -192,4 +193,31 @@ export function getSurroundingPositions(center: Position, width: number, height:
         }
     }
     return positions;
+}
+
+export function isTileInPlayerSuburb(players: Player[], playerId: string, x: number, y: number): boolean {
+  const player = players.find(p => p.id === playerId);
+  if (!player) return false;
+
+  for (const city of player.cities) {
+    const dx = Math.abs(city.position.x - x);
+    const dy = Math.abs(city.position.y - y);
+    if (dx <= 1 && dy <= 1) { // 도시 자신(0,0)을 포함해 주변 8방향 반경 1칸 이내면 교외지역
+      return true;
+    }
+  }
+  return false;
+}
+
+// 🌟 [추가] 특정 타일에 적(다른 플레이어) 유닛이 올라와 있어 자원 수확이 차단되었는지 판별
+export function isTileBlockedByEnemy(players: Player[], ownerId: string, x: number, y: number): boolean {
+  for (const p of players) {
+    if (p.id === ownerId) continue; // 내 유닛은 차단하지 않음
+    
+    // 적 유닛 중 하나라도 이 타일을 밟고 있다면 true 반환
+    if (p.units.some(u => u.position.x === x && u.position.y === y)) {
+      return true;
+    }
+  }
+  return false;
 }

@@ -11,7 +11,8 @@ import {
 } from '../types';
 import { BUILDINGS } from '../constants/buildings';
 import { WONDERS, WonderType } from '../types/wonder';
-import { isWonderActive } from '../store/helpers/playerHelpers'; // 🌟 봉쇄 판정 헬퍼 임포트
+import { isWonderActive } from '../store/helpers/playerHelpers'; 
+import { isTileBlockedByEnemy } from '../store/helpers/mapHelpers';
 
 export interface TileYield {
   production: number;
@@ -68,18 +69,27 @@ export function getCitySurroundingTiles(city: City, map: GameMap): Tile[] {
   return positions.map(pos => map.tiles[pos.y][pos.x]);
 }
 
-// 🌟 [수정 2] 도시 계산 함수들: 외부에서 players를 받아와서 calculateTileYield로 넘겨줍니다.
+// 🌟 [수정] 생산력 계산에 봉쇄 판정 및 개척자 보너스 반영
 export function calculateCityProduction(city: City, map: GameMap, players?: Player[]): number {
   let production = 0;
   
+  // 플레이어 ID 식별 (isTileBlockedByEnemy 파라미터용)
+  const owner = players?.find(p => p.cities.some(c => c.id === city.id));
+  const ownerId = owner ? owner.id : '';
+
   if (city.position.x >= 0 && city.position.x < map.width && city.position.y >= 0 && city.position.y < map.height) {
-    const cityTile = map.tiles[city.position.y][city.position.x];
-    production += calculateTileYield(cityTile, players).production;
+    if (!players || !isTileBlockedByEnemy(players, ownerId, city.position.x, city.position.y)) {
+      const cityTile = map.tiles[city.position.y][city.position.x];
+      production += calculateTileYield(cityTile, players).production;
+    }
   }
 
-  const surroundingTiles = getCitySurroundingTiles(city, map);
-  for (const tile of surroundingTiles) {
-    production += calculateTileYield(tile, players).production;
+  const surroundingPositions = getSurroundingPositions(city.position, map.width, map.height);
+  for (const pos of surroundingPositions) {
+    if (!players || !isTileBlockedByEnemy(players, ownerId, pos.x, pos.y)) {
+      const tile = map.tiles[pos.y][pos.x];
+      production += calculateTileYield(tile, players).production;
+    }
   }
 
   city.buildings.forEach(b => {
@@ -93,6 +103,11 @@ export function calculateCityProduction(city: City, map: GameMap, players?: Play
       production += city.tempProductionBonus;
   }
   
+  // 🌟 개척자 타일 보급 보너스 합산
+  if (city.pioneerProductionBonus) {
+      production += city.pioneerProductionBonus;
+  }
+  
   return production;
 }
 
@@ -101,19 +116,25 @@ export function calculateDetailedCityProduction(city: City, map: GameMap, player
   base: number, 
   buildings: number, 
   militaryScience: number, 
-  tempBonus: number 
+  tempBonus: number,
+  pioneerBonus: number // 🌟 리턴 타입에 개척자 보너스 명시
 } {
   let base = 0;
   let buildings = 0;
 
   if (city.position.x >= 0 && city.position.x < map.width && city.position.y >= 0 && city.position.y < map.height) {
-    const cityTile = map.tiles[city.position.y][city.position.x];
-    base += calculateTileYield(cityTile, players).production;
+    if (!isTileBlockedByEnemy(players || [], player.id, city.position.x, city.position.y)) {
+      const cityTile = map.tiles[city.position.y][city.position.x];
+      base += calculateTileYield(cityTile, players).production;
+    }
   }
 
-  const surroundingTiles = getCitySurroundingTiles(city, map);
-  for (const tile of surroundingTiles) {
-    base += calculateTileYield(tile, players).production;
+  const surroundingPositions = getSurroundingPositions(city.position, map.width, map.height);
+  for (const pos of surroundingPositions) {
+    if (!isTileBlockedByEnemy(players || [], player.id, pos.x, pos.y)) {
+      const tile = map.tiles[pos.y][pos.x];
+      base += calculateTileYield(tile, players).production;
+    }
   }
 
   city.buildings.forEach(b => {
@@ -129,22 +150,33 @@ export function calculateDetailedCityProduction(city: City, map: GameMap, player
       militaryScience = Math.floor(player.resources.currency / 3);
   }
 
-  const total = base + buildings + tempBonus + militaryScience;
+  // 🌟 개척자 타일 보급 보너스 합산
+  const pioneerBonus = city.pioneerProductionBonus || 0;
 
-  return { total, base, buildings, militaryScience, tempBonus };
+  const total = base + buildings + tempBonus + militaryScience + pioneerBonus;
+
+  return { total, base, buildings, militaryScience, tempBonus, pioneerBonus };
 }
 
+// 🌟 [수정] 교역력 계산에 봉쇄 판정 및 개척자 보너스 반영
 export function calculateCityTrade(city: City, map: GameMap, players?: Player[]): number {
   let trade = 0;
+  const owner = players?.find(p => p.cities.some(c => c.id === city.id));
+  const ownerId = owner ? owner.id : '';
 
   if (city.position.x >= 0 && city.position.x < map.width && city.position.y >= 0 && city.position.y < map.height) {
-     const cityTile = map.tiles[city.position.y][city.position.x];
-     trade += calculateTileYield(cityTile, players).trade;
+     if (!players || !isTileBlockedByEnemy(players, ownerId, city.position.x, city.position.y)) {
+       const cityTile = map.tiles[city.position.y][city.position.x];
+       trade += calculateTileYield(cityTile, players).trade;
+     }
   }
 
-  const surroundingTiles = getCitySurroundingTiles(city, map);
-  for (const tile of surroundingTiles) {
-    trade += calculateTileYield(tile, players).trade;
+  const surroundingPositions = getSurroundingPositions(city.position, map.width, map.height);
+  for (const pos of surroundingPositions) {
+    if (!players || !isTileBlockedByEnemy(players, ownerId, pos.x, pos.y)) {
+      const tile = map.tiles[pos.y][pos.x];
+      trade += calculateTileYield(tile, players).trade;
+    }
   }
 
   city.buildings.forEach(b => {
@@ -154,20 +186,33 @@ export function calculateCityTrade(city: City, map: GameMap, players?: Player[])
     }
   });
 
+  // 🌟 개척자 타일 보급 교역 보너스 합산
+  if (city.pioneerTradeBonus) {
+      trade += city.pioneerTradeBonus;
+  }
+
   return trade;
 }
 
+// 🌟 [수정] 문화력 계산에 봉쇄 판정 반영 (문화는 개척자 보너스가 없으므로 차단 로직만 적용)
 export function calculateCityCulture(city: City, map: GameMap, players?: Player[]): number {
   let culture = 0;
+  const owner = players?.find(p => p.cities.some(c => c.id === city.id));
+  const ownerId = owner ? owner.id : '';
 
   if (city.position.x >= 0 && city.position.x < map.width && city.position.y >= 0 && city.position.y < map.height) {
-     const cityTile = map.tiles[city.position.y][city.position.x];
-     culture += calculateTileYield(cityTile, players).culture;
+     if (!players || !isTileBlockedByEnemy(players, ownerId, city.position.x, city.position.y)) {
+       const cityTile = map.tiles[city.position.y][city.position.x];
+       culture += calculateTileYield(cityTile, players).culture;
+     }
   }
 
-  const surroundingTiles = getCitySurroundingTiles(city, map);
-  for (const tile of surroundingTiles) {
-    culture += calculateTileYield(tile, players).culture;
+  const surroundingPositions = getSurroundingPositions(city.position, map.width, map.height);
+  for (const pos of surroundingPositions) {
+    if (!players || !isTileBlockedByEnemy(players, ownerId, pos.x, pos.y)) {
+      const tile = map.tiles[pos.y][pos.x];
+      culture += calculateTileYield(tile, players).culture;
+    }
   }
 
   city.buildings.forEach(b => {

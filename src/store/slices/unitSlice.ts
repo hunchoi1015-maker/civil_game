@@ -7,6 +7,7 @@ import { Position, UnitType, createUnit, BASE_STACKING_LIMIT, RewardType, UNIT_D
 import { findPlayerById } from '../helpers/playerHelpers';
 import { getPlayerPassives } from '../helpers/playerHelpers';
 import { calculateDetailedCityProduction } from '../../engine/ResourceCalculator';
+import { calculateTileYield } from '../../engine/ResourceCalculator';
 
 export interface UnitSlice {
   // 🌟 [수정] 4번째 파라미터(sourceCityId) 추가!
@@ -16,6 +17,7 @@ export interface UnitSlice {
   moveSelectedUnits: (newPosition: Position) => void;
   exploreChunk: (unitId: string, targetChunkPos: Position) => void;
   claimObjectReward: (playerId: string, reward: RewardType) => void;
+  sendPioneerTileToCity: (pioneerId: string, cityId: string) => void;
 }
 
 export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]], [], UnitSlice> = (set, get) => ({
@@ -357,5 +359,42 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
           else if (reward.type === 'greatPerson') player.greatPeople += 1;
           else if (reward.type === 'nuclear') player.nuclearMaterial += 1;
       });
-  }
+  },
+
+  // 🌟 [추가] 개척자 보급 스킬 구현부
+  sendPioneerTileToCity: (pioneerId: string, cityId: string) => {
+    set((state) => {
+      const player = state.players[state.currentPlayerIndex];
+      const pioneer = player.units.find(u => u.id === pioneerId);
+      const city = player.cities.find(c => c.id === cityId);
+
+      if (!pioneer || !city) return;
+
+      const tile = state.map.tiles[pioneer.position.y][pioneer.position.x];
+      
+      // 🌟 calculateTileYield를 사용하여 실제 타일의 자원 산출량을 가져옵니다.
+      const tileYield = calculateTileYield(tile, state.players);
+
+      // 🌟 1. 생산력과 교역 복사
+      city.pioneerProductionBonus = tileYield.production || 0;
+      city.pioneerTradeBonus = tileYield.trade || 0;
+      
+      // 🌟 2. 사치품 접근권(Link) 복사
+      city.pioneerLinkedLuxuries = [];
+      if (tile.resource) {
+          city.pioneerLinkedLuxuries.push(tile.resource);
+      }
+
+      // 전투/액션 로그에 기록
+      //if (!state.combatState) state.combatState = { log: [] }; // 방어 로직
+      if (!state.combatState.log) state.combatState.log = [];
+      state.combatState.log.push({ 
+          message: `⛺ [보급] 개척자가 타일의 자원(생산+${city.pioneerProductionBonus}, 교역+${city.pioneerTradeBonus})을 ${city.name}에 전송했습니다!` 
+      });
+
+      // 🌟 스킬 사용 후 개척자 행동력 소모 처리
+      pioneer.movement = 0;
+      pioneer.hasMoved = true;
+    });
+  },
 });

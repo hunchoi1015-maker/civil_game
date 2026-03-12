@@ -24,6 +24,7 @@ import { InterruptModal } from '../components/game/InterruptModal';
 import { WonderActionModal } from '../components/game/WonderActionModal';
 import { CultureTrackWidget } from '../components/game/CultureTrackWidget';
 import { CultureCardTargetModal } from '../components/game/CultureCardTargetModal';
+import { PioneerActionModal } from '../components/game/PioneerActionModal'; // 🌟 모달 임포트
 
 type PanelView = 'map' | 'tech' | 'city' | 'units';
 
@@ -34,8 +35,11 @@ export function GameScreen() {
   const [showPlayerTransition, setShowPlayerTransition] = useState(false);
   const [previousPlayerIndex, setPreviousPlayerIndex] = useState(currentPlayerIndex);
 
-  // 플레이어 변경 시 전환 화면 표시
+  // 🌟 [추가] 개척자 액션 모달 상태 및 중복 띄움 방지 장치
+  const [isPioneerModalOpen, setIsPioneerModalOpen] = useState(false);
+  const [lastPioneerPrompt, setLastPioneerPrompt] = useState({ turn: -1, playerIndex: -1 });
 
+  // 플레이어 변경 시 전환 화면 표시
   useEffect(() => {
     if (players.length === 0) {
       navigate('/');
@@ -48,6 +52,23 @@ export function GameScreen() {
       setPreviousPlayerIndex(currentPlayerIndex);
     }
   }, [currentPlayerIndex, previousPlayerIndex, players.length]);
+
+  // 🌟 [추가] 턴 시작 시(PlayerTransition이 닫힌 직후) 개척자가 있으면 팝업 표시
+  useEffect(() => {
+    if (!showPlayerTransition && players.length > 0) {
+      const currentPlayer = players[currentPlayerIndex];
+      // 해당 턴, 해당 플레이어에게 이미 띄운 적이 있는지 검사
+      if (currentPlayer && (lastPioneerPrompt.turn !== turn || lastPioneerPrompt.playerIndex !== currentPlayerIndex)) {
+        const hasAvailablePioneer = currentPlayer.units.some(u => u.type === 'settler' && u.movement > 0);
+        if (hasAvailablePioneer) {
+          setIsPioneerModalOpen(true);
+        }
+        // 검사 완료 후 기록 업데이트
+        setLastPioneerPrompt({ turn, playerIndex: currentPlayerIndex });
+      }
+    }
+  }, [turn, currentPlayerIndex, players, showPlayerTransition, lastPioneerPrompt]);
+
 
   if (players.length === 0) {
     return null;
@@ -215,8 +236,15 @@ export function GameScreen() {
           <TechAbilityWidget />
         </div>     
       </div>
+      
+      {/* 🌟 [추가] 개척자 보급 액션 모달 */}
+      <PioneerActionModal 
+        isOpen={isPioneerModalOpen}
+        onClose={() => setIsPioneerModalOpen(false)}
+      />
+
       {/* 공공 서비스 방해 모달 */}
-        <InterruptModal />
+      <InterruptModal />
 
       {/* 승리 모달 */}
       {isGameOver && winner && <VictoryModal />}
