@@ -1,5 +1,6 @@
 import { useGameStore } from '../../store/gameStore';
 import { GOVERNMENTS } from '../../constants/governments';
+import { NATIONS } from '../../types/nation';
 
 const PLAYER_COLORS_BG: Record<string, string> = {
   red: 'bg-red-500',
@@ -26,6 +27,7 @@ export function PlayerPanel() {
         const isCurrentPlayer = index === currentPlayerIndex;
         const isMe = index === currentPlayerIndex;
         const govEffect = player.government ? GOVERNMENTS[player.government] : null;
+        const nationDef = player.nation ? NATIONS[player.nation as keyof typeof NATIONS] : null;
 
         // ====================================================================
         // 🌟 [신규] 비밀 자원 그룹화 로직 (내 것은 내용 공개, 남의 것은 ? 처리)
@@ -56,6 +58,12 @@ export function PlayerPanel() {
             <div className="flex items-center gap-2 mb-2">
               <div className={`w-4 h-4 rounded-full ${PLAYER_COLORS_BG[player.color]}`} />
               <span className="text-white font-medium">{player.name}</span>
+              {/* 🌟 국가 이름과 국기 표시 */}
+              {nationDef && (
+                <span className="text-xs text-slate-300 ml-1 px-1.5 py-0.5 bg-slate-800 rounded border border-slate-600">
+                  {nationDef.flag} {nationDef.name}
+                </span>
+              )}
               {isCurrentPlayer && (
                 <span className="text-xs text-amber-500 ml-auto">현재 턴</span>
               )}

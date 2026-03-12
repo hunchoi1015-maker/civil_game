@@ -6,7 +6,7 @@ import { useGameStore } from '../../../store/gameStore';
 import { City, UnitType, UNIT_DEFINITIONS, Position, TERRAIN_PROPERTIES, BuildingDefinition, TerrainType, Player } from '../../../types';
 import { BUILDINGS, getAvailableBuildings } from '../../../constants/buildings';
 import { getAvailableArmyCards, ArmyCardTemplate } from '../../../constants/armyCards';
-import { calculateCityProduction, calculateDetailedCityProduction, calculateCityCulture } from '../../../engine/ResourceCalculator';
+import {  calculateDetailedCityProduction, calculateCityCulture } from '../../../engine/ResourceCalculator';
 import clsx from 'clsx';
 import { ResourceType } from '../../../types/map';
 import { getNextStepCost, CULTURE_TRACK_MAX } from '../../../constants/culture';
@@ -233,6 +233,8 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
     const resources = new Set<ResourceType>();
     const cx = selectedCity.position.x;
     const cy = selectedCity.position.y;
+    
+    // 1. 기존: 도시 주변 9칸(중심 포함) 탐색
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
         const nx = cx + dx;
@@ -243,6 +245,14 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
         }
       }
     }
+
+    // 🌟 2. [추가] 개척자가 도시로 보급해 준 사치품 접근권 추가
+    if (selectedCity.pioneerLinkedLuxuries) {
+      selectedCity.pioneerLinkedLuxuries.forEach(res => {
+        if (res !== 'none') resources.add(res);
+      });
+    }
+
     return Array.from(resources);
   }, [selectedCity, map]);
 
@@ -495,7 +505,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
           {/* 사치품 수확 */}
           {availableResources.length > 0 && (
             <div className="bg-slate-800 rounded-lg p-4 mb-4 border border-amber-700/50">
-                <h4 className="text-lg font-bold text-amber-400 mb-3 flex items-center gap-2"><span>🌾</span> 사치품 수확 (주변 8칸)</h4>
+                <h4 className="text-lg font-bold text-amber-400 mb-3 flex items-center gap-2"><span>🌾</span> 사치품 수확 (주변 8칸&보급)</h4>
                 <div className="flex flex-wrap gap-2">
                     {availableResources.map((resource) => (
                         <button key={resource} onClick={() => handleHarvestResource(resource)} disabled={!isOwner || cannotHarvest || !canManageCity} className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold border', (!isOwner || cannotHarvest || !canManageCity) ? 'bg-slate-700 border-slate-600 opacity-50' : 'bg-slate-700 border-amber-600 hover:bg-amber-900 text-white')}>

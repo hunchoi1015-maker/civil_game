@@ -392,9 +392,6 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
           message: `⛺ [보급] 개척자가 타일의 자원(생산+${city.pioneerProductionBonus}, 교역+${city.pioneerTradeBonus})을 ${city.name}에 전송했습니다!` 
       });
 
-      // 🌟 스킬 사용 후 개척자 행동력 소모 처리
-      pioneer.movement = 0;
-      pioneer.hasMoved = true;
     });
   },
 });

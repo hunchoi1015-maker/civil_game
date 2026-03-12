@@ -301,12 +301,12 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
           if (resourceFound) break;
         }
       }
-
-      // 수확할 자원이 아예 없거나 적이 막고 있으면 거부
-      if (!resourceFound) {
-          alert(`[${targetResource}] 자원을 수확할 수 없습니다. (주변에 없거나 적 유닛이 차단 중입니다.)`);
-          return;
+      // 🌟 [수정 4] 주변 9칸에 없더라도, 개척자가 보급해 준 사치품 접근권이 있다면 수확 가능!
+      if (!resourceFound && city.pioneerLinkedLuxuries?.includes(targetResource)) {
+          resourceFound = true;
       }
+
+      if (!resourceFound) return;
 
       if (!player.luxuryResources) {
         player.luxuryResources = createInitialLuxuryResources();

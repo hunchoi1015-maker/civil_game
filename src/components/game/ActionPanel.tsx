@@ -1,7 +1,11 @@
+// src/components/game/ActionPanel.tsx
+
+import { useState } from 'react'; // 🌟 useState 임포트 추가
 import { useGameStore } from '../../store/gameStore';
 import { getPhaseDisplayName, getPhaseDescription, calculateTradeIncome } from '../../engine/GameEngine';
 import { TERRAIN_PROPERTIES } from '../../types';
 import { GovernmentPanel } from './GovernmentPanel';
+import { PioneerActionModal } from './PioneerActionModal'; // 🌟 모달 컴포넌트 임포트
 
 export function ActionPanel() {
   const {
@@ -24,6 +28,9 @@ export function ActionPanel() {
     targetingMode,
   } = useGameStore();
 
+  // 🌟 모달 팝업 상태 관리
+  const [isPioneerModalOpen, setIsPioneerModalOpen] = useState(false);
+
   const currentPlayer = players[currentPlayerIndex];
 
   const unplacedGPCount = currentPlayer.unplacedGreatPeople?.length || 0;
@@ -36,13 +43,25 @@ export function ActionPanel() {
     : null;
 
   // 계산된 수입
-  const tradeIncome = calculateTradeIncome(currentPlayer,map);
+  const tradeIncome = calculateTradeIncome(currentPlayer, map);
 
   const handleCollectTrade = () => {
     collectTradeIncome(currentPlayer.id);
   };
 
+  const isOutskirts = (pos: { x: number; y: number }) => {
+    return !players.some(p =>
+      p.cities.some(c =>
+        Math.abs(c.position.x - pos.x) <= 1 && Math.abs(c.position.y - pos.y) <= 1
+      )
+    );
+  };
   
+  // 🌟 교외(cityId가 없는 타일)에 위치한 개척자 존재 여부 판별
+  const hasOutskirtsSettler = currentPlayer.units.some(
+    (u) => u.type === 'settler' && isOutskirts(u.position)
+  );
+
   return (
     <div className="p-4 space-y-4">
       {/* 현재 단계 정보 */}
@@ -102,7 +121,25 @@ export function ActionPanel() {
         {currentPhase === 'start' && (
           <div className="space-y-2">
             
-            {/* 🌟 [신규 추가] 대기 중인 위인이 있을 때만 보이는 버튼 UI */}
+            {/* 🌟 [신규 추가] 개척자 보급 스킬 버튼 (시작 단계에서만 활성화) */}
+            <div className="bg-slate-800 border border-slate-600 p-3 rounded-lg mb-2">
+              <p className="text-white text-sm font-bold mb-2 flex items-center gap-1">
+                <span>⛺</span> 개척자 보급 스킬
+              </p>
+              <button
+                onClick={() => setIsPioneerModalOpen(true)}
+                disabled={!hasOutskirtsSettler}
+                className={`w-full py-2 rounded font-bold transition-colors ${
+                  hasOutskirtsSettler
+                    ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-md'
+                    : 'bg-slate-700 text-slate-500 cursor-not-allowed border border-slate-600'
+                }`}
+              >
+                {hasOutskirtsSettler ? '보급 스킬 사용하기' : '조건 미달 (교외 개척자 없음)'}
+              </button>
+            </div>
+
+            {/* 대기 중인 위인이 있을 때만 보이는 버튼 UI */}
             {unplacedGPCount > 0 && (
               <div className="bg-amber-900/50 border border-amber-500 p-3 rounded-lg mb-2">
                 <p className="text-amber-300 text-sm font-bold mb-2">
@@ -297,6 +334,12 @@ export function ActionPanel() {
           </div>
         </details>
       </div>
+
+      {/* 🌟 모달 마운트 (이 영역은 화면의 최상단 레이어로 렌더링됩니다) */}
+      <PioneerActionModal 
+        isOpen={isPioneerModalOpen} 
+        onClose={() => setIsPioneerModalOpen(false)} 
+      />
     </div>
   );
 }
