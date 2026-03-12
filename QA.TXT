@@ -19,6 +19,8 @@ https://gamecollege.com/archives/5314
 https://namu.wiki/w/%EB%A0%88%EB%B2%A8%20%EB%94%94%EC%9E%90%EC%9D%B8
 https://www.reddit.com/r/gamedev/comments/lygftq/how_do_you_balance_your_game/?tl=ko
 https://m.blog.naver.com/PostList.naver?blogId=tepet&categoryName=%EC%97%AD%EA%B8%B0%ED%9A%8D%EC%84%9C%EA%B0%95%EC%9D%98&categoryNo=166&logCode=0&tab=1
+https://wikidocs.net/book/19009
+유리링의 게임 기획자 책
 =======================================
 qa ver1
 
@@ -558,9 +560,7 @@ qa ver2
 1.사보타주
 2. 무정부
 
-시작 기술과 기술 피라미드 관계
-교역
-
+불가사의 개방 순서?
 오두막, 마을로 얻은 자원도 전투 중 사용할 수 있도록
 개척자+군사 유닛으로 오두막 이동시, 이동은 되나 오두막 획득 X
 마을 전투시, 전투 보너스 적용 X?
