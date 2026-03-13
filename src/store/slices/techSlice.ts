@@ -1,5 +1,5 @@
 // src/store/slices/techSlice.ts
-
+import { v4 as uuidv4 } from 'uuid';
 import { StateCreator } from 'zustand';
 import { GameStore } from '../types/storeTypes';
 import { TECHNOLOGIES } from '../../constants/technologies';
@@ -94,8 +94,16 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
       }
 
       const unlockedCards = ARMY_CARD_TEMPLATES.filter(c => c.requiredTech === techId);
+      
+      // 👇👇 플래그 변수 2개 선언 추가 👇👇
+      let isArmyUpgrade = false; 
+      let upgradedCardTemplate: any = null;
+
       unlockedCards.forEach(newCard => {
           if (newCard.tier > 1) {
+              isArmyUpgrade = true; // 진급 발생 체크
+              upgradedCardTemplate = newCard; // 템플릿 저장
+
               if (player.armyCards) { 
                   player.armyCards.forEach(card => {
                       if (card.type === newCard.type && card.tier < newCard.tier) {
@@ -109,6 +117,29 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
               }
           }
       });
+
+      // 👇👇 [여기부터 추가] 독일 특성 로직 👇👇
+      if (player.nation === 'germany' && isArmyUpgrade && upgradedCardTemplate) {
+          player.armyCards.push({
+              id: uuidv4(),
+              type: upgradedCardTemplate.type,
+              tier: upgradedCardTemplate.tier,
+              attack: upgradedCardTemplate.attack,
+              health: upgradedCardTemplate.health,
+              maxHealth: upgradedCardTemplate.maxHealth,
+              ownerId: player.id,
+              name: `[독일 정예] ${upgradedCardTemplate.name}`
+          });
+          
+          if (!state.combatState) state.combatState = { log: [] } as any;
+          if (!state.combatState.log) state.combatState.log = [];
+          state.combatState.log.push({ message: `⚙️ [독일 특성] 부대 진급으로 '${upgradedCardTemplate.name}' 부대를 무료로 획득했습니다! (자원 선택 대기)` });
+          
+          // 자원 선택 모달 띄우기 (uiSlice의 상태 조작)
+          state.germanyResourcePrompt = true;
+      }
+
+
 
       const unlockedGov = Object.values(GOVERNMENTS).find(g => g.requiredTech === techId);
       if (unlockedGov) {

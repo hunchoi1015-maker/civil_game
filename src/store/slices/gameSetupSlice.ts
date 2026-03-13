@@ -1,5 +1,3 @@
-// src/store/slices/gameSetupSlice.ts
-
 import { StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { GameStore, GameSetupState } from '../types/storeTypes';
@@ -7,13 +5,15 @@ import { NationType, Position, Player, createInitialResources, createCity, creat
 import { generateMap, setAdjacentTilesOwner } from '../helpers/mapHelpers';
 import { createInitialLuxuryResources } from '../../types/player';
 import { TECHNOLOGIES } from '../../constants/technologies';
+import { NATIONS } from '../../types/nation'; // 🌟 추가
+import { drawRandomGreatPerson } from '../../constants/greatPerson';
 
 export interface GameSetupSlice {
   setupState: GameSetupState;
   initSetup: (playerCount: number, playerNames: string[]) => void;
   selectNation: (playerIndex: number, nation: NationType) => void;
   selectCapitalPosition: (playerIndex: number, position: Position) => void;
-  placeInitialUnit: (playerIndex: number, position: Position) => void; // 🌟 [신규] 초기 유닛 배치 액션
+  placeInitialUnit: (playerIndex: number, position: Position) => void;
   startGame: () => void;
 }
 
@@ -22,7 +22,7 @@ const initialSetupState: GameSetupState = {
   currentSetupPlayer: 0,
   selectedNations: [],
   capitalPositionOptions: [],
-  pendingInitialUnits: {}, // 초기화
+  pendingInitialUnits: {},
 };
 
 const PLAYER_COLORS_LIST = ['red', 'blue', 'green', 'yellow'] as const;
@@ -218,16 +218,75 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
       state.firstPlayerIndex = 0;
       state.phaseComplete = new Array(state.players.length).fill(false);
 
-      // 🌟 [추가] 게임 시작 시 각 플레이어에게 국가 고유(시작) 기술을 무료로 지급합니다!
+      // 🌟 [수정] 게임 시작 시 국가별 특성(시작 보너스) 일괄 지급
       state.players.forEach(player => {
+          const nationDef = NATIONS[player.nation as keyof typeof NATIONS];
+          if (!nationDef) return;
+
+          const bonus = nationDef.startingBonus;
+
+          // 1. 고유 시작 기술 + 보너스 기술 해금
+          const techsToUnlock = [...(bonus.unlockedTechs || [])];
           const startingTechDef = TECHNOLOGIES.find(t => t.isStartingTechFor === player.nation);
-          if (startingTechDef && !player.technologies.some(t => t.id === startingTechDef.id)) {
-              player.technologies.push({
-                  ...startingTechDef,
-                  tokensOnCard: 0,
-                  abilityUsedThisTurn: false,
-                  usedPhases: []
+          if (startingTechDef && !techsToUnlock.includes(startingTechDef.id)) {
+              techsToUnlock.push(startingTechDef.id);
+          }
+
+          techsToUnlock.forEach(techId => {
+              const techDef = TECHNOLOGIES.find(t => t.id === techId);
+              if (techDef && !player.technologies.some(t => t.id === techId)) {
+                  player.technologies.push({
+                      ...techDef,
+                      tokensOnCard: 0,
+                      abilityUsedThisTurn: false,
+                      usedPhases: []
+                  });
+              }
+          });
+
+          // 2. 정치 체제 적용
+          if (bonus.startingGovernment) {
+              player.government = bonus.startingGovernment as any;
+          }
+
+          // 3. 위인 지급
+          if (bonus.greatPeople) {
+              player.greatPeople += bonus.greatPeople;
+              // 랜덤 위인 객체를 생성하여 대기열에 추가합니다!
+              if (!player.unplacedGreatPeople) player.unplacedGreatPeople = [];
+              for(let i = 0; i < bonus.greatPeople; i++) {
+                  player.unplacedGreatPeople.push(drawRandomGreatPerson());
+              }
+          }
+
+          // 4. 시작 부대 카드 지급 (예: 독일 보병 1티어 2장)
+          if (bonus.armyCards) {
+              bonus.armyCards.forEach(ac => {
+                  for (let i = 0; i < ac.count; i++) {
+                      player.armyCards.push({
+                          id: uuidv4(),
+                          type: ac.type,
+                          tier: ac.tier,
+                          attack: 2, health: 2, maxHealth: 2,
+                          ownerId: player.id,
+                          name: `${nationDef.name} 정예부대`
+                      });
+                  }
               });
+          }
+
+          // 5. 패시브 보너스 적용 (유닛 제한, 스태킹 등)
+          if (bonus.stackingLimitBonus) {
+              player.stackingLimitBonus = bonus.stackingLimitBonus;
+          }
+
+          // 6. 수도 성벽 지급 (중국 등)
+          if (bonus.hasWalls) {
+              const capital = player.cities.find(c => c.isCapital);
+              if (capital) {
+                  capital.hasWalls = true;
+                  capital.cityDefenseBonus += 2;
+              }
           }
       });
     });

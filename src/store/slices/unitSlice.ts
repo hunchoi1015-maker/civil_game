@@ -8,6 +8,7 @@ import { findPlayerById } from '../helpers/playerHelpers';
 import { getPlayerPassives } from '../helpers/playerHelpers';
 import { calculateDetailedCityProduction } from '../../engine/ResourceCalculator';
 import { calculateTileYield } from '../../engine/ResourceCalculator';
+import { canLearnTechInPyramid } from '../helpers/validationHelpers';
 
 export interface UnitSlice {
   // 🌟 [수정] 4번째 파라미터(sourceCityId) 추가!
@@ -155,6 +156,28 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       }
     }
     
+    // 👇👇 [여기부터 추가] 👇👇
+    // 🌟 러시아 특성: 적 도시에 진입 시 기술 도용 체크
+    if (enemyPlayerId && targetTile.cityId) {
+      if (currentPlayer.nation === 'russia' && !currentPlayer.hasUsedRussiaTechStealThisTurn) {
+        const enemyPlayer = state.players.find(p => p.id === enemyPlayerId);
+        if (enemyPlayer) {
+          // 피라미드 제약을 만족하며 내가 없는 기술 필터링
+          const stealableTechs = enemyPlayer.technologies.filter(t => 
+            !currentPlayer.technologies.some(myT => myT.id === t.id) && 
+            canLearnTechInPyramid(currentPlayer, t.id).canResearch
+          );
+
+          if (stealableTechs.length > 0) {
+            get().setRussiaStealPrompt({ unitId, targetPlayerId: enemyPlayer.id, targetPos: newPosition });
+            return; // 🌟 이동 및 전투를 멈추고 모달의 선택을 기다립니다.
+          } else {
+            alert("상대에게 도용할 수 있는 기술이 없어 바로 전투에 돌입합니다.");
+          }
+        }
+      }
+    }
+    
     if (enemyPlayerId) {
       if (unit.type === 'settler') return; 
       
@@ -179,6 +202,12 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
                     const p = s.players.find(pl => pl.id === currentPlayer.id);
                     const u = p?.units.find(un => un.id === unitId);
                     if (p && u) {
+                        // 👇👇 [여기 추가] 중국 오두막 문화 +3 특성 👇👇
+                        if (p.nation === 'china') {
+                            p.resources.culture += 3;
+                            if (!s.combatState.log) s.combatState.log = [];
+                            s.combatState.log.push({ message: `🐉 [중국 특성] 오두막을 발견하여 문화 3개를 획득했습니다!` });
+                        }
                         if (obj.reward.type === 'resource') {
                             // 🌟 신규: 일반 주머니가 아닌 비밀 자원(오두막) 주머니에 추가!
                             if (!p.secretResources) p.secretResources = [];

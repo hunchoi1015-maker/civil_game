@@ -55,6 +55,9 @@ export interface Player {
   hasUsedMassMediaThisTurn?: boolean;
   hasUsedAngkorWatThisTurn?: boolean;
   anarchyTurnsLeft?: number;
+
+  hasUsedEgyptFreeBuildingThisTurn?: boolean;
+  hasUsedRussiaTechStealThisTurn?: boolean;
 }
 
 export type PlayerColor = 'red' | 'blue' | 'green' | 'yellow';

@@ -24,7 +24,7 @@ import { InterruptModal } from '../components/game/InterruptModal';
 import { WonderActionModal } from '../components/game/WonderActionModal';
 import { CultureTrackWidget } from '../components/game/CultureTrackWidget';
 import { CultureCardTargetModal } from '../components/game/CultureCardTargetModal';
-import { PioneerActionModal } from '../components/game/PioneerActionModal'; // 🌟 모달 임포트
+import { NationModals } from '../components/game/NationModals';
 
 type PanelView = 'map' | 'tech' | 'city' | 'units';
 
@@ -234,6 +234,9 @@ export function GameScreen() {
       
       {/* 문화 카드 타겟 모달*/}
       <CultureCardTargetModal />
+      
+      {/* 국가 모달 */}
+      <NationModals />
     </div>
   );
 }

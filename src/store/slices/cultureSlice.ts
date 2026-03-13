@@ -10,6 +10,53 @@ import { Position } from '../../types/map';
 import { drawRandomGreatPerson } from '../../constants/greatPerson';
 import { getCultureCardLimit } from '../helpers/playerHelpers'; 
 
+// 문화 트랙 전진 및 보상(카드/위인) 지급 범용 헬퍼 함수
+export function handleCultureTrackAdvancement(state: GameStore, playerId: string, reasonMessage: string) {
+    const player = state.players.find(p => p.id === playerId);
+    if (!player || player.cultureTrack >= CULTURE_TRACK_MAX) return;
+
+    player.cultureTrack += 1;
+    const newTrack = player.cultureTrack;
+
+    if (!state.combatState) state.combatState = { log: [] } as any;
+    if (!state.combatState.log) state.combatState.log = [];
+    state.combatState.log.push({ message: reasonMessage });
+
+    if (GREAT_PERSON_SPOTS.includes(newTrack)) {
+        player.greatPeople += 1;
+        if (!player.unplacedGreatPeople) player.unplacedGreatPeople = [];
+        const newGreatPerson = drawRandomGreatPerson();
+        player.unplacedGreatPeople.push(newGreatPerson);
+        state.combatState.log.push({ message: `🌟 문화 트랙 보상으로 [${newGreatPerson.type}] 위인이 탄생했습니다!` });
+        alert(`🌟 문화 트랙 보상으로 [${newGreatPerson.type}] 위인이 탄생했습니다! 대기열을 확인하세요.`);
+    } else {
+        const levelToDraw = getCultureLevel(newTrack) as 1|2|3;
+        if (levelToDraw !== null) {
+            if (!player.cultureEventCards) player.cultureEventCards = [];
+            const templates = Object.values(CULTURE_CARD_TEMPLATES).filter(t => t.level === levelToDraw);
+            if (templates.length > 0) {
+                const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
+                player.cultureEventCards.push({
+                    id: uuidv4(),
+                    templateId: randomTemplate.id,
+                    level: randomTemplate.level,
+                    name: randomTemplate.name,
+                    description: randomTemplate.description,
+                    targetType: randomTemplate.targetType,
+                    allowedPhase: randomTemplate.allowedPhase,
+                });
+                alert(`🃏 문화 트랙 보상으로 [${randomTemplate.name}] 카드를 획득했습니다!`);
+            }
+        }
+    }
+
+    if (newTrack === CULTURE_TRACK_MAX) {
+        state.winner = player.id;
+        state.winCondition = 'culture';
+        state.isGameOver = true;
+    }
+}
+
 export interface CardTargetingState {
   cardId: string;
   templateId: string;
@@ -34,8 +81,6 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
   activeCardTargeting: null,
 
   advanceCultureTrack: () => {
-    let levelToDraw: 1 | 2 | 3 | null = null;
-
     set((state) => {
       const player = state.players[state.currentPlayerIndex];
       const currentTrack = player.cultureTrack;
@@ -49,68 +94,23 @@ export const createCultureSlice: StateCreator<GameStore, [["zustand/immer", neve
 
       player.resources.culture -= cost.culture;
       player.resources.trade -= cost.trade;
-      player.cultureTrack += 1;
-      const newTrack = player.cultureTrack;
-
-      if (GREAT_PERSON_SPOTS.includes(newTrack)) {
-        player.greatPeople += 1;
-        if (!player.unplacedGreatPeople) player.unplacedGreatPeople = [];
-        const newGreatPerson = drawRandomGreatPerson();
-        player.unplacedGreatPeople.push(newGreatPerson);
-        alert(`🌟 위인이 탄생했습니다! [${newGreatPerson.type}] 위인이 대기열에 합류합니다.`);
-      } else {
-        levelToDraw = getCultureLevel(newTrack) as 1|2|3;
-      }
-
-      if (newTrack === CULTURE_TRACK_MAX) {
-        state.winner = player.id;
-        state.winCondition = 'culture';
-        state.isGameOver = true;
-      }
+      
+      // 헬퍼 호출
+      handleCultureTrackAdvancement(state, player.id, `🏛️ ${player.name}이(가) 문화 트랙을 전진했습니다!`);
     });
-
-    if (levelToDraw !== null) {
-        get().drawCultureCard(levelToDraw);
-    }
   },
 
+  // 🌟 [수정] 헬퍼 함수를 사용하도록 간소화
   advanceCultureTrackFree: () => {
-    let levelToDraw: 1 | 2 | 3 | null = null;
-
     set((state) => {
       const player = state.players[state.currentPlayerIndex];
-      const currentTrack = player.cultureTrack;
-      if (currentTrack >= CULTURE_TRACK_MAX) return;
+      if (player.cultureTrack >= CULTURE_TRACK_MAX) return;
 
-      // 🌟 자원 소모 로직 없이 바로 트랙만 증가시킵니다!
-      player.cultureTrack += 1;
-      const newTrack = player.cultureTrack;
-
-      if (GREAT_PERSON_SPOTS.includes(newTrack)) {
-        player.greatPeople += 1;
-        if (!player.unplacedGreatPeople) player.unplacedGreatPeople = [];
-        const newGreatPerson = drawRandomGreatPerson();
-        player.unplacedGreatPeople.push(newGreatPerson);
-        alert(`🌟 [시드니 오페라 하우스] 위인이 탄생했습니다! [${newGreatPerson.type}] 위인이 대기열에 합류합니다.`);
-      } else {
-        levelToDraw = getCultureLevel(newTrack) as 1|2|3;
-      }
-
-      if (!state.combatState.log) state.combatState.log = [];
-      state.combatState.log.push({ message: `🎵 [시드니 오페라 하우스] ${player.name}이(가) 무료로 문화 트랙을 1칸 전진했습니다!` });
-
-      if (newTrack === CULTURE_TRACK_MAX) {
-        state.winner = player.id;
-        state.winCondition = 'culture';
-        state.isGameOver = true;
-      }
+      // 헬퍼 호출
+      handleCultureTrackAdvancement(state, player.id, `🎵 [시드니 오페라 하우스] ${player.name}이(가) 무료로 문화 트랙을 1칸 전진했습니다!`);
     });
-
-    if (levelToDraw !== null) {
-        get().drawCultureCard(levelToDraw);
-    }
   },
-
+  
   drawCultureCard: (level: 1|2|3) => {
     set((state) => {
       const player = state.players[state.currentPlayerIndex];

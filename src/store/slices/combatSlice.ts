@@ -5,6 +5,7 @@ import { CombatState, Position, CombatType, ArmyCard, Player, getAttackerMaxCard
 import { resolveBattlefields, resolvePairedFight } from '../../engine/CombatResolver';
 import { shuffleArray, getCombatCardBonus, hasTechnology, hasActiveWonder, hasEnoughLuxuryResource, consumeLuxuryResource } from '../helpers/playerHelpers';
 import { BUILDINGS } from '../../constants/buildings';
+import { handleCultureTrackAdvancement } from './cultureSlice';
 
 export interface CombatSlice {
   combatState: CombatState;
@@ -988,6 +989,23 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
           mover.units = mover.units.filter((u) => !movingUnitIds.includes(u.id));
         }
       }
+
+      if (winner && winner.nation === 'rome') {
+        if (defenderId === 'village' || state.combatState.combatType === 'city' || state.combatState.combatType === 'capital') {
+            // 헬퍼 함수를 사용하여 정상적으로 카드/위인 지급 및 로그 출력
+            handleCultureTrackAdvancement(state, winner.id, `🏛️ [로마 제국] 전투 승리로 문화 트랙이 1칸 전진했습니다!`);
+        }
+      }
+
+      // 🌟 중국 특성: 전투 종료 후 무덤에서 내 카드 1장 부활 모달 호출
+      const chinaPlayers = allPlayersInCombat.filter(p => p.nation === 'china');
+      chinaPlayers.forEach(chinaPlayer => {
+        const chinaDeadCards = state.combatState.graveyard.filter(c => c.ownerId === chinaPlayer.id);
+        if (chinaDeadCards.length > 0) {
+            // UI 슬라이스에 정의된 상태에 데이터를 주입하여 모달을 엽니다.
+            state.chinaGraveyardPrompt = { playerId: chinaPlayer.id, cards: chinaDeadCards };
+        }
+      });
       
       // 전투 상태 초기화
       state.combatState = { ...initialCombatState };

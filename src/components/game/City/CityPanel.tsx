@@ -207,9 +207,12 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
     harvestResource, 
     constructWonder,
     map, 
-    advanceCultureTrack
+    advanceCultureTrack,
+    convertTradeToProduction,
   } = useGameStore();
   
+  const [tradeConvertAmount, setTradeConvertAmount] = useState<number>(0);
+
   const currentPlayer = players[currentPlayerIndex];
   
   const [selectedCityId, setSelectedCityId] = useState<string | null>(initialCity?.id || currentPlayer.cities[0]?.id || null);
@@ -217,7 +220,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
   
   const [productionTab, setProductionTab] = useState<ProductionTab>('buildings');
   const [selectedArmyTemplate, setSelectedArmyTemplate] = useState<ArmyCardTemplate | null>(null);
-  const [selectedBuildingToBuild, setSelectedBuildingToBuild] = useState<BuildingDefinition | null>(null);
+  const [selectedBuildingToBuild, setSelectedBuildingToBuild] = useState<{ def: BuildingDefinition; isFree: boolean } | null>(null);
   const [selectedWonderToBuild, setSelectedWonderToBuild] = useState<WonderDefinition | null>(null);
   
   // 🌟 [추가] 유닛 배치 모달용 상태
@@ -301,13 +304,28 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
     currentPlayer.resources.trade >= nextCultureCost.trade &&
     currentPlayer.cultureTrack < CULTURE_TRACK_MAX;
 
-  const handleBuild = (building: BuildingDefinition) => {
+  const isAmerica = currentPlayer.nation === 'america';
+  const prodPerClick = isAmerica ? 2 : 1;
+  const tradeCostPerClick = 3;
+
+  const handleConvertTrade = () => {
+    if (tradeConvertAmount > 0 && selectedCity) {
+      const times = tradeConvertAmount / prodPerClick;
+      const cost = times * tradeCostPerClick;
+      convertTradeToProduction(currentPlayer.id, selectedCity.id, tradeConvertAmount, cost);
+      setTradeConvertAmount(0); // 사용 후 초기화
+    }
+  };
+
+  const handleBuild = (building: BuildingDefinition, useFreeBuild: boolean = false) => {
     if (!canManageCity || cannotProduce) return;
-    if (availableProduction < building.productionCost) {
-      alert(`잔여 생산력이 부족합니다. (현재: ${availableProduction}, 필요: ${building.productionCost})`);
+    if (!useFreeBuild && availableProduction < building.productionCost) {
+      alert(`잔여 생산력이 부족합니다.`);
       return;
     }
-    setSelectedBuildingToBuild(building);
+    // 🌟 LocationModal에 선택된 건물을 전달하되, 이집트 무료건설 여부도 함께 기억해야 하므로 상태를 하나 더 만들거나 확장할 수 있습니다. 
+    // 심플하게 setSelectedBuildingToBuild에 { def, isFree } 객체를 담도록 수정.
+    setSelectedBuildingToBuild({ def: building, isFree: useFreeBuild } as any);
   };
 
   const handleBuildWonder = (wonder: WonderDefinition) => {
@@ -327,7 +345,8 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
 
   const handleBuildAtLocation = (position: Position) => {
     if (selectedCity && selectedBuildingToBuild) {
-      buildInCity(selectedCity.id, selectedBuildingToBuild.type, position);
+      // 🌟 def.type 으로 접근하고, 4번째 인자로 무료 여부(isFree)를 전달합니다!
+      buildInCity(selectedCity.id, selectedBuildingToBuild.def.type, position, selectedBuildingToBuild.isFree);
       setSelectedBuildingToBuild(null);
     }
   };
@@ -413,7 +432,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
       
       {/* 건물 모달 */}
       {selectedBuildingToBuild && selectedCity && (
-        <LocationModal name={selectedBuildingToBuild.name} city={selectedCity} currentPlayer={currentPlayer} mode="building" onSelect={handleBuildAtLocation} onClose={() => setSelectedBuildingToBuild(null)} />
+        <LocationModal name={selectedBuildingToBuild.def.name} city={selectedCity} currentPlayer={currentPlayer} mode="building" onSelect={handleBuildAtLocation} onClose={() => setSelectedBuildingToBuild(null)} />
       )}
 
       {/* 불가사의 모달 */}
@@ -583,6 +602,65 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
 
           {/* 생산 패널 */}
           <div className="bg-slate-800 rounded-lg p-4">
+
+            {/* 🌟 [신규] 교역 -> 생산력 변환 UI */}
+            {canManageCity && !cannotProduce && !selectedCity?.isParalyzed && (
+               <div className="mb-4 p-3 bg-slate-750 border border-amber-600/50 rounded-lg">
+                 <div className="flex justify-between items-center mb-2">
+                   <h4 className="text-sm font-bold text-amber-400">🔄 교역품 긴급 조달</h4>
+                   <span className="text-xs text-slate-400">
+                     (비율 - 교역 3 : 생산 {isAmerica ? '2 (🇺🇸 미국 특성)' : '1'})
+                   </span>
+                 </div>
+                 <div className="flex items-center gap-3">
+                   <div className="flex-1 flex items-center bg-slate-900 rounded p-1">
+                     <button onClick={() => setTradeConvertAmount(Math.max(0, tradeConvertAmount - prodPerClick))} className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded">-</button>
+                     <span className="flex-1 text-center text-white font-bold">+{tradeConvertAmount} 생산</span>
+                     <button onClick={() => setTradeConvertAmount(tradeConvertAmount + prodPerClick)} className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded">+</button>
+                   </div>
+                   <button 
+                     onClick={handleConvertTrade}
+                     disabled={tradeConvertAmount === 0 || currentPlayer.resources.trade < (tradeConvertAmount / prodPerClick) * tradeCostPerClick}
+                     className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-600 text-white font-bold rounded text-sm transition-colors"
+                   >
+                     교역 {tradeConvertAmount === 0 ? 0 : (tradeConvertAmount / prodPerClick) * tradeCostPerClick} 소모
+                   </button>
+                 </div>
+               </div>
+            )}
+
+            {/* 건물 탭 내 이집트 무료 버튼 UI */}
+            {productionTab === 'buildings' && (
+              <div className="grid grid-cols-2 gap-2">
+                {availableBuildings.map((building) => {
+                  const canAfford = availableProduction >= building.productionCost;
+                  const canUseEgyptFreeBuild = currentPlayer.nation === 'egypt' && !currentPlayer.hasUsedEgyptFreeBuildingThisTurn;
+                  const cityActed = cannotProduce || selectedCity?.isParalyzed;
+                  
+                  return (
+                    <div key={building.type} className={clsx('p-3 rounded-lg text-left transition-colors flex flex-col justify-between', (canManageCity && (canAfford || canUseEgyptFreeBuild) && !cityActed) ? 'bg-slate-700' : 'bg-slate-700 opacity-40')}>
+                      <div>
+                          <div className="text-white font-medium text-sm">{building.name}</div>
+                          <div className="text-slate-400 text-xs mt-1">{building.description}</div>
+                          <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>비용: {building.productionCost} {canAfford ? "" : "(부족)"}</div>
+                      </div>
+                      
+                      <div className="mt-3 flex gap-1">
+                          <button onClick={() => handleBuild(building, false)} disabled={!canManageCity || !canAfford || cityActed} className="flex-1 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-600 text-white text-xs font-bold rounded">
+                              건설
+                          </button>
+                          {/* 🌟 이집트 무료 건설 전용 버튼 */}
+                          {currentPlayer.nation === 'egypt' && (
+                              <button onClick={() => handleBuild(building, true)} disabled={!canManageCity || !canUseEgyptFreeBuild || cityActed} className="flex-1 py-1.5 bg-yellow-500 hover:bg-yellow-400 disabled:bg-slate-600 text-black text-xs font-bold rounded">
+                                  🏺 무료 건설
+                              </button>
+                          )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {selectedCity?.isParalyzed && (
               <div className="mb-4 p-3 bg-red-900/80 border-2 border-red-500 rounded-lg animate-pulse shadow-lg">
