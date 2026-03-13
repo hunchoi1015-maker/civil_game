@@ -64,15 +64,18 @@ const PLAYER_BG_COLORS: Record<string, string> = {
 };
 
 export function TileComponent({ tile, isSelected, onClick }: TileComponentProps) {
+  /* 
   if (!tile.isExplored) {
     return (
       <div className="w-12 h-12 rounded-sm bg-black flex items-center justify-center relative">
-        {/* 미탐험 지역임을 나타내는 아이콘이나 패턴을 넣을 수도 있음 */}
+        { 미탐험 지역임을 나타내는 아이콘이나 패턴을 넣을 수도 있음 }
         <span className="text-gray-800 text-[10px]">?</span>
       </div>
     );
   }
+  */
   
+
   const { players, selectedUnit, currentPlayerIndex } = useGameStore();
 
   const owner = tile.ownerId ? players.find((p) => p.id === tile.ownerId) : null;

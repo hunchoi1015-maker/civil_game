@@ -1,127 +1,141 @@
-import { motion } from 'framer-motion';
-import { useGameStore } from '../../store/gameStore';
-import { NATIONS, NationType } from '../../types/nation';
-import clsx from 'clsx';
+// src/components/game/NationSelectionScreen.tsx
 
-const PLAYER_COLORS: Record<string, string> = {
-  red: 'border-red-500 bg-red-500/20',
-  blue: 'border-blue-500 bg-blue-500/20',
-  green: 'border-green-500 bg-green-500/20',
-  yellow: 'border-yellow-500 bg-yellow-500/20',
+import { useGameStore } from '../../store/gameStore';
+import { NATIONS } from '../../types/nation';
+import { NationType } from '../../types';
+
+// UI 표시용 기술/정치체제 이름 매핑 헬퍼
+const displayNames: Record<string, string> = {
+  currency: '통화',
+  code_of_laws: '법계',
+  construction: '건설',
+  pottery: '도기 제조',
+  communism_tech: '공산주의',
+  iron_working: '금속 가공',
+  despotism: '전제군주제',
+  communism: '공산주의',
 };
 
 export function NationSelectionScreen() {
-  const { players, setupState, selectNation } = useGameStore();
+  const { setupState, players, selectNation } = useGameStore();
 
   const currentPlayerIndex = setupState.currentSetupPlayer;
   const currentPlayer = players[currentPlayerIndex];
-  const selectedNations = setupState.selectedNations;
+  const selectedNations = setupState.selectedNations as NationType[];
 
-  const handleSelectNation = (nationId: NationType) => {
-    // 이미 선택된 국가인지 확인
-    if (selectedNations.includes(nationId)) {
-      return;
+  // 랜덤 선택 함수
+  const handleRandomPick = () => {
+    const availableNations = (Object.keys(NATIONS) as NationType[]).filter(
+      (n) => !selectedNations.includes(n)
+    );
+    if (availableNations.length > 0) {
+      const randomIndex = Math.floor(Math.random() * availableNations.length);
+      selectNation(currentPlayerIndex, availableNations[randomIndex]);
     }
-    selectNation(currentPlayerIndex, nationId);
   };
 
-  const allNations = Object.values(NATIONS);
+  if (!currentPlayer) return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 p-6">
-      <div className="max-w-4xl mx-auto">
-        {/* 헤더 */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-amber-500 mb-2">국가 선택</h1>
-          <p className="text-slate-400">플레이할 국가를 선택하세요</p>
-        </div>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-900 text-white p-8">
+      
+      {/* 턴 헤더 */}
+      <div className="mb-10 text-center">
+        <h1 className="text-4xl font-bold text-amber-500 mb-2">
+          {currentPlayer.name} 님의 국가 선택
+        </h1>
+        <p className="text-slate-400">당신의 제국을 이끌 위대한 국가를 선택하세요.</p>
+      </div>
 
-        {/* 현재 플레이어 정보 */}
-        <motion.div
-          key={currentPlayerIndex}
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className={clsx(
-            'mb-8 p-4 rounded-lg border-2 text-center',
-            PLAYER_COLORS[currentPlayer.color]
-          )}
-        >
-          <h2 className="text-2xl font-bold text-white">{currentPlayer.name}</h2>
-          <p className="text-slate-400 mt-1">플레이어 {currentPlayerIndex + 1} / {players.length}</p>
-        </motion.div>
+      {/* 국가 카드 그리드 */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-6 max-w-5xl w-full">
+        {Object.entries(NATIONS).map(([nationId, nationDef]) => {
+          const isSelected = selectedNations.includes(nationId as NationType);
+          const bonus = nationDef.startingBonus;
 
-        {/* 국가 목록 */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          {allNations.map((nation) => {
-            const isSelected = selectedNations.includes(nation.id);
-            const isCurrentSelection = currentPlayer.nation === nation.id && selectedNations[currentPlayerIndex] === nation.id;
+          return (
+            <div
+              key={nationId}
+              onClick={() => !isSelected && selectNation(currentPlayerIndex, nationId as NationType)}
+              className={`relative group bg-slate-800 p-6 rounded-xl border-2 transition-all duration-200 
+                ${isSelected 
+                  ? 'border-slate-700 opacity-40 cursor-not-allowed grayscale' 
+                  : 'border-slate-600 hover:border-amber-500 hover:shadow-lg hover:-translate-y-1 cursor-pointer'
+                }`}
+            >
+              <div className="text-center">
+                <div className="text-6xl mb-3 drop-shadow-md">{nationDef.flag}</div>
+                <h2 className="text-2xl font-bold" style={{ color: isSelected ? '#9ca3af' : nationDef.color }}>
+                  {nationDef.name}
+                </h2>
+                {isSelected && <span className="text-red-500 font-bold text-sm mt-2 block">선택 완료됨</span>}
+              </div>
 
-            return (
-              <motion.button
-                key={nation.id}
-                whileHover={!isSelected ? { scale: 1.02 } : {}}
-                whileTap={!isSelected ? { scale: 0.98 } : {}}
-                onClick={() => handleSelectNation(nation.id)}
-                disabled={isSelected}
-                className={clsx(
-                  'p-4 rounded-lg border-2 text-left transition-all',
-                  isSelected
-                    ? 'border-slate-600 bg-slate-800 opacity-50 cursor-not-allowed'
-                    : 'border-slate-600 bg-slate-700 hover:border-amber-500 hover:bg-slate-600 cursor-pointer',
-                  isCurrentSelection && 'border-amber-500 bg-amber-900/30'
-                )}
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-3xl">{nation.flag}</span>
-                  <div>
-                    <h3 className="text-lg font-semibold text-white">{nation.name}</h3>
-                    {isSelected && !isCurrentSelection && (
-                      <span className="text-xs text-red-400">이미 선택됨</span>
-                    )}
+              {/* 🌟 마우스 오버(Hover) 시 나타나는 상세 설명 툴팁 (새로운 타입 아키텍처 반영) */}
+              {!isSelected && (
+                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-4 w-80 p-5 bg-slate-950 border border-amber-600 rounded-lg shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none text-left">
+                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 border-8 border-transparent border-b-amber-600"></div>
+                  
+                  <h3 className="text-lg font-bold text-amber-400 mb-1">[{nationDef.name}]</h3>
+                  <p className="text-xs text-slate-400 mb-4 italic leading-relaxed">"{nationDef.description}"</p>
+                  
+                  <div className="space-y-3">
+                    {/* 고유 능력 */}
+                    <div>
+                      <span className="text-sm font-bold text-blue-400 flex items-center gap-1">✨ 특수 능력</span>
+                      <span className="text-xs text-slate-300 mt-1 block leading-tight">
+                        {nationDef.specialAbility.description}
+                      </span>
+                    </div>
+                    
+                    {/* 시작 보너스 */}
+                    <div>
+                      <span className="text-sm font-bold text-green-400 flex items-center gap-1">🎁 시작 보너스</span>
+                      <ul className="text-xs text-slate-300 list-disc pl-5 mt-1 space-y-1">
+                        {bonus.unlockedTechs && bonus.unlockedTechs.length > 0 && (
+                          <li>시작 기술: {bonus.unlockedTechs.map(t => displayNames[t] || t).join(', ')}</li>
+                        )}
+                        {bonus.startingGovernment && (
+                          <li>정치체제: {displayNames[bonus.startingGovernment] || bonus.startingGovernment}</li>
+                        )}
+                        {bonus.greatPeople && (
+                          <li>무료 위인 <span className="text-amber-300 font-bold">{bonus.greatPeople}명</span> 제공</li>
+                        )}
+                        {bonus.armyCards && (
+                          <li>시작 부대 카드 <span className="text-amber-300 font-bold">{bonus.armyCards.reduce((acc, card) => acc + card.count, 0)}장</span> 제공</li>
+                        )}
+                        {bonus.extraMilitaryUnits && (
+                          <li>군사 유닛 추가 <span className="text-amber-300 font-bold">{bonus.extraMilitaryUnits}기</span> (유닛 상한: {bonus.militaryLimit || 6})</li>
+                        )}
+                        {bonus.stackingLimitBonus && (
+                          <li>타일 유닛 배치(스택) 상한 <span className="text-amber-300 font-bold">+{bonus.stackingLimitBonus}</span></li>
+                        )}
+                        {bonus.hasWalls && (
+                          <li>수도에 <span className="text-amber-300 font-bold">성벽</span> 기본 건설됨</li>
+                        )}
+                        {bonus.wonderCards && (
+                          <li>불가사의 카드 <span className="text-amber-300 font-bold">{bonus.wonderCards}장</span> 제공</li>
+                        )}
+                      </ul>
+                    </div>
                   </div>
                 </div>
-                <p className="text-sm text-slate-400 mb-3">{nation.description}</p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-      
-
-                </div>
-              </motion.button>
-            );
-          })}
-        </div>
-
-        {/* 선택 현황 */}
-        <div className="mt-8 p-4 bg-slate-800 rounded-lg">
-          <h3 className="text-lg font-semibold text-white mb-3">선택 현황</h3>
-          <div className="flex flex-wrap gap-3">
-            {players.map((player, idx) => {
-              const selectedNation = selectedNations[idx];
-              const nation = selectedNation ? NATIONS[selectedNation] : null;
-
-              return (
-                <div
-                  key={player.id}
-                  className={clsx(
-                    'px-3 py-2 rounded-lg border',
-                    idx === currentPlayerIndex
-                      ? 'border-amber-500 bg-amber-900/30'
-                      : 'border-slate-600 bg-slate-700'
-                  )}
-                >
-                  <span className="text-slate-400">{player.name}: </span>
-                  {nation ? (
-                    <span className="text-white">
-                      {nation.flag} {nation.name}
-                    </span>
-                  ) : (
-                    <span className="text-slate-500">선택 중...</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      {/* 랜덤 버튼 */}
+      <div className="mt-12">
+        <button
+          onClick={handleRandomPick}
+          className="px-8 py-3 bg-purple-700 hover:bg-purple-600 text-white font-bold rounded-lg shadow-lg transition-transform hover:scale-105 border border-purple-500 flex items-center gap-2"
+        >
+          <span className="text-xl">🎲</span> 운명에 맡기기 (랜덤 선택)
+        </button>
+      </div>
+
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { GOVERNMENTS } from '../../constants/governments';
 import { ARMY_CARD_TEMPLATES } from '../../constants/armyCards';
 import { getPlayerPassives, hasEnoughLuxuryResource, consumeLuxuryResource } from '../helpers/playerHelpers';
 import { canLearnTechInPyramid } from '../helpers/validationHelpers';
+import { generateArmyStats } from '../helpers/armyHelpers';
 
 //  [스토어 슬라이스 정의]
 export interface TechSlice {
@@ -95,40 +96,45 @@ export const createTechSlice: StateCreator<GameStore, [["zustand/immer", never]]
 
       const unlockedCards = ARMY_CARD_TEMPLATES.filter(c => c.requiredTech === techId);
       
-      // 👇👇 플래그 변수 2개 선언 추가 👇👇
       let isArmyUpgrade = false; 
       let upgradedCardTemplate: any = null;
 
       unlockedCards.forEach(newCard => {
           if (newCard.tier > 1) {
-              isArmyUpgrade = true; // 진급 발생 체크
-              upgradedCardTemplate = newCard; // 템플릿 저장
+              isArmyUpgrade = true; 
+              upgradedCardTemplate = newCard; 
 
               if (player.armyCards) { 
                   player.armyCards.forEach(card => {
                       if (card.type === newCard.type && card.tier < newCard.tier) {
                           card.tier = newCard.tier;           
                           card.name = newCard.name;           
-                          card.attack += 1;                   
-                          card.health += 1;                   
-                          card.maxHealth += 1;                
+                          
+                          // 🌟 기존 성향(statProfile)을 기반으로 새 티어의 능력치를 계산!
+                          const stats = generateArmyStats(newCard.tier, card.statProfile as any);
+                          card.attack = stats.attack;                   
+                          card.maxHealth = stats.maxHealth;                
+                          card.health = stats.maxHealth; // 전부 회복시켜줌!
+                          card.statProfile = stats.profile;                
                       }
                   });
               }
           }
       });
 
-      // 👇👇 [여기부터 추가] 독일 특성 로직 👇👇
+      // 독일 특성 로직 수정 (랜덤 스탯 부여)
       if (player.nation === 'germany' && isArmyUpgrade && upgradedCardTemplate) {
+          const stats = generateArmyStats(upgradedCardTemplate.tier);
           player.armyCards.push({
               id: uuidv4(),
               type: upgradedCardTemplate.type,
               tier: upgradedCardTemplate.tier,
-              attack: upgradedCardTemplate.attack,
-              health: upgradedCardTemplate.health,
-              maxHealth: upgradedCardTemplate.maxHealth,
+              attack: stats.attack,
+              health: stats.maxHealth,
+              maxHealth: stats.maxHealth,
               ownerId: player.id,
-              name: `[독일 정예] ${upgradedCardTemplate.name}`
+              name: `[독일 정예] ${upgradedCardTemplate.name}`,
+              statProfile: stats.profile
           });
           
           if (!state.combatState) state.combatState = { log: [] } as any;

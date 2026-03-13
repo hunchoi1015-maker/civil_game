@@ -3,12 +3,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useGameStore } from '../store/gameStore';
-
-// 🌟 각 페이즈별 스크린 컴포넌트 임포트
-import { NationSelectionScreen } from '../components/game/NationSelectionScreen';
 import { CapitalSelectionScreen } from '../components/game/CapitalSelectionScreen';
-import { InitialDeploymentScreen } from '../components/game/InitialDeploymentScreen'; 
+import { InitialDeploymentScreen } from '../components/game/InitialDeploymentScreen';
+import { NationSelectionScreen } from '../components/game/NationSelectionScreen'; // 🌟 추가!
+import { useGameStore } from '../store/gameStore';
 
 const PLAYER_COLORS = [
   { id: 'red', name: '빨강', bg: 'bg-red-500' },

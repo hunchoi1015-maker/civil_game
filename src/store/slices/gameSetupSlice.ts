@@ -1,3 +1,5 @@
+// src/store/slices/gameSetupSlice.ts
+
 import { StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { GameStore, GameSetupState } from '../types/storeTypes';
@@ -5,8 +7,10 @@ import { NationType, Position, Player, createInitialResources, createCity, creat
 import { generateMap, setAdjacentTilesOwner } from '../helpers/mapHelpers';
 import { createInitialLuxuryResources } from '../../types/player';
 import { TECHNOLOGIES } from '../../constants/technologies';
-import { NATIONS } from '../../types/nation'; // 🌟 추가
-import { drawRandomGreatPerson } from '../../constants/greatPerson';
+import { NATIONS } from '../../types/nation';
+// 🌟 위인 뽑기 함수 최상단 임포트 (require 대신 사용)
+import { drawRandomGreatPerson } from '../../constants/greatPerson'; 
+import { generateArmyStats } from '../helpers/armyHelpers';
 
 export interface GameSetupSlice {
   setupState: GameSetupState;
@@ -32,14 +36,22 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
 
   initSetup: (playerCount: number, playerNames: string[]) => {
     const map = generateMap(16, 16);
-    const availableNations: NationType[] = ['america', 'rome', 'egypt', 'china', 'russia', 'germany'];
+
+    // 테스트용 함수
+    for (let y = 0; y < 16; y++) {
+      for (let x = 0; x < 16; x++) {
+        map.tiles[y][x].isExplored = true;
+      }
+    }
+
     const players: Player[] = [];
+    
     for (let i = 0; i < playerCount; i++) {
       players.push({
         id: uuidv4(),
-        name: playerNames[i],
+        name: playerNames[i] || `Player ${i + 1}`,
         color: PLAYER_COLORS_LIST[i],
-        nation: availableNations[i],
+        nation: 'america', // 🌟 더미 데이터(선택 페이즈에서 실제 선택한 국가로 덮어씌워집니다)
         resources: createInitialResources(),
         cities: [],
         units: [],
@@ -55,25 +67,36 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
         luxuryResources: createInitialLuxuryResources(),
         spies: 3,
         greatPeople: 0,
-        unplacedGreatPeople:[],
+        unplacedGreatPeople: [],
         nuclearMaterial: 3,
         cultureEventCards: [],
         pendingGreatPerson: false,
         pendingCardDraw: 0,
         secretResources: [],
-        hasUsedAngkorWatThisTurn: false, 
+        hasUsedAngkorWatThisTurn: false,
       });
     }
+
+    /*
     const capitalOptions: Position[][] = [];
     for (let i = 0; i < playerCount; i++) {
       capitalOptions.push(getStartPositionOptions(i, 16, 16));
     }
+    */
+   const capitalOptions: Position[][] = [];
+    const allTiles: Position[] = [];
+    for(let y = 0; y < 16; y++) {
+      for(let x = 0; x < 16; x++) {
+        allTiles.push({x, y});
+      }
+    }
+
+
     set((state) => {
       state.id = uuidv4();
       state.players = players;
       state.map = map;
 
-      // 시장 자원 
       state.marketResources = {
         spice: playerCount,
         wheat: playerCount,
@@ -82,9 +105,9 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
       };
 
       state.setupState = {
-        phase: 'capitalSelect', // 테스트 끝나면 nationSelect로 돌리기
+        phase: 'nationSelect', // 첫 단계: 국가 선택
         currentSetupPlayer: 0,
-        selectedNations: availableNations.slice(0, playerCount),
+        selectedNations: new Array(playerCount).fill(null), // 아무도 선택하지 않은 상태로 초기화
         capitalPositionOptions: capitalOptions,
         pendingInitialUnits: {},
       };
@@ -93,22 +116,21 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
 
   selectNation: (playerIndex: number, nation: NationType) => {
     set((state) => {
+      // 이미 다른 사람이 선택한 국가인지 확인
       if (state.setupState.selectedNations.includes(nation)) {
         return;
       }
+
       state.setupState.selectedNations[playerIndex] = nation;
       state.players[playerIndex].nation = nation;
-      const allSelected = state.setupState.selectedNations.every((n) => n !== null);
-      if (allSelected) {
+
+      // 다음 플레이어로 턴 넘기기
+      if (playerIndex < state.players.length - 1) {
+        state.setupState.currentSetupPlayer = playerIndex + 1;
+      } else {
+        // 전원 선택이 끝났다면 수도 선택 단계로 전환
         state.setupState.phase = 'capitalSelect';
         state.setupState.currentSetupPlayer = 0;
-      } else {
-        for (let i = 0; i < state.players.length; i++) {
-          if (state.setupState.selectedNations[i] === null) {
-            state.setupState.currentSetupPlayer = i;
-            break;
-          }
-        }
       }
     });
   },
@@ -117,7 +139,6 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
     set((state) => {
       const player = state.players[playerIndex];
       const playerId = player.id;
-      // 인접 도시 체크
       for (const p of state.players) {
         for (const city of p.cities) {
           const dx = Math.abs(city.position.x - position.x);
@@ -141,7 +162,7 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
       state.map.tiles[position.y][position.x].ownerId = playerId;
       setAdjacentTilesOwner(state.map, position, playerId);
       
-      // 🌟 [추가] 수도를 지으면 주변 3x3 타일의 시야(전장의 안개)가 밝혀집니다!
+      // 수도 주변 시야 확보
       for (let dy = -1; dy <= 1; dy++) {
           for (let dx = -1; dx <= 1; dx++) {
               const nx = position.x + dx;
@@ -160,6 +181,7 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
         
         state.players.forEach((p) => {
             const initialQueue: UnitType[] = ['military', 'settler'];
+            // 🌟 러시아 시작 보너스: 군사 유닛 +1
             if (p.nation === 'russia') {
                 initialQueue.unshift('military'); 
             }
@@ -184,12 +206,10 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
           player.units.push(unit);
           state.map.tiles[position.y][position.x].unitIds.push(unitId);
 
-          // 🌟 [수정 1] 현재 플레이어의 큐에 유닛이 아직 남아있다면 턴을 넘기지 않고 함수 종료!
           if (queue.length > 0) {
               return;
           }
 
-          // 🌟 (이하 큐가 비었을 때만 다음 사람을 찾는 로직 실행)
           let nextPlayerFound = false;
           let nextIdx = (playerIndex + 1) % state.players.length;
           
@@ -218,14 +238,14 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
       state.firstPlayerIndex = 0;
       state.phaseComplete = new Array(state.players.length).fill(false);
 
-      // 🌟 [수정] 게임 시작 시 국가별 특성(시작 보너스) 일괄 지급
+      // 🌟 게임 시작 시 모든 플레이어의 국가별 보너스 지급 처리
       state.players.forEach(player => {
           const nationDef = NATIONS[player.nation as keyof typeof NATIONS];
           if (!nationDef) return;
 
           const bonus = nationDef.startingBonus;
 
-          // 1. 고유 시작 기술 + 보너스 기술 해금
+          // 1. 시작 기술 지급
           const techsToUnlock = [...(bonus.unlockedTechs || [])];
           const startingTechDef = TECHNOLOGIES.find(t => t.isStartingTechFor === player.nation);
           if (startingTechDef && !techsToUnlock.includes(startingTechDef.id)) {
@@ -244,43 +264,48 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
               }
           });
 
-          // 2. 정치 체제 적용
+          // 2. 시작 정치 체제 적용
           if (bonus.startingGovernment) {
               player.government = bonus.startingGovernment as any;
           }
 
-          // 3. 위인 지급
+          // 3. 위인 지급 (미국 특성 등)
           if (bonus.greatPeople) {
               player.greatPeople += bonus.greatPeople;
-              // 랜덤 위인 객체를 생성하여 대기열에 추가합니다!
               if (!player.unplacedGreatPeople) player.unplacedGreatPeople = [];
               for(let i = 0; i < bonus.greatPeople; i++) {
                   player.unplacedGreatPeople.push(drawRandomGreatPerson());
               }
           }
 
-          // 4. 시작 부대 카드 지급 (예: 독일 보병 1티어 2장)
+          // 4. 시작 부대 카드 지급 (독일 특성 등)
           if (bonus.armyCards) {
               bonus.armyCards.forEach(ac => {
                   for (let i = 0; i < ac.count; i++) {
+                      // 랜덤 성향으로 능력치 굴리기
+                      const stats = generateArmyStats(ac.tier);
+                      
                       player.armyCards.push({
                           id: uuidv4(),
                           type: ac.type,
                           tier: ac.tier,
-                          attack: 2, health: 2, maxHealth: 2,
+                          attack: stats.attack, 
+                          health: stats.maxHealth, 
+                          maxHealth: stats.maxHealth,
                           ownerId: player.id,
-                          name: `${nationDef.name} 정예부대`
+                          name: `${nationDef.name} 정예부대`,
+                          statProfile: stats.profile // 성향 저장
                       });
                   }
               });
           }
 
-          // 5. 패시브 보너스 적용 (유닛 제한, 스태킹 등)
+          // 5. 스택 제한 패시브
           if (bonus.stackingLimitBonus) {
               player.stackingLimitBonus = bonus.stackingLimitBonus;
           }
 
-          // 6. 수도 성벽 지급 (중국 등)
+          // 6. 시작 성벽 지급 (중국 특성 등)
           if (bonus.hasWalls) {
               const capital = player.cities.find(c => c.isCapital);
               if (capital) {

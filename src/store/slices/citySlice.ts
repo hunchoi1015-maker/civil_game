@@ -11,6 +11,7 @@ import { ResourceType } from '../../types/map';
 import { WonderType, WONDERS } from '../../types/wonder';
 import { CULTURE_TRACK_MAX } from '../../constants/culture'; // 🌟 로마 문화 상한용 임포트
 import { handleCultureTrackAdvancement } from './cultureSlice';
+import { generateArmyStats } from '../helpers/armyHelpers';
 
 export interface CitySlice {
   foundCity: (playerId: string, position: Position, name: string) => void;
@@ -19,7 +20,7 @@ export interface CitySlice {
   harvestCityCulture: (playerId: string, cityId: string) => void;
   harvestResource: (playerId: string, cityId: string, targetResource: ResourceType) => void;
   constructWonder: (cityId: string, wonderType: WonderType, tilePos: Position) => void;
-  produceArmyCard: (playerId: string, type: string, tier: number, attack: number, health: number, name: string, cityId: string, cost: number) => void;
+  produceArmyCard: (playerId: string, type: string, tier: number, name: string, cityId: string, cost: number) => void;
   placeGreatPerson: (playerId: string, gpId: string, x: number, y: number) => void;
   
   // 🌟 [신규] 교역 -> 생산력 변환 액션
@@ -377,13 +378,11 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
   },
 
   // 🌟 파라미터에 cost: number 추가됨
-  produceArmyCard: (playerId: string, type: string, tier: number, attack: number, health: number, name: string, cityId: string, cost: number) => {
+  produceArmyCard: (playerId: string, type: string, tier: number, name: string, cityId: string, cost: number) => {
     set((state) => {
-      const player = state.players.find(p => p.id === playerId);
-      if (!player) return;
-      
-      const city = player.cities.find(c => c.id === cityId);
-      if (!city) return;
+        const player = state.players.find(p => p.id === playerId);
+        const city = player?.cities.find(c => c.id === cityId);
+        if (!player || !city) return;
 
       // 🌟 1. 행동 충돌 방지
       if (city.actionTypeThisTurn === 'harvest') return;
@@ -399,22 +398,19 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
           const availableProduction = totalCityProduction - (city.usedProductionThisTurn || 0);
       if (availableProduction < cost) return;
 
-      const newArmyCard = {
-        id: crypto.randomUUID(),
-        type: type as any,
-        tier: tier as 1|2|3|4,
-        attack,
-        health,
-        maxHealth: health,     
-        ownerId: playerId,     
-        isDeployed: false,  
-        name,
-      };
+      const stats = generateArmyStats(tier);
 
-      if (!player.armyCards) {
-          player.armyCards = [];
-      }
-      player.armyCards.push(newArmyCard);
+        player.armyCards.push({
+            id: uuidv4(),
+            type: type as any,
+            tier: tier as 1|2|3|4,
+            attack: stats.attack,
+            health: stats.maxHealth,
+            maxHealth: stats.maxHealth,
+            ownerId: playerId,
+            name,
+            statProfile: stats.profile
+        });
 
       // 🌟 4. 상태 업데이트
       city.usedProductionThisTurn = (city.usedProductionThisTurn || 0) + cost;

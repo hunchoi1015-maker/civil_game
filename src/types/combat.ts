@@ -13,8 +13,8 @@ export interface ArmyCard {
   health: number;    // 체력
   maxHealth: number;
   ownerId: string;
-  // 🌟 2. isDeployed 제거됨
   name: string;
+  statProfile?: 'defensive' | 'balanced' | 'offensive';
 }
 
 export interface ArmyCardDefinition {
