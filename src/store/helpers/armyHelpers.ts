@@ -1,9 +1,8 @@
-// src/store/helpers/armyHelpers.ts 파일을 새로 만들어주세요.
+// src/store/helpers/armyHelpers.ts
 
 export type StatProfile = 'defensive' | 'balanced' | 'offensive';
 
 export function generateArmyStats(tier: number, existingProfile?: StatProfile): { attack: number; maxHealth: number; profile: StatProfile } {
-    // 기존 성향이 있으면 그걸 쓰고, 없으면 3개 중 하나를 랜덤으로 부여합니다.
     const profile = existingProfile || (['defensive', 'balanced', 'offensive'][Math.floor(Math.random() * 3)] as StatProfile);
     
     let attack = 0;

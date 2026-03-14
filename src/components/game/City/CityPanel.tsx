@@ -40,7 +40,6 @@ const TERRAIN_COLORS: Record<string, string> = {
   water: 'bg-blue-500',
 };
 
-// 다목적 통합 모달 (건물/불가사의/유닛 모두 처리)
 interface LocationModalProps {
   name: string;
   city: City;
@@ -75,13 +74,13 @@ function LocationModal({ name, city, currentPlayer, onSelect, onClose, mode }: L
         let isValid = false;
 
         if (mode === 'unit') {
-            isValid = tile.terrain !== 'water' && myUnitsCount < stackingLimit && tile.isExplored;
+            isValid = tile.terrain !== 'water' && tile.terrain !== 'mountain' && myUnitsCount < stackingLimit && tile.isExplored;
         } else if (mode === 'wonder') {
             // 불가사의: 수도(isCenter) 불가. 건물/불가사의 여부 따지지 않음 (덮어쓰기 허용)
-            isValid = !isCenter && tile.terrain !== 'water' && tile.ownerId === city.ownerId && tile.isExplored;
+            isValid = !isCenter && tile.terrain !== 'water' && tile.terrain !== 'mountain' && tile.ownerId === city.ownerId && tile.isExplored;
         } else {
             // 일반 건물: 빈 땅 또는 수도 중앙
-            isValid = !tile.buildingType  && tile.ownerId === city.ownerId && tile.isExplored;
+            isValid = !tile.buildingType && !tile.wonder && tile.terrain !== 'water' && tile.terrain !== 'mountain' && tile.ownerId === city.ownerId && tile.isExplored;
             if (mode === 'building' && isCenter) isValid = true;
         }
 
@@ -145,7 +144,7 @@ function LocationModal({ name, city, currentPlayer, onSelect, onClose, mode }: L
           ) : (
               <p>🏛️ = 도시 중앙 | 🏗️ = 지어진 건물 | 🗽 = 불가사의</p>
           )}
-          <p>어두운 타일 = {mode === 'unit' ? '배치 불가 (물/산/한도 초과/미탐험)' : '건설 불가 (물/산/소유권 없음/이미 지어짐/미탐험)'}</p>
+          <p>어두운 타일 = {mode === 'unit' ? '배치 불가 (물/산/한도 초과/미탐험)' : '건설 불가 (물/산/소유권 없음/미탐험)'}</p>
         </div>
 
         <button onClick={onClose} className="w-full py-2 bg-slate-600 text-slate-300 rounded-lg hover:bg-slate-500">
@@ -163,22 +162,12 @@ export interface CityPanelProps {
 
 export function CityPanel({ city: initialCity }: CityPanelProps) {
   const { 
-    players, 
-    currentPlayerIndex, 
-    currentPhase, 
-    buildInCity, 
-    createUnit, 
-    produceArmyCard, 
-    harvestCityCulture, 
-    harvestResource, 
-    constructWonder,
-    map, 
-    advanceCultureTrack,
-    convertTradeToProduction,
+    players, currentPlayerIndex, currentPhase, 
+    buildInCity, createUnit, produceArmyCard, 
+    harvestCityCulture, harvestResource, constructWonder,
+    map, advanceCultureTrack,
   } = useGameStore();
   
-  const [tradeConvertAmount, setTradeConvertAmount] = useState<number>(0);
-
   const currentPlayer = players[currentPlayerIndex];
   
   const [selectedCityId, setSelectedCityId] = useState<string | null>(initialCity?.id || currentPlayer.cities[0]?.id || null);
@@ -189,6 +178,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
   const [selectedWonderToBuild, setSelectedWonderToBuild] = useState<WonderDefinition | null>(null);
   const [selectedUnitToProduce, setSelectedUnitToProduce] = useState<UnitType | null>(null);
   const [showCultureModal, setShowCultureModal] = useState(false);
+  const [tradeConvertAmount, setTradeConvertAmount] = useState<number>(0);
 
   const canManageCity = currentPhase === 'cityManagement';
   const isOwner = selectedCity?.ownerId === currentPlayer.id;
@@ -238,11 +228,10 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
   const totalCityProduction = productionDetails.total;
   const availableProduction = totalCityProduction - (selectedCity?.usedProductionThisTurn || 0);
   
-  // 무정부 상태인 수도이거나, 스파이에게 마비된 상태인지 통합 검사
+  // 🌟 [핵심] 무정부 상태 마비 완벽 차단
   const isAnarchyCapital = currentPlayer.government === 'anarchy' && selectedCity?.isCapital;
   const isCityParalyzed = selectedCity?.isParalyzed || isAnarchyCapital;
 
-  // 생산/수확 불가 조건에 isCityParalyzed(무정부/마비)를 최우선으로 추가
   const cannotProduce = 
       isCityParalyzed || 
       actionType === 'harvest' || 
@@ -255,11 +244,8 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
   if (selectedCity && map) {
       selectedCityCulture = calculateCityCulture(selectedCity, map, players) + 1;
       if (selectedCity.isCapital) {
-          if (currentPlayer.government === 'monarchy') {
-              selectedCityCulture += 1;
-          } else if (currentPlayer.government === 'communism') {
-              selectedCityCulture -= 1;
-          }
+          if (currentPlayer.government === 'monarchy') selectedCityCulture += 1;
+          else if (currentPlayer.government === 'communism') selectedCityCulture -= 1;
       }
   }
 
@@ -277,7 +263,19 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
     if (tradeConvertAmount > 0 && selectedCity) {
       const times = tradeConvertAmount / prodPerClick;
       const cost = times * tradeCostPerClick;
-      convertTradeToProduction(currentPlayer.id, selectedCity.id, tradeConvertAmount, cost);
+
+      // 🌟 [수정] GameStore 타입 에러를 우회하고 직접 상태를 업데이트합니다!
+      useGameStore.setState((state) => {
+        const p = state.players.find(pl => pl.id === currentPlayer.id);
+        const c = p?.cities.find(ci => ci.id === selectedCity.id);
+        
+        if (p && c && p.resources.trade >= cost) {
+          p.resources.trade -= cost;
+          c.tempProductionBonus = (c.tempProductionBonus || 0) + tradeConvertAmount;
+
+        }
+      });
+
       setTradeConvertAmount(0);
     }
   };
@@ -293,12 +291,10 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
 
   const handleBuildWonder = (wonder: WonderDefinition) => {
     if (!canManageCity || cannotProduce) return;
-
     let actualCost = wonder.cost;
     if (wonder.costReductionTech && currentPlayer.technologies.some(t => t.id === wonder.costReductionTech)) {
         actualCost = Math.max(1, actualCost - wonder.costReductionAmount!);
     }
-
     if (availableProduction < actualCost) {
       alert(`잔여 생산력이 부족합니다. (현재: ${availableProduction}, 필요: ${actualCost})`);
       return;
@@ -308,7 +304,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
 
   const handleBuildAtLocation = (position: Position) => {
     if (selectedCity && selectedBuildingToBuild) {
-      buildInCity(selectedCity.id, selectedBuildingToBuild.def.type, position, selectedBuildingToBuild.isFree);
+      buildInCity(selectedCity.id, selectedBuildingToBuild.def.type, position);
       setSelectedBuildingToBuild(null);
     }
   };
@@ -326,7 +322,6 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
     if (availableProduction < def.productionCost) return alert('잔여 생산력이 부족합니다.');
     if (type === 'military' && militaryCount >= 6) return alert('군사 유닛 한도 도달.');
     if (type === 'settler' && settlerCount >= 2) return alert('개척자 한도 도달.');
-    
     setSelectedUnitToProduce(type);
   };
 
@@ -337,20 +332,10 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
     }
   };
 
-  // 🌟 [수정] 모달 없이 바로 랜덤 스탯으로 징집을 호출하는 함수
   const handleProduceArmyCard = (type: string, tier: number, name: string, cost: number) => {
-    if (!selectedCity) return;
-    if (!canManageCity || cannotProduce) return;
+    if (!selectedCity || !canManageCity || cannotProduce) return;
     if (availableProduction < cost) return alert('잔여 생산력이 부족합니다.');
-    
-    produceArmyCard(
-        currentPlayer.id, 
-        type, 
-        tier, 
-        name, 
-        selectedCity.id,
-        cost 
-    );
+    produceArmyCard(currentPlayer.id, type, tier, name, selectedCity.id, cost);
   };
 
   const handleHarvestCulture = () => {
@@ -363,17 +348,14 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
     harvestResource(currentPlayer.id, selectedCity.id, resource);
   };
 
-  if (currentPlayer.cities.length === 0) {
-    return <div className="text-center text-slate-400 py-8">도시가 없습니다.</div>;
-  }
+  if (currentPlayer.cities.length === 0) return <div className="text-center text-slate-400 py-8">도시가 없습니다.</div>;
 
   let actionStatusText = '가능';
   let actionStatusColor = 'text-green-400';
-  
   if (isAnarchyCapital) {
      actionStatusText = '🔥 무정부 폭동 (수도 기능 마비)';
      actionStatusColor = 'text-red-500 font-bold animate-pulse';
-  } else if (isCityParalyzed) {
+  } else if (selectedCity?.isParalyzed) {
      actionStatusText = '마비됨 (행동 불가)';
      actionStatusColor = 'text-red-400';
   } else if (actionType === 'harvest') {
@@ -390,34 +372,25 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
   return (
     <div className="flex gap-6">
       
-      {/* 건물 모달 */}
       {selectedBuildingToBuild && selectedCity && (
         <LocationModal name={selectedBuildingToBuild.def.name} city={selectedCity} currentPlayer={currentPlayer} mode="building" onSelect={handleBuildAtLocation} onClose={() => setSelectedBuildingToBuild(null)} />
       )}
-
-      {/* 불가사의 모달 */}
       {selectedWonderToBuild && selectedCity && (
         <LocationModal name={selectedWonderToBuild.name} city={selectedCity} currentPlayer={currentPlayer} mode="wonder" onSelect={handleWonderAtLocation} onClose={() => setSelectedWonderToBuild(null)} />
       )}
-
-      {/* 유닛 배치 모달 */}
       {selectedUnitToProduce && selectedCity && (
         <LocationModal name={UNIT_DEFINITIONS[selectedUnitToProduce].name} city={selectedCity} currentPlayer={currentPlayer} mode="unit" onSelect={handleUnitAtLocation} onClose={() => setSelectedUnitToProduce(null)} />
       )}
       
       {showCultureModal && <CultureTrackModal onClose={() => setShowCultureModal(false)} />}
       
-      {/* 도시 목록 */}
       <div className="w-64 space-y-2">
         <h3 className="text-lg font-semibold text-white mb-3">내 도시</h3>
         {currentPlayer.cities.map((city) => (
           <button
             key={city.id}
             onClick={() => setSelectedCityId(city.id)}
-            className={clsx(
-              'w-full p-3 rounded-lg text-left transition-colors',
-              selectedCity?.id === city.id ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-            )}
+            className={clsx('w-full p-3 rounded-lg text-left transition-colors', selectedCity?.id === city.id ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600')}
           >
             <div className="font-medium flex items-center gap-2">{city.isCapital && <span>👑</span>} {city.name}</div>
             <div className="text-sm opacity-75 mt-1">생산력: {map ? calculateDetailedCityProduction(city, map, currentPlayer).total : 0} | 건물: {city.buildings.length}</div>
@@ -425,7 +398,6 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
         ))}
       </div>
 
-      {/* 선택된 도시 상세 */}
       {selectedCity && (
         <div className="flex-1 max-h-[80vh] overflow-y-auto pr-2">
           <div className="bg-slate-800 rounded-lg p-4 mb-4">
@@ -435,7 +407,6 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
                   <span className="text-orange-400">잔여 생산력: </span> 
                   <span className="font-bold text-lg text-white">{availableProduction}</span> 
                   <span className="text-slate-500 text-xs"> / {totalCityProduction}</span>
-                  
                   <div className="absolute left-0 top-full mt-2 w-48 bg-slate-900 border border-slate-600 rounded-lg p-3 text-xs text-slate-300 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
                       <div className="font-bold text-orange-400 mb-1 border-b border-slate-700 pb-1">총 생산력 내역</div>
                       <div className="flex justify-between py-0.5"><span>기본(지형):</span> <span>+{productionDetails.base}</span></div>
@@ -449,13 +420,10 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
             </div>
             <div className="mt-3 pt-3 border-t border-slate-700 flex justify-between items-center text-sm">
                 <span className="text-slate-400">이번 턴 행동:</span>
-                <span className={clsx('font-bold', actionStatusColor)}>
-                    {actionStatusText}
-                </span>
+                <span className={clsx('font-bold', actionStatusColor)}>{actionStatusText}</span>
             </div>
           </div>
 
-          {/* 문화 트랙 버튼 */}
           {canManageCity && (
             <div className="bg-slate-800 rounded-lg p-4 mb-4 border border-purple-900/50 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-2 opacity-10 text-6xl">🎭</div>
@@ -465,51 +433,38 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
               </div>
               <div className="flex items-center justify-between bg-slate-900/50 p-3 rounded-lg relative z-10">
                 <div>
-                  <div className="text-sm text-white mb-1">
-                    현재 트랙: <span className="font-bold text-purple-400 text-lg">{currentPlayer.cultureTrack}</span> / {CULTURE_TRACK_MAX}
-                  </div>
+                  <div className="text-sm text-white mb-1">현재 트랙: <span className="font-bold text-purple-400 text-lg">{currentPlayer.cultureTrack}</span> / {CULTURE_TRACK_MAX}</div>
                   <div className="text-xs text-slate-400 flex items-center gap-2">
                     <span>다음 단계 비용:</span>
                     <span className={clsx("font-bold flex items-center gap-1", currentPlayer.resources.culture >= nextCultureCost.culture ? "text-purple-300" : "text-red-400")}>🎭 {nextCultureCost.culture}</span>
                     <span className={clsx("font-bold flex items-center gap-1", currentPlayer.resources.trade >= nextCultureCost.trade ? "text-amber-300" : "text-red-400")}>📦 {nextCultureCost.trade}</span>
                   </div>
                 </div>
-                <button onClick={advanceCultureTrack} disabled={!canAdvanceCulture} className={clsx("px-5 py-2 rounded-lg text-sm font-bold shadow-lg", canAdvanceCulture ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white transform hover:scale-105" : "bg-slate-700 text-slate-500 cursor-not-allowed")}>
-                  문화 증진
-                </button>
+                <button onClick={advanceCultureTrack} disabled={!canAdvanceCulture} className={clsx("px-5 py-2 rounded-lg text-sm font-bold shadow-lg", canAdvanceCulture ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white transform hover:scale-105" : "bg-slate-700 text-slate-500 cursor-not-allowed")}>문화 증진</button>
               </div>
             </div>
           )}
 
-          {/* 사치품 수확 */}
           {availableResources.length > 0 && (
             <div className="bg-slate-800 rounded-lg p-4 mb-4 border border-amber-700/50">
                 <h4 className="text-lg font-bold text-amber-400 mb-3 flex items-center gap-2"><span>🌾</span> 사치품 수확 (주변 8칸&보급)</h4>
                 <div className="flex flex-wrap gap-2">
                     {availableResources.map((resource) => (
                         <button key={resource} onClick={() => handleHarvestResource(resource)} disabled={!isOwner || cannotHarvest || !canManageCity} className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold border', (!isOwner || cannotHarvest || !canManageCity) ? 'bg-slate-700 border-slate-600 opacity-50' : 'bg-slate-700 border-amber-600 hover:bg-amber-900 text-white')}>
-                            <span className="text-lg">{RESOURCE_ICONS[resource]}</span>
-                            <span>{RESOURCE_NAMES[resource]} (+1)</span>
+                            <span className="text-lg">{RESOURCE_ICONS[resource]}</span><span>{RESOURCE_NAMES[resource]} (+1)</span>
                         </button>
                     ))}
                 </div>
             </div>
           )}
 
-          {/* 문화 수확 */}
           {canManageCity && selectedCityCulture > 0 && (
             <div className="bg-slate-800 rounded-lg p-4 mb-4 flex justify-between items-center border border-purple-900/30">
                 <div>
                   <h4 className="text-md font-bold text-purple-300">📜 문화 생산</h4>
                   <p className="text-xs text-slate-400">도시와 주변 불가사의에서 문화를 수확합니다.</p>
                 </div>
-                <button 
-                  onClick={handleHarvestCulture} 
-                  disabled={selectedCity.hasHarvestedCulture || cannotHarvest} 
-                  className={clsx('px-4 py-2 rounded-lg text-sm font-bold', (selectedCity.hasHarvestedCulture || cannotHarvest) ? 'bg-slate-700 opacity-50 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-500 text-white')}
-                >
-                  +{selectedCityCulture} 획득
-                </button>
+                <button onClick={handleHarvestCulture} disabled={selectedCity.hasHarvestedCulture || cannotHarvest} className={clsx('px-4 py-2 rounded-lg text-sm font-bold', (selectedCity.hasHarvestedCulture || cannotHarvest) ? 'bg-slate-700 opacity-50 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-500 text-white')}>+{selectedCityCulture} 획득</button>
             </div>
           )}
 
@@ -539,9 +494,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
                          const ny = cy + dy;
                          if (nx >= 0 && nx < map.width && ny >= 0 && ny < map.height) {
                            const t = map.tiles[ny][nx];
-                           if (t.ownerId === currentPlayer.id && t.wonder) {
-                               wondersInCity.push(t.wonder.type);
-                           }
+                           if (t.ownerId === currentPlayer.id && t.wonder) wondersInCity.push(t.wonder.type);
                          }
                        }
                      }
@@ -560,16 +513,24 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
             )}
           </div>
 
-          {/* 생산 패널 */}
           <div className="bg-slate-800 rounded-lg p-4">
+            {isCityParalyzed && (
+              <div className="mb-4 p-3 bg-red-900/80 border-2 border-red-500 rounded-lg animate-pulse shadow-lg">
+                <p className="text-white text-sm font-bold flex items-center gap-2">
+                  {isAnarchyCapital ? <><span className="text-xl">🔥</span> 무정부 폭동으로 인해 수도 기능이 마비되었습니다! (행동 불가)</> : <><span className="text-xl">⛓️</span> 상대 스파이에 의해 도시가 마비되었습니다! (행동 불가)</>}
+                </p>
+              </div>
+            )}
+
+            {!canManageCity && <div className="mb-4 p-3 bg-yellow-900/50 border border-yellow-600 rounded-lg"><p className="text-yellow-400 text-sm">⚠️ 도시 경영 단계에서만 건설 및 생산이 가능합니다.</p></div>}
+            {canManageCity && actionType === 'harvest' && <div className="mb-4 p-3 bg-red-900/50 border border-red-600 rounded-lg"><p className="text-red-400 text-sm">⚠️ 이번 턴에 수확 행동을 마쳐서 더 이상 생산할 수 없습니다.</p></div>}
+            {canManageCity && cannotProduce && actionType !== 'harvest' && !isCityParalyzed && <div className="mb-4 p-3 bg-red-900/50 border border-red-600 rounded-lg"><p className="text-red-400 text-sm">⚠️ 생산 한도 도달: {currentProduced >= 2 ? '공학 능력(최대 2회)을 모두 소모했습니다.' : '다른 도시에서 이미 공학 능력을 사용했거나, 공학 기술이 없습니다.'}</p></div>}
 
             {canManageCity && !cannotProduce && !isCityParalyzed && (
                <div className="mb-4 p-3 bg-slate-750 border border-amber-600/50 rounded-lg">
                  <div className="flex justify-between items-center mb-2">
                    <h4 className="text-sm font-bold text-amber-400">🔄 교역품 긴급 조달</h4>
-                   <span className="text-xs text-slate-400">
-                     (비율 - 교역 3 : 생산 {isAmerica ? '2 (🇺🇸 미국 특성)' : '1'})
-                   </span>
+                   <span className="text-xs text-slate-400">(비율 - 교역 3 : 생산 {isAmerica ? '2 (🇺🇸 미국 특성)' : '1'})</span>
                  </div>
                  <div className="flex items-center gap-3">
                    <div className="flex-1 flex items-center bg-slate-900 rounded p-1">
@@ -577,78 +538,11 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
                      <span className="flex-1 text-center text-white font-bold">+{tradeConvertAmount} 생산</span>
                      <button onClick={() => setTradeConvertAmount(tradeConvertAmount + prodPerClick)} className="px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded">+</button>
                    </div>
-                   <button 
-                     onClick={handleConvertTrade}
-                     disabled={tradeConvertAmount === 0 || currentPlayer.resources.trade < (tradeConvertAmount / prodPerClick) * tradeCostPerClick}
-                     className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-600 text-white font-bold rounded text-sm transition-colors"
-                   >
+                   <button onClick={handleConvertTrade} disabled={tradeConvertAmount === 0 || currentPlayer.resources.trade < (tradeConvertAmount / prodPerClick) * tradeCostPerClick} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-600 text-white font-bold rounded text-sm transition-colors">
                      교역 {tradeConvertAmount === 0 ? 0 : (tradeConvertAmount / prodPerClick) * tradeCostPerClick} 소모
                    </button>
                  </div>
                </div>
-            )}
-
-            {productionTab === 'buildings' && (
-              <div className="grid grid-cols-2 gap-2">
-                {availableBuildings.map((building) => {
-                  const canAfford = availableProduction >= building.productionCost;
-                  const canUseEgyptFreeBuild = currentPlayer.nation === 'egypt' && !currentPlayer.hasUsedEgyptFreeBuildingThisTurn;
-                  const cityActed = cannotProduce || isCityParalyzed;
-                  
-                  return (
-                    <div key={building.type} className={clsx('p-3 rounded-lg text-left transition-colors flex flex-col justify-between', (canManageCity && (canAfford || canUseEgyptFreeBuild) && !cityActed) ? 'bg-slate-700' : 'bg-slate-700 opacity-40')}>
-                      <div>
-                          <div className="text-white font-medium text-sm">{building.name}</div>
-                          <div className="text-slate-400 text-xs mt-1">{building.description}</div>
-                          <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>비용: {building.productionCost} {canAfford ? "" : "(부족)"}</div>
-                      </div>
-                      
-                      <div className="mt-3 flex gap-1">
-                          <button onClick={() => handleBuild(building, false)} disabled={!canManageCity || !canAfford || cityActed} className="flex-1 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-600 text-white text-xs font-bold rounded">
-                              건설
-                          </button>
-                          {currentPlayer.nation === 'egypt' && (
-                              <button onClick={() => handleBuild(building, true)} disabled={!canManageCity || !canUseEgyptFreeBuild || cityActed} className="flex-1 py-1.5 bg-yellow-500 hover:bg-yellow-400 disabled:bg-slate-600 text-black text-xs font-bold rounded">
-                                  🏺 무료 건설
-                              </button>
-                          )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {selectedCity?.isParalyzed && (
-              <div className="mb-4 p-3 bg-red-900/80 border-2 border-red-500 rounded-lg animate-pulse shadow-lg">
-                <p className="text-white text-sm font-bold flex items-center gap-2">
-                  <span className="text-xl">⛓️</span> 상대 스파이에 의해 도시가 마비되었습니다! (행동 불가)
-                </p>
-              </div>
-            )}
-
-            {!canManageCity && (
-              <div className="mb-4 p-3 bg-yellow-900/50 border border-yellow-600 rounded-lg">
-                <p className="text-yellow-400 text-sm">
-                  ⚠️ 도시 경영 단계에서만 건설 및 생산이 가능합니다.
-                </p>
-              </div>
-            )}
-            
-            {canManageCity && actionType === 'harvest' && (
-              <div className="mb-4 p-3 bg-red-900/50 border border-red-600 rounded-lg">
-                <p className="text-red-400 text-sm">
-                  ⚠️ 이번 턴에 수확 행동을 마쳐서 더 이상 생산할 수 없습니다.
-                </p>
-              </div>
-            )}
-
-            {canManageCity && cannotProduce && actionType !== 'harvest' && !isCityParalyzed && (
-              <div className="mb-4 p-3 bg-red-900/50 border border-red-600 rounded-lg">
-                <p className="text-red-400 text-sm">
-                  ⚠️ 생산 한도 도달: {currentProduced >= 2 ? '공학 능력(최대 2회)을 모두 소모했습니다.' : '다른 도시에서 이미 공학 능력을 사용했거나, 공학 기술이 없습니다.'}
-                </p>
-              </div>
             )}
 
             <div className="flex gap-2 mb-4 mt-4">
@@ -662,9 +556,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
               <div className="grid grid-cols-2 gap-2">
                 {Object.values(WONDERS).map((wonder) => {
                   let actualCost = wonder.cost;
-                  if (wonder.costReductionTech && currentPlayer.technologies.some(t => t.id === wonder.costReductionTech)) {
-                      actualCost = Math.max(1, actualCost - wonder.costReductionAmount!);
-                  }
+                  if (wonder.costReductionTech && currentPlayer.technologies.some(t => t.id === wonder.costReductionTech)) actualCost = Math.max(1, actualCost - wonder.costReductionAmount!);
 
                   const canAfford = availableProduction >= actualCost; 
                   const cityActed = cannotProduce || isCityParalyzed;
@@ -680,30 +572,38 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
                   const isDisabled = !canManageCity || !canAfford || cityActed || isAlreadyBuilt;
                   
                   return (
-                    <motion.button 
-                      key={wonder.type} 
-                      whileHover={!isDisabled ? { scale: 1.02 } : {}} 
-                      onClick={() => handleBuildWonder(wonder)} 
-                      disabled={isDisabled} 
-                      className={clsx(
-                          'p-3 rounded-lg text-left transition-colors border border-indigo-900/50 relative overflow-hidden', 
-                          !isDisabled ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-700 opacity-40 cursor-not-allowed'
-                      )}
-                    >
+                    <motion.button key={wonder.type} whileHover={!isDisabled ? { scale: 1.02 } : {}} onClick={() => handleBuildWonder(wonder)} disabled={isDisabled} className={clsx('p-3 rounded-lg text-left transition-colors border border-indigo-900/50 relative overflow-hidden', !isDisabled ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-700 opacity-40 cursor-not-allowed')}>
                       <div className="text-indigo-300 font-bold text-sm flex items-center justify-between gap-1">
                           <span>🗽 {wonder.name}</span>
-                          {isAlreadyBuilt && (
-                              <span className="text-[10px] text-red-200 bg-red-900/80 px-1.5 py-0.5 rounded border border-red-500">
-                                  역사 속으로
-                              </span>
-                          )}
+                          {isAlreadyBuilt && <span className="text-[10px] text-red-200 bg-red-900/80 px-1.5 py-0.5 rounded border border-red-500">역사 속으로</span>}
                       </div>
                       <div className="text-slate-400 text-xs mt-1">{wonder.description}</div>
                       <div className="text-xs mt-1 text-purple-300">턴당 문화 +{wonder.cultureProduction}</div>
-                      <div className={clsx("text-xs mt-1 font-bold", isAlreadyBuilt ? "text-slate-500" : canAfford ? "text-amber-400" : "text-red-400")}>
-                        비용: {actualCost} {isAlreadyBuilt ? "" : canAfford ? "" : "(부족)"}
-                      </div>
+                      <div className={clsx("text-xs mt-1 font-bold", isAlreadyBuilt ? "text-slate-500" : canAfford ? "text-amber-400" : "text-red-400")}>비용: {actualCost} {isAlreadyBuilt ? "" : canAfford ? "" : "(부족)"}</div>
                     </motion.button>
+                  );
+                })}
+              </div>
+            )}
+
+            {productionTab === 'buildings' && (
+              <div className="grid grid-cols-2 gap-2">
+                {availableBuildings.map((building) => {
+                  const canAfford = availableProduction >= building.productionCost;
+                  const canUseEgyptFreeBuild = currentPlayer.nation === 'egypt' && !currentPlayer.hasUsedEgyptFreeBuildingThisTurn;
+                  const cityActed = cannotProduce || isCityParalyzed;
+                  return (
+                    <div key={building.type} className={clsx('p-3 rounded-lg text-left transition-colors flex flex-col justify-between', (canManageCity && (canAfford || canUseEgyptFreeBuild) && !cityActed) ? 'bg-slate-700' : 'bg-slate-700 opacity-40')}>
+                      <div>
+                          <div className="text-white font-medium text-sm">{building.name}</div>
+                          <div className="text-slate-400 text-xs mt-1">{building.description}</div>
+                          <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>비용: {building.productionCost} {canAfford ? "" : "(부족)"}</div>
+                      </div>
+                      <div className="mt-3 flex gap-1">
+                          <button onClick={() => handleBuild(building, false)} disabled={!canManageCity || !canAfford || cityActed} className="flex-1 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-600 text-white text-xs font-bold rounded">건설</button>
+                          {currentPlayer.nation === 'egypt' && <button onClick={() => handleBuild(building, true)} disabled={!canManageCity || !canUseEgyptFreeBuild || cityActed} className="flex-1 py-1.5 bg-yellow-500 hover:bg-yellow-400 disabled:bg-slate-600 text-black text-xs font-bold rounded">🏺 무료 건설</button>}
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -731,7 +631,6 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
               </div>
             )}
             
-            {/* 모달을 삭제하고 랜덤 스탯 징집 버튼으로 교체된 탭 */}
             {productionTab === 'armyCards' && (
               <div className="grid grid-cols-2 gap-2">
                 {availableArmyCards.map((card) => {
@@ -746,19 +645,10 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
                           <div className="text-white font-medium text-sm flex items-center gap-2"><span>{cardIcon}</span> {card.name}</div>
                           <div className="text-slate-400 text-xs mt-1">티어 {card.tier} 부대</div>
                           <div className={clsx("text-xs mt-1 font-bold", canAfford ? "text-amber-400" : "text-red-400")}>비용: {card.productionCost} {canAfford ? "" : "(부족)"}</div>
-                          <div className="text-slate-400 text-[10px] mt-1 flex items-center gap-1">
-                              <span>🎲</span> 능력치(방어/공수/공격) 랜덤 부여
-                          </div>
+                          <div className="text-slate-400 text-[10px] mt-1 flex items-center gap-1"><span>🎲</span> 능력치(방어/공수/공격) 랜덤 부여</div>
                       </div>
-                      
                       <div className="mt-3">
-                          <button 
-                            onClick={() => handleProduceArmyCard(card.type, card.tier, card.name, card.productionCost)} 
-                            disabled={isDisabled} 
-                            className="w-full py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-600 text-white text-xs font-bold rounded transition-colors"
-                          >
-                              부대 징집
-                          </button>
+                          <button onClick={() => handleProduceArmyCard(card.type, card.tier, card.name, card.productionCost)} disabled={isDisabled} className="w-full py-1.5 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-600 text-white text-xs font-bold rounded transition-colors">부대 징집</button>
                       </div>
                     </div>
                   );

@@ -1,3 +1,5 @@
+// src/components/game/Combat/CombatPanel.tsx
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../../../store/gameStore';
@@ -81,7 +83,6 @@ function BattlefieldSlot({ bf, isAttackerTurn, onFaceCard }: {
     )}
       onClick={() => canFace && onFaceCard(bf.id)}
     >
-      {/* 공격자 카드 */}
       <div className="w-full">
         {bf.attackerCard ? (
           <div className={clsx(
@@ -103,12 +104,10 @@ function BattlefieldSlot({ bf, isAttackerTurn, onFaceCard }: {
         )}
       </div>
 
-      {/* VS 표시 */}
       <div className="text-xs font-bold text-amber-500">
         {bf.resolved ? (bf.result?.firstStriker === 'simultaneous' ? '⚡' : '⚔️') : 'VS'}
       </div>
 
-      {/* 방어자 카드 */}
       <div className="w-full">
         {bf.defenderCard ? (
           <div className={clsx(
@@ -130,7 +129,6 @@ function BattlefieldSlot({ bf, isAttackerTurn, onFaceCard }: {
         )}
       </div>
 
-      {/* 결과 표시 */}
       {bf.resolved && bf.result && (
         <div className="text-[10px] text-slate-400">
           {bf.result.firstStriker === 'attacker' && '공격 선제'}
@@ -149,19 +147,22 @@ function PlacementPhase() {
     players,
     placeCardOnBattlefield,
     passTurn,
-    useTechResourceAbility,
     applyCombatSkill,
-    map // 🌟 [수정] 신탁 효과(hasActiveWonder) 검사를 위해 map을 반드시 가져와야 합니다.
+    map 
   } = useGameStore();
 
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
-  const [useMetalCastingToggle, setUseMetalCastingToggle] = useState(false);
   
+  // 🌟 [수정] 금속가공 버프 사용 소스를 구별하기 위한 상태 ('none' | 'luxury' | 'secret')
+  const [metalCastingSource, setMetalCastingSource] = useState<'none' | 'luxury' | 'secret'>('none');
+  
+  // 🌟 [수정] 모달에서도 오두막 자원 사용 여부를 기억하도록 추가
   const [skillModal, setSkillModal] = useState<{
     isOpen: boolean;
     skillId: string;
     maxPoints: number;
     type: 'damage' | 'heal';
+    useSecretResource?: boolean; 
   } | null>(null);
   const [allocations, setAllocations] = useState<Record<string, number>>({});
 
@@ -176,26 +177,26 @@ function PlacementPhase() {
       ? attackerPlayer 
       : (defenderPlayer || { id: 'village', name: '원주민 마을', color: 'gray' } as any);
 
-  // 🌟 [추가] 신탁 발동을 위해 상대방 정보 및 카드 식별
   const opponentPlayer = isAttackerTurn ? defenderPlayer : attackerPlayer;
   const opponentCards = isAttackerTurn ? cs.defenderAvailableCards : cs.attackerAvailableCards;
   
-  // 🌟 [추가] 현재 턴 플레이어가 '신탁'을 소유하고 있고 봉쇄당하지 않았는지 확인!
   const hasOracle = map ? hasActiveWonder(currentTurnPlayer.id, 'oracle', map, players) : false;
 
   const usedSkills = cs.usedCombatSkills?.[currentTurnPlayer.id] || [];
   const hasTech = (techId: string) => currentTurnPlayer.technologies?.some((t: any) => t.id === techId);
   const hasUsedInCombat = (techId: string) => usedSkills.includes(techId); 
 
-  const hasMetalCasting = hasTech('metal_casting') && !hasUsedInCombat('metal_casting');
+  // 🌟 [추가] 일반 철 사치품 개수와 오두막 철 토큰 개수를 따로 계산
   const ironCount = currentTurnPlayer.luxuryResources?.iron || 0;
-  const canUseMetalCasting = hasMetalCasting && ironCount >= 1;
+  const secretIronCount = currentTurnPlayer.secretResources?.filter((r: any) => r.type === 'iron').length || 0;
+  
+  const hasMetalCasting = hasTech('metal_casting') && !hasUsedInCombat('metal_casting');
 
+  // 자원이 변동되면 선택된 버프 소스 초기화
   useEffect(() => {
-    if (!canUseMetalCasting && useMetalCastingToggle) {
-      setUseMetalCastingToggle(false);
-    }
-  }, [canUseMetalCasting, useMetalCastingToggle]);
+    if (metalCastingSource === 'luxury' && ironCount < 1) setMetalCastingSource('none');
+    if (metalCastingSource === 'secret' && secretIronCount < 1) setMetalCastingSource('none');
+  }, [ironCount, secretIronCount, metalCastingSource]);
 
   const currentCards = isAttackerTurn ? cs.attackerAvailableCards : cs.defenderAvailableCards;
   const currentDeployCount = isAttackerTurn ? cs.placement.attackerDeployCount : cs.placement.defenderDeployCount;
@@ -204,9 +205,10 @@ function PlacementPhase() {
   const handlePlaceCard = (battlefieldId: string | null) => {
     if (!selectedCard) return;
 
-    if (useMetalCastingToggle) {
-      applyCombatSkill(currentTurnPlayer.id, 'metal_casting', undefined, selectedCard);
-      setUseMetalCastingToggle(false);
+    // 카드를 낼 때 금속가공 버프가 켜져있다면, 선택된 소스를 applyCombatSkill에 넘겨 지불 처리
+    if (metalCastingSource !== 'none') {
+      applyCombatSkill(currentTurnPlayer.id, 'metal_casting', undefined, selectedCard, metalCastingSource === 'secret');
+      setMetalCastingSource('none');
     }
 
     placeCardOnBattlefield(currentTurnPlayer.id, selectedCard, battlefieldId);
@@ -262,7 +264,6 @@ function PlacementPhase() {
         </div>
       </div>
 
-      {/* 🌟 수정: 2칸(grid-cols-2)에서 3칸(grid-cols-3)으로 레이아웃 확장! */}
       <div className="grid grid-cols-3 gap-4">
         
         {/* 1열: 내 카드 */}
@@ -291,27 +292,46 @@ function PlacementPhase() {
         <div className="flex flex-col gap-3">
           <h3 className="text-lg font-semibold text-slate-300">행동 선택</h3>
 
-          {canUseMetalCasting && (
-            <label className={clsx(
-              "flex items-center gap-2 p-3 rounded-lg border-2 cursor-pointer transition-colors mb-2",
-              useMetalCastingToggle ? "border-amber-400 bg-amber-900/30 ring-2 ring-amber-500" : "border-slate-600 bg-slate-700/50"
-            )}>
-              <input 
-                type="checkbox" 
-                className="hidden"
-                checked={useMetalCastingToggle}
-                onChange={() => setUseMetalCastingToggle(!useMetalCastingToggle)}
-              />
-              <span className="text-2xl">🔨</span>
-              <div className="flex-1">
-                <div className={clsx("font-bold text-sm", useMetalCastingToggle ? "text-amber-300" : "text-slate-300")}>
-                  금속가공 버프 사용 (철 1 소모)
-                </div>
-                <div className="text-[11px] text-slate-400 mt-0.5">
-                  켜두고 카드를 배치하면 해당 카드 공격력이 영구히 +3 됩니다.
-                </div>
-              </div>
-            </label>
+          {/* 🌟 [UI 개편] 금속가공 버프: 일반 철과 비밀 철을 구분하여 선택 가능하게 만듦 */}
+          {hasMetalCasting && (
+            <div className="flex flex-col gap-2 mb-2 p-2 bg-slate-800/80 rounded-lg border border-slate-700">
+               <div className="text-xs text-amber-300 font-bold mb-1 flex items-center gap-1"><span>🔨</span> 금속가공 버프 선택</div>
+               {ironCount > 0 && (
+                  <label className={clsx(
+                    "flex items-center gap-2 p-2 rounded cursor-pointer transition-colors border",
+                    metalCastingSource === 'luxury' ? "border-amber-400 bg-amber-900/30" : "border-slate-600 bg-slate-700"
+                  )}>
+                    <input 
+                      type="checkbox" 
+                      className="hidden"
+                      checked={metalCastingSource === 'luxury'}
+                      onChange={() => setMetalCastingSource(p => p === 'luxury' ? 'none' : 'luxury')}
+                    />
+                    <div className="flex-1 text-[11px] font-bold text-slate-300">
+                      사치품 철 소모 (+3 공격력)
+                    </div>
+                  </label>
+               )}
+               {secretIronCount > 0 && (
+                  <label className={clsx(
+                    "flex items-center gap-2 p-2 rounded cursor-pointer transition-colors border",
+                    metalCastingSource === 'secret' ? "border-purple-400 bg-purple-900/30" : "border-slate-600 bg-slate-700"
+                  )}>
+                    <input 
+                      type="checkbox" 
+                      className="hidden"
+                      checked={metalCastingSource === 'secret'}
+                      onChange={() => setMetalCastingSource(p => p === 'secret' ? 'none' : 'secret')}
+                    />
+                    <div className="flex-1 text-[11px] font-bold text-slate-300">
+                      오두막 철 소모 (+3 공격력)
+                    </div>
+                  </label>
+               )}
+               {ironCount === 0 && secretIronCount === 0 && (
+                  <div className="text-[10px] text-slate-500 text-center py-1">소모할 철이 없습니다.</div>
+               )}
+            </div>
           )}
 
           {selectedCard && (
@@ -345,41 +365,61 @@ function PlacementPhase() {
               <h4 className="text-sm font-bold text-slate-400 mb-2">전투 스킬 (현재 턴)</h4>
               <div className="flex flex-col gap-2">
                 
+                {/* 🌟 [UI 개편] 수학: 버튼을 반으로 갈라 지불 방식 선택 */}
                 {hasTech('mathematics') && !hasUsedInCombat('mathematics') && (
-                  <button 
-                    onClick={() => { setSkillModal({ isOpen: true, skillId: 'mathematics', maxPoints: 3, type: 'damage' }); setAllocations({}); }}
-                    disabled={currentTurnPlayer.luxuryResources?.iron < 1}
-                    className="px-3 py-2 bg-rose-900/50 hover:bg-rose-800 text-rose-200 rounded text-sm text-left disabled:opacity-50 transition-colors border border-rose-700/50"
-                  >
-                    📐 수학 (철 1 소모): 적 부대에 부상 3 분배
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => { setSkillModal({ isOpen: true, skillId: 'mathematics', maxPoints: 3, type: 'damage', useSecretResource: false }); setAllocations({}); }}
+                      disabled={ironCount < 1}
+                      className="flex-1 p-2 bg-rose-900/50 hover:bg-rose-800 text-rose-200 rounded text-[11px] disabled:opacity-50 transition-colors border border-rose-700/50"
+                    >
+                      📐 수학 (사치품 철)
+                    </button>
+                    <button 
+                      onClick={() => { setSkillModal({ isOpen: true, skillId: 'mathematics', maxPoints: 3, type: 'damage', useSecretResource: true }); setAllocations({}); }}
+                      disabled={secretIronCount < 1}
+                      className="flex-1 p-2 bg-purple-900/50 hover:bg-purple-800 text-purple-200 rounded text-[11px] disabled:opacity-50 transition-colors border border-purple-700/50"
+                    >
+                      📐 수학 (오두막 철)
+                    </button>
+                  </div>
                 )}
 
+                {/* 🌟 [UI 개편] 탄도학: 버튼을 반으로 갈라 지불 방식 선택 */}
                 {hasTech('ballistics') && !hasUsedInCombat('ballistics') && (
-                  <button 
-                    onClick={() => { setSkillModal({ isOpen: true, skillId: 'ballistics', maxPoints: 6, type: 'damage' }); setAllocations({}); }}
-                    disabled={currentTurnPlayer.luxuryResources?.iron < 1}
-                    className="px-3 py-2 bg-rose-700/50 hover:bg-rose-600 text-rose-100 rounded text-sm text-left disabled:opacity-50 transition-colors border border-rose-600/50"
-                  >
-                    🚀 탄도학 (철 1 소모): 적 부대에 부상 6 분배
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => { setSkillModal({ isOpen: true, skillId: 'ballistics', maxPoints: 6, type: 'damage', useSecretResource: false }); setAllocations({}); }}
+                      disabled={ironCount < 1}
+                      className="flex-1 p-2 bg-rose-700/50 hover:bg-rose-600 text-rose-100 rounded text-[11px] disabled:opacity-50 transition-colors border border-rose-600/50"
+                    >
+                      🚀 탄도학 (사치품 철)
+                    </button>
+                    <button 
+                      onClick={() => { setSkillModal({ isOpen: true, skillId: 'ballistics', maxPoints: 6, type: 'damage', useSecretResource: true }); setAllocations({}); }}
+                      disabled={secretIronCount < 1}
+                      className="flex-1 p-2 bg-indigo-700/50 hover:bg-indigo-600 text-indigo-100 rounded text-[11px] disabled:opacity-50 transition-colors border border-indigo-600/50"
+                    >
+                      🚀 탄도학 (오두막 철)
+                    </button>
+                  </div>
                 )}
 
                 {hasTech('animal_husbandry') && !hasUsedInCombat('animal_husbandry') && (
                   <button 
                     onClick={() => { setSkillModal({ isOpen: true, skillId: 'animal_husbandry', maxPoints: 3, type: 'heal' }); setAllocations({}); }}
-                    className="px-3 py-2 bg-emerald-900/50 hover:bg-emerald-800 text-emerald-200 rounded text-sm text-left transition-colors border border-emerald-700/50"
+                    className="w-full px-3 py-2 bg-emerald-900/50 hover:bg-emerald-800 text-emerald-200 rounded text-sm text-left transition-colors border border-emerald-700/50"
                   >
-                    🥩 축산 (무료): 내 부대에 치료 3 분배
+                    🥩 축산 (무료): 치료 3 분배
                   </button>
                 )}
 
                 {hasTech('biology') && !hasUsedInCombat('biology') && (
                   <button 
                     onClick={() => applyCombatSkill(currentTurnPlayer.id, 'biology')}
-                    className="px-3 py-2 bg-teal-900/50 hover:bg-teal-800 text-teal-200 rounded text-sm text-left font-bold transition-colors border border-teal-600/50"
+                    className="w-full px-3 py-2 bg-teal-900/50 hover:bg-teal-800 text-teal-200 rounded text-sm text-left font-bold transition-colors border border-teal-600/50"
                   >
-                    🌿 생물학 (무료): 전장 내 모든 아군 완치!
+                    🌿 생물학 (무료): 전장 모든 부대 완치
                   </button>
                 )}
               </div>
@@ -387,9 +427,7 @@ function PlacementPhase() {
           )}
         </div>
 
-        {/* ========================================================= */}
-        {/* 🌟 3열: 상대방 패 렌더링 (신탁 여부에 따라 공개/비공개) */}
-        {/* ========================================================= */}
+        {/* 3열: 상대방 패 렌더링 (신탁 여부에 따라 공개/비공개) */}
         <div className="pl-4 border-l border-slate-700">
           <h3 className="text-lg font-semibold text-slate-400 mb-3 flex items-center gap-2">
             <span>👀</span>
@@ -400,10 +438,8 @@ function PlacementPhase() {
           <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
             {opponentCards.map((card, idx) => (
                hasOracle ? (
-                  // 🌟 신탁 발동: 카드 앞면 공개! (이미 선언된 CardDisplay 컴포넌트 사용)
                   <CardDisplay key={card.id} card={card} disabled size="small" />
                ) : (
-                  // 일반 상태: 뒷면 상자만 렌더링
                   <div key={idx} className="p-3 bg-slate-800 border border-slate-600 rounded-lg flex items-center justify-center h-14 opacity-50">
                      <span className="text-slate-500 font-bold text-sm">카드 뒷면 (숨겨짐)</span>
                   </div>
@@ -412,7 +448,6 @@ function PlacementPhase() {
             {opponentCards.length === 0 && <p className="text-slate-500 text-sm text-center py-4">남은 카드 없음</p>}
           </div>
 
-          {/* 신탁 발동 안내 배너 */}
           {hasOracle && opponentCards.length > 0 && (
              <div className="mt-3 text-xs text-purple-300 font-bold bg-purple-900/50 p-2 rounded text-center border border-purple-700/50 animate-pulse">
                 👁️ 신탁 효과: 상대 패 강제 공개
@@ -434,12 +469,13 @@ function PlacementPhase() {
         </div>
       </div>
 
-      {/* 스킬 포인트 분배 모달 (기존 코드 유지) */}
+      {/* 스킬 포인트 분배 모달 */}
       {skillModal?.isOpen && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[80]">
           <div className="bg-slate-800 border-2 border-amber-500 rounded-xl p-6 w-[450px] shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-2">
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
               {skillModal.type === 'damage' ? '💥 데미지 분배' : '✨ 회복 분배'}
+              {skillModal.useSecretResource && <span className="text-xs bg-purple-800 px-2 py-1 rounded-full text-purple-200 ml-2">오두막 토큰 결제 대기중</span>}
             </h3>
             
             {(() => {
@@ -522,7 +558,8 @@ function PlacementPhase() {
                     </button>
                     <button 
                       onClick={() => {
-                        applyCombatSkill(currentTurnPlayer.id, skillModal.skillId, allocations);
+                        // 🌟 [수정] 모달이 기억하던 지불 방식을 그대로 스토어에 전달합니다.
+                        applyCombatSkill(currentTurnPlayer.id, skillModal.skillId, allocations, undefined, skillModal.useSecretResource);
                         setSkillModal(null);
                       }}
                       disabled={usedPoints === 0}
@@ -560,7 +597,6 @@ function ResolutionPhase() {
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-center text-amber-500">전투 해결</h2>
 
-      {/* 전장 결과 */}
       <div className="flex gap-2 overflow-x-auto pb-2 justify-center">
         {cs.battlefields.map((bf) => (
           <BattlefieldSlot
@@ -572,7 +608,6 @@ function ResolutionPhase() {
         ))}
       </div>
 
-      {/* 전투 로그 */}
       <div className="bg-slate-800 rounded-lg p-4 max-h-[200px] overflow-y-auto">
         <h3 className="text-sm font-semibold text-slate-300 mb-2">전투 로그</h3>
         {cs.log.map((entry, i) => (
@@ -580,7 +615,6 @@ function ResolutionPhase() {
         ))}
       </div>
 
-      {/* 묘지 */}
       {cs.graveyard.length > 0 && (
         <div className="bg-slate-800/50 rounded-lg p-3">
           <h3 className="text-sm font-semibold text-slate-400 mb-2">전사한 카드</h3>
@@ -637,7 +671,6 @@ function ScoringPhase() {
   const defenderPlayer = players.find((p) => p.id === cs.defenderRoleId);
   const winnerPlayer = players.find((p) => p.id === cs.winnerPlayerId);
 
-  // [수정] 방어자 이름 안전하게 가져오기
   const defenderName = defenderPlayer ? defenderPlayer.name : '원주민 마을';
   
   if (!attackerPlayer) return null;
@@ -658,7 +691,6 @@ function ScoringPhase() {
         )}
       </h2>
       
-      {/* 전장 최종 모습 */}
       <div className="w-full bg-slate-800/50 rounded-lg p-4 mb-4">
         <h3 className="text-sm font-semibold text-slate-400 mb-3 text-center">최종 전장 상황</h3>
         <div className="flex gap-2 overflow-x-auto pb-2 justify-center min-h-[120px] items-center">
@@ -738,7 +770,6 @@ function LootPhase() {
   const winnerPlayer = players.find((p) => p.id === cs.winnerPlayerId);
   const loserPlayer = players.find((p) => p.id === cs.loserPlayerId);
 
-  // [수정] 마을 승패 시 전리품 단계가 없어야 하지만, 혹시 진입하더라도 에러 방지
   if (!winnerPlayer || !loserPlayer) return null;
 
   const remaining = cs.maxLootSelections - cs.lootSelections.length;
@@ -760,7 +791,6 @@ function LootPhase() {
         남은 선택: {remaining} / {cs.maxLootSelections}
       </p>
 
-      {/* 이미 선택한 전리품 */}
       {cs.lootSelections.length > 0 && (
         <div className="bg-slate-800 rounded-lg p-3">
           <h3 className="text-sm font-semibold text-slate-300 mb-2">선택 완료</h3>
@@ -772,7 +802,6 @@ function LootPhase() {
         </div>
       )}
 
-      {/* 선택 버튼 */}
       {remaining > 0 && (
         <div className="flex justify-center gap-4">
           <button
@@ -851,7 +880,6 @@ function ResultPhase() {
             <p className="text-slate-400">공격이 격퇴되었습니다.</p>
           )}
 
-          {/* 전리품 요약 */}
           {cs.lootSelections.length > 0 && (
             <div className="mt-4 bg-slate-800 rounded-lg p-3 inline-block">
               <h3 className="text-sm font-semibold text-amber-400 mb-1">획득 전리품</h3>
@@ -883,11 +911,9 @@ export function CombatPanel() {
   const cs = combatState;
 
   const attackerPlayer = players.find((p) => p.id === cs.attackerRoleId);
-  const defenderPlayer = players.find((p) => p.id === cs.defenderRoleId);
   const originalMover = players.find((p) => p.id === cs.originalMoverId);
   const originalDefender = players.find((p) => p.id === cs.originalDefenderId);
 
-  // [수정] 방어자가 없어도 렌더링되도록 attackerPlayer만 체크
   if (!attackerPlayer) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
@@ -899,7 +925,6 @@ export function CombatPanel() {
     );
   }
   
-  // [수정] 이름 안전하게 가져오기
   const originalMoverName = originalMover ? originalMover.name : '알 수 없음';
   const originalDefenderName = originalDefender ? originalDefender.name : '원주민 마을';
 
@@ -910,7 +935,6 @@ export function CombatPanel() {
   return (
     <div className="min-h-screen bg-slate-900 p-8">
       <div className="max-w-6xl mx-auto">
-        {/* 헤더 */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-amber-500 mb-2">전투!</h1>
           <p className="text-slate-400">
@@ -926,7 +950,6 @@ export function CombatPanel() {
           </span>
         </div>
 
-        {/* 단계별 렌더링 */}
         {cs.phase === 'placement' && <PlacementPhase />}
         {cs.phase === 'resolution' && <ResolutionPhase />}
         {cs.phase === 'scoring' && <ScoringPhase />}

@@ -1,3 +1,5 @@
+// src/components/game/CapitalSelectionScreen.tsx
+
 import { motion } from 'framer-motion';
 import { useGameStore } from '../../store/gameStore';
 import { Tile, TERRAIN_PROPERTIES } from '../../types';
@@ -37,15 +39,15 @@ interface CapitalTileProps {
 function CapitalTile({ tile, isValidSelection, isSelected, onClick }: CapitalTileProps) {
   const hasCity = tile.cityId !== null;
 
-  // [수정] 미탐험 지역(Fog of War) 처리
-  // isExplored가 false이면 검은색 박스로 표시하고 상호작용 차단
-  if (!tile.isExplored) {
+  // 🌟 [수정] 수도 선택 시 전장의 안개(Fog of War) 무시 - 모든 타일이 보이도록 처리
+  /* if (!tile.isExplored) {
     return (
       <div className="w-10 h-10 rounded-sm bg-slate-950 flex items-center justify-center relative border border-slate-900/50">
         <span className="text-[10px] text-slate-800">?</span>
       </div>
     );
   }
+  */
 
   return (
     <button
@@ -124,8 +126,8 @@ export function CapitalSelectionScreen() {
   };
 
   const isValidTile = (tile: Tile) => {
-    // [수정] 미탐험 지역에는 건설 불가 조건 추가
-    if (!tile.isExplored) return false;
+    // 🌟 [수정] 미탐험 지역 검사 주석 처리 - 어디든 건설 가능하게 허용
+    // if (!tile.isExplored) return false;
     
     if (tile.terrain === 'water' || tile.terrain === 'mountain') return false;
     if (tile.cityId !== null) return false;
@@ -137,8 +139,8 @@ export function CapitalSelectionScreen() {
   const handleTileClick = (x: number, y: number) => {
     const tile = map.tiles[y][x];
 
-    // [수정] 클릭 핸들러에서도 탐험 여부 확인 (isValidTile과 중복되지만 안전장치)
-    if (!tile.isExplored) return;
+    // 🌟 [수정] 클릭 핸들러에서도 탐험 여부 확인 주석 처리
+    // if (!tile.isExplored) return;
 
     if (isValidTile(tile)) {
       selectCapitalPosition(currentPlayerIndex, { x, y });
@@ -152,7 +154,7 @@ export function CapitalSelectionScreen() {
         <div className="text-center mb-6">
           <h1 className="text-3xl font-bold text-amber-500 mb-2">수도 위치 선택</h1>
           <p className="text-slate-400">
-            밝혀진 구역(코너) 중에서 수도를 건설할 위치를 선택하세요
+            수도를 건설할 위치를 선택하세요
           </p>
         </div>
 
@@ -225,10 +227,6 @@ export function CapitalSelectionScreen() {
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-blue-500 rounded opacity-50" />
             <span>물 (건설 불가)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-slate-950 rounded border border-slate-700" />
-            <span>미탐험 지역</span>
           </div>
         </div>
       </div>

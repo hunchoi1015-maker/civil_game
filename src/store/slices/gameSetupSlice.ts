@@ -1,5 +1,3 @@
-import { generateArmyStats } from '../helpers/armyHelpers';
-
 // src/store/slices/gameSetupSlice.ts
 
 import { StateCreator } from 'zustand';
@@ -11,7 +9,8 @@ import { createInitialLuxuryResources } from '../../types/player';
 import { TECHNOLOGIES } from '../../constants/technologies';
 import { NATIONS } from '../../types/nation'; 
 import { drawRandomGreatPerson } from '../../constants/greatPerson';
-import { WONDERS } from '../../types/wonder'; // 🌟 불가사의 데이터 임포트
+import { WONDERS } from '../../types/wonder'; 
+import { generateArmyStats } from '../helpers/armyHelpers';
 
 export interface GameSetupSlice {
   setupState: GameSetupState;
@@ -19,18 +18,17 @@ export interface GameSetupSlice {
   selectNation: (playerIndex: number, nation: NationType) => void;
   selectCapitalPosition: (playerIndex: number, position: Position) => void;
   placeInitialUnit: (playerIndex: number, position: Position) => void;
-  placeInitialWonder: (playerIndex: number, position: Position) => void; // 🌟 신규 액션
+  placeInitialWonder: (playerIndex: number, position: Position) => void;
   startGame: () => void;
 }
 
-// ... (initialSetupState, PLAYER_COLORS_LIST, initSetup, selectNation은 기존과 동일하므로 생략하지 않고 모두 포함) ...
 const initialSetupState: GameSetupState = {
   phase: 'nationSelect',
   currentSetupPlayer: 0,
   selectedNations: [],
   capitalPositionOptions: [],
   pendingInitialUnits: {},
-  pendingInitialWonders: {}, // 초기화
+  pendingInitialWonders: {},
 };
 
 const PLAYER_COLORS_LIST = ['red', 'blue', 'green', 'yellow'] as const;
@@ -39,7 +37,6 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
   setupState: initialSetupState,
 
   initSetup: (playerCount: number, playerNames: string[]) => {
-    // ... (기존과 동일)
     const map = generateMap(16, 16);
     const players: Player[] = [];
     for (let i = 0; i < playerCount; i++) {
@@ -99,7 +96,6 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
   },
 
   selectNation: (playerIndex: number, nation: NationType) => {
-    // ... (기존과 동일)
     set((state) => {
       if (state.setupState.selectedNations.includes(nation)) return;
       state.setupState.selectedNations[playerIndex] = nation;
@@ -136,27 +132,23 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
           }
       }
 
-      // 🌟 [추가 1] 러시아 등 스태킹 한도 보너스를 여기서 미리 적용!
       const nationBonus = NATIONS[player.nation].startingBonus;
       if (nationBonus.stackingLimitBonus) {
           player.stackingLimitBonus = nationBonus.stackingLimitBonus;
       }
 
-      // 🌟 [추가 2] 이집트 특성: 고대 불가사의 중 1개 랜덤 획득 큐에 넣기
       if (player.nation === 'egypt') {
-
-        const takenWonders = [
+          const takenWonders = [
               ...Object.values(state.setupState.pendingInitialWonders || {}),
               ...state.players.flatMap(p => p.builtWonders || [])
           ];
-
-        const ancientWonders = Object.values(WONDERS).filter(w => w.era === 'ancient' && !takenWonders.includes(w.type));
+          const ancientWonders = Object.values(WONDERS).filter(w => w.era === 'ancient' && !takenWonders.includes(w.type));
           
-        if (ancientWonders.length > 0) {
+          if (ancientWonders.length > 0) {
               const randomWonder = ancientWonders[Math.floor(Math.random() * ancientWonders.length)];
               if (!state.setupState.pendingInitialWonders) state.setupState.pendingInitialWonders = {};
               state.setupState.pendingInitialWonders[player.id] = randomWonder.type;
-        }
+          }
       }
 
       if (playerIndex < state.players.length - 1) {
@@ -188,13 +180,9 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
           player.units.push(unit);
           state.map.tiles[position.y][position.x].unitIds.push(unitId);
 
-          // 유닛이 남았다면 대기
           if (queue.length > 0) return;
-          
-          // 🌟 [수정] 유닛 배치가 끝났어도 이집트 불가사의 큐가 남아있다면 턴을 넘기지 않음!
           if (state.setupState.pendingInitialWonders?.[player.id]) return;
 
-          // 다음 플레이어 찾기 (헬퍼 함수로 분리하면 좋지만 여기선 인라인 유지)
           let nextPlayerFound = false;
           let nextIdx = (playerIndex + 1) % state.players.length;
           
@@ -214,7 +202,6 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
       });
   },
 
-  // 🌟 [신규 액션] 이집트의 조기 불가사의 배치 함수
   placeInitialWonder: (playerIndex: number, position: Position) => {
       set((state) => {
           const player = state.players[playerIndex];
@@ -223,7 +210,6 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
 
           const tile = state.map.tiles[position.y][position.x];
 
-          // 🌟 [추가] 기존 건물/불가사의 덮어쓰기 (파괴)
           if (tile.wonder) {
               const oldWonder = tile.wonder.type;
               const oldOwner = state.players.find(p => p.id === tile.ownerId);
@@ -244,11 +230,9 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
               tile.buildingType = null;
           }
 
-          // 새 불가사의 건설
           tile.wonder = { type: wonderType as any };
           tile.ownerId = player.id; 
 
-          // 플레이어/도시 상태 반영
           const capital = player.cities.find(c => c.isCapital);
           if (capital) {
               if (!capital.builtWonders) capital.builtWonders = [];
@@ -257,12 +241,10 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
           if (!player.builtWonders) player.builtWonders = [];
           player.builtWonders.push(wonderType as any);
 
-          // 큐에서 제거
           if (state.setupState.pendingInitialWonders) {
               delete state.setupState.pendingInitialWonders[player.id];
           }
 
-          // 턴 넘기기 로직
           let nextPlayerFound = false;
           let nextIdx = (playerIndex + 1) % state.players.length;
           for (let count = 0; count < state.players.length; count++) {
@@ -289,14 +271,12 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
       state.firstPlayerIndex = 0;
       state.phaseComplete = new Array(state.players.length).fill(false);
 
-      // 🌟 게임 시작 시 모든 플레이어의 국가별 보너스 지급 처리
       state.players.forEach(player => {
           const nationDef = NATIONS[player.nation as keyof typeof NATIONS];
           if (!nationDef) return;
 
           const bonus = nationDef.startingBonus;
 
-          // 1. 시작 기술 지급
           const techsToUnlock = [...(bonus.unlockedTechs || [])];
           const startingTechDef = TECHNOLOGIES.find(t => t.isStartingTechFor === player.nation);
           if (startingTechDef && !techsToUnlock.includes(startingTechDef.id)) {
@@ -315,12 +295,10 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
               }
           });
 
-          // 2. 시작 정치 체제 적용
           if (bonus.startingGovernment) {
               player.government = bonus.startingGovernment as any;
           }
 
-          // 3. 위인 지급 (미국 특성 등)
           if (bonus.greatPeople) {
               player.greatPeople += bonus.greatPeople;
               if (!player.unplacedGreatPeople) player.unplacedGreatPeople = [];
@@ -329,13 +307,10 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
               }
           }
 
-          // 4. 시작 부대 카드 지급 (독일 특성 등)
           if (bonus.armyCards) {
               bonus.armyCards.forEach(ac => {
                   for (let i = 0; i < ac.count; i++) {
-                      // 랜덤 성향으로 능력치 굴리기
                       const stats = generateArmyStats(ac.tier);
-                      
                       player.armyCards.push({
                           id: uuidv4(),
                           type: ac.type,
@@ -345,18 +320,16 @@ export const createGameSetupSlice: StateCreator<GameStore, [["zustand/immer", ne
                           maxHealth: stats.maxHealth,
                           ownerId: player.id,
                           name: `${nationDef.name} 정예부대`,
-                          statProfile: stats.profile // 성향 저장
+                          statProfile: stats.profile
                       });
                   }
               });
           }
 
-          // 5. 스택 제한 패시브
           if (bonus.stackingLimitBonus) {
               player.stackingLimitBonus = bonus.stackingLimitBonus;
           }
 
-          // 6. 시작 성벽 지급 (중국 특성 등)
           if (bonus.hasWalls) {
               const capital = player.cities.find(c => c.isCapital);
               if (capital) {

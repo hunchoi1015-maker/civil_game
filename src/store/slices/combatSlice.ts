@@ -1,3 +1,5 @@
+// src/store/slices/combatSlice.ts
+
 import { StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
@@ -25,9 +27,10 @@ export interface CombatSlice {
     defenderCityDefense: number, 
     combatType: CombatType
   ) => void;
-  // [추가] 마을 전투 시작 액션
   startVillageCombat: (unitId: string, villagePos: Position) => void;
-  applyCombatSkill: (playerId: string, skillId: string, allocations?: Record<string, number>, targetCardId?: string) => void;
+  
+  // 🌟 [수정] 오두막 자원 사용 여부를 받는 파라미터(useSecretResource) 추가
+  applyCombatSkill: (playerId: string, skillId: string, allocations?: Record<string, number>, targetCardId?: string, useSecretResource?: boolean) => void;
 }
 
 const initialCombatState: CombatState = {
@@ -73,8 +76,6 @@ const initialCombatState: CombatState = {
 export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never]], [], CombatSlice> = (set, get) => ({
   combatState: initialCombatState,
 
-  // src/store/slices/combatSlice.ts 의 startCombat 함수 전체 교체
-
   startCombat: (moverId: string, targetPosition: Position) => {
     const state = get();
     const mover = state.players.find((p) => p.id === moverId);
@@ -83,7 +84,6 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     const targetTile = state.map.tiles[targetPosition.y][targetPosition.x];
     let defenderId: string | null = null;
     
-    // 방어자 식별
     for (const p of state.players) {
       if (p.id === moverId) continue;
       if (p.units.some((u) => targetTile.unitIds.includes(u.id))) {
@@ -101,25 +101,23 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     let combatType: CombatType = 'field';
     let targetCityId: string | null = null;
     let isWalledCity = false;
-    let willDestroyWall = false; // 🌟 [수정] 쓰기 전용 판정 플래그
+    let willDestroyWall = false;
 
     const moverMilitaryUnits = mover.units.filter(u => u.type === 'military' && state.selectedUnits.includes(u.id));
     const moverSettlerUnits = mover.units.filter(u => u.type === 'settler' && state.selectedUnits.includes(u.id));
     const isMoverMilitary = moverMilitaryUnits.length > 0 || (mover.units.some(u => u.type === 'military' && u.id === state.selectedUnit));
     const isMoverSettler = moverSettlerUnits.length > 0 || (mover.units.some(u => u.type === 'settler' && u.id === state.selectedUnit));
 
-    // 도시 공격일 경우
     if (targetTile.cityId) {
       const city = defender.cities.find((c) => c.id === targetTile.cityId);
       if (city) {
         combatType = city.isCapital ? 'capital' : 'city';
         targetCityId = city.id;
-        isWalledCity = city.hasWalls; // 실제 성벽 존재 여부
+        isWalledCity = city.hasWalls;
         
-        // 🌟 [수정] 상태를 직접 바꾸지 않고 판정(flag)만 합니다! (읽기 전용 에러 방지)
         if (hasTechnology(mover, 'combustion') && isMoverMilitary && city.hasWalls) {
             willDestroyWall = true;
-            isWalledCity = false; // 방어자 이점 즉시 상실
+            isWalledCity = false;
         }
       }
     }
@@ -170,10 +168,6 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     const attackerHasHimeji = hasActiveWonder(attackerPlayer.id, 'himeji_castle', state.map, state.players);
     const defenderHasHimeji = hasActiveWonder(defenderPlayer.id, 'himeji_castle', state.map, state.players);
 
-    // ==============================================================================
-    // 🌟 [수정] prepareCards 뒤에 .map()을 붙여서, 원본 데이터를 훼손하지 않고 
-    // 복사본({ ...c })을 만들며 히메지성이 있을 경우 스탯을 +1/+1 펌핑합니다.
-    // ==============================================================================
     const attackerAvailableCards = prepareCards(
         attackerPlayer, 
         attackerMaxCards, 
@@ -232,7 +226,6 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     if (combatType !== 'field' && targetCityId) {
       const city = defender.cities.find((c) => c.id === targetCityId);
       if (city) {
-        // 🌟 [수정] 판정 결과에 따라 방어 보너스를 삭감하여 로컬 변수에 저장
         let actualDefBonus = city.cityDefenseBonus;
         if (willDestroyWall) {
              const wallBonus = BUILDINGS.walls?.effects?.cityDefenseBonus || 6;
@@ -248,7 +241,6 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     }
 
     set((s) => {
-      // 🌟 [수정] 쓰기 가능한 draft 상태(s) 내부에서 안전하게 성벽 데이터를 삭제합니다.
       if (willDestroyWall && targetCityId) {
           const draftDefender = s.players.find(p => p.id === defenderId);
           if (draftDefender) {
@@ -303,34 +295,22 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       };
     });
 
-    // 🌟 파괴 완료 후 유저에게 알림
     if (willDestroyWall) {
         alert(`🔥 [연소] 기술 발동! 전투 시작 전 대상 도시의 성벽이 파괴되었습니다!`);
     }
   },
 
-  // [추가] 마을 전투 시작 함수
   startVillageCombat: (unitId, villagePos) => {
     const state = get();
     const currentPlayer = state.players[state.currentPlayerIndex];
     const attackerUnit = currentPlayer.units.find(u => u.id === unitId);
     if (!attackerUnit) return;
 
-    // 마을 방어군 생성 (Tier 1 랜덤 - 총 전투력 4)
-    // 기획: 민병대(2/2), 투석기(3/1), 경기병(2/2) 중 하나
     const villageCardTemplates: ArmyCard[] = [
         { id: uuidv4(), type: 'infantry', name: '민병대', tier: 1, attack: 2, health: 2, maxHealth: 2,  ownerId: 'village',  },
         { id: uuidv4(), type: 'artillery', name: '투석기', tier: 1, attack: 3, health: 1, maxHealth: 1,  ownerId: 'village', },
         { id: uuidv4(), type: 'cavalry', name: '경기병', tier: 1, attack: 2, health: 2, maxHealth: 2,  ownerId: 'village', },
     ];
-    
-    // 마을도 카드를 1장만 사용한다고 가정 (또는 기획에 따라 여러 장일 수도 있음. 여기서는 1장으로 예시)
-    // "마을의 부대카드는 민병대 1장, 투석기 1장, 경기병 1장" 이라고 하셨는데,
-    // "이동시 전투 발생"이므로 한 번에 이 3장과 다 싸우는 것인지, 그 중 하나가 랜덤으로 나오는 것인지 명확하지 않으나
-    // 보통 초반 야만인 전투는 1:1이므로 랜덤으로 1장을 뽑아 배치하거나, 
-    // 혹은 3장을 모두 덱에 넣고 싸우게 할 수 있습니다. 
-    // 여기서는 "전투력 4 기준, 랜덤"이라는 표현과 "부대카드는 ~ 1장, ~ 1장, ~ 1장" 표현을 종합하여
-    // **3장 모두를 보유한 상태**로 시작하도록 설정하겠습니다. (플레이어도 여러 장일 수 있으므로)
     
     const villageCards: ArmyCard[] = [
         { ...villageCardTemplates[0], id: uuidv4() },
@@ -338,21 +318,17 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         { ...villageCardTemplates[2], id: uuidv4() },
     ];
 
-    // 플레이어의 카드 준비 (셔플 후 최대 장수만큼)
-    // 야전이므로 유닛 수에 따라 카드 수가 결정됨 (여기서는 단일 유닛 진입이므로 1유닛 -> 최대 2장)
     const attackerCardBonus = getCombatCardBonus(currentPlayer);
     const attackerMaxCards = getAttackerMaxCards(1) + attackerCardBonus; 
     
     const shuffledAttackerCards = shuffleArray(currentPlayer.armyCards);
     const attackerHasHimeji = hasActiveWonder(currentPlayer.id, 'himeji_castle', state.map, state.players);
 
-    // 🌟 [수정] 덱에서 카드를 가져올 때 히메지성이 있다면 스탯을 +1/+1 펌핑합니다.
     const attackerAvailableCards = shuffledAttackerCards.slice(0, attackerMaxCards).map(c => 
         attackerHasHimeji 
             ? { ...c, attack: c.attack + 1, maxHealth: c.maxHealth + 1, health: c.health + 1 } 
             : { ...c }
     );
-
     
     let attackerGeneralBonus = 0;
     state.map.tiles.forEach(row => {
@@ -369,7 +345,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
             originalMoverId: currentPlayer.id,
             originalDefenderId: 'village',
             attackerRoleId: currentPlayer.id,
-            defenderRoleId: 'village', // 특수 ID
+            defenderRoleId: 'village',
             combatType: 'field',
             targetTilePosition: { ...villagePos },
             targetCityId: null,
@@ -379,13 +355,13 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
             defenderAvailableCards: villageCards,
             battlefields: [],
             placement: {
-                currentTurn: 'defender', // 방어자(마을)부터 배치? 혹은 플레이어부터? 보통 방어자 우선
+                currentTurn: 'defender',
                 attackerPassed: false,
                 defenderPassed: false,
                 attackerDeployCount: 0,
                 defenderDeployCount: 0,
                 attackerMaxCards,
-                defenderMaxCards: 3, // 마을은 3장 다 씀
+                defenderMaxCards: 3,
             },
             graveyard: [],
             phase: 'placement',
@@ -399,7 +375,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
             winnerPlayerId: null,
             loserPlayerId: null,
             lootSelections: [],
-            maxLootSelections: 1, // 승리 시 보상은 따로 처리되지만 형식상 1
+            maxLootSelections: 1,
             usedCombatSkills: {},
             log: [{ message: "원주민 마을과의 전투가 시작되었습니다!" }],
         };
@@ -413,8 +389,6 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       if (!cs.isActive || cs.phase !== 'placement') return;
       
       const isAttacker = cs.attackerRoleId === playerId;
-      // 마을(NPC)인 경우 defenderRoleId가 'village'이므로 playerId와 일치하지 않음.
-      // 하지만 UI에서 defender 카드를 클릭하면 handlePlaceCard가 defenderRoleId('village')로 호출함.
       const isDefender = cs.defenderRoleId === playerId;
 
       if (!isAttacker && !isDefender) return;
@@ -455,13 +429,11 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         targetBf = bf;
       }
 
-      // 카드 배치 즉시 해결 로직 (기존 로직 유지)
       if (targetBf && targetBf.attackerCard && targetBf.defenderCard) {
           const result = resolvePairedFight(targetBf.attackerCard, targetBf.defenderCard);
           targetBf.result = result;
           targetBf.resolved = true;
 
-          // 데미지 적용
           if (result.firstStriker === 'attacker') {
               targetBf.defenderCard.health -= result.attackerDamageDealt;
               if (targetBf.defenderCard.health > 0) {
@@ -477,12 +449,11 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
                targetBf.attackerCard.health -= result.defenderDamageDealt;
           }
 
-          // 사망 처리
           if (targetBf.attackerCard.health <= 0) {
             targetBf.attackerCard.health = 0;
             cs.graveyard.push(targetBf.attackerCard);
             targetBf.attackerCard = null;
-            targetBf.resolved = false; // 한쪽이 죽었으므로 빈 자리가 생김
+            targetBf.resolved = false;
           }
           if (targetBf.defenderCard && targetBf.defenderCard.health <= 0) {
             targetBf.defenderCard.health = 0;
@@ -528,13 +499,12 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     });
   },
 
-  // 기술 능력 (전투)
-  applyCombatSkill: (playerId: string, skillId: string, allocations?: Record<string, number>, targetCardId?: string) => {
+  // 🌟 [수정] 기술 능력 사용 시 자원 출처(비밀 자원 여부)에 따른 차감 로직 래핑
+  applyCombatSkill: (playerId: string, skillId: string, allocations?: Record<string, number>, targetCardId?: string, useSecretResource: boolean = false) => {
     set((state) => {
       const cs = state.combatState;
       if (!cs.isActive) return;
 
-      // 🌟 [핵심] 플레이어별 스킬 기록 장부가 없으면 생성하여 완벽히 격리
       if (!cs.usedCombatSkills) cs.usedCombatSkills = {};
       if (!cs.usedCombatSkills[playerId]) cs.usedCombatSkills[playerId] = [];
 
@@ -542,6 +512,26 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       if (!player) return;
 
       const isAttacker = cs.attackerRoleId === playerId;
+
+      // 🌟 [추가] 철(iron) 1개를 출처에 맞게 안전하게 소비하는 헬퍼 함수
+      const tryConsumeIron = () => {
+          if (useSecretResource) {
+              // 오두막(마을) 토큰에서 지불
+              const secretIdx = player.secretResources?.findIndex(r => r.type === 'iron');
+              if (secretIdx !== undefined && secretIdx !== -1) {
+                  player.secretResources!.splice(secretIdx, 1);
+                  return true;
+              }
+              return false;
+          } else {
+              // 일반 사치품에서 지불
+              if (hasEnoughLuxuryResource(player, 'iron', 1)) {
+                  consumeLuxuryResource(player, state.marketResources, 'iron', 1);
+                  return true;
+              }
+              return false;
+          }
+      };
       
       // ==========================================
       // 🌿 생물학 (무료): 내 전장 모든 부대 풀 회복
@@ -557,13 +547,11 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       }
 
       // ==========================================
-      // 💥 수학/탄도학 (철 1 소모): 적 전장 부대에 데미지 분배
+      // 💥 수학/탄도학 (철 1 소모): 적 전장 부대에 데미지 분배 (파괴 로직 유지)
       // ==========================================
       if (skillId === 'mathematics' || skillId === 'ballistics') {
-        // 일반+비밀 철이 충분한지 확인하고 자동 결제 엔진을 돌립니다.
-        if (hasEnoughLuxuryResource(player, 'iron', 1)) {
-          consumeLuxuryResource(player, state.marketResources, 'iron', 1);
-          
+        // 🌟 [수정] 헬퍼를 통해 결제 확인 후 기존 로직 100% 실행
+        if (tryConsumeIron()) {
           if (allocations) {
             Object.entries(allocations).forEach(([bfId, damage]) => {
               if (damage <= 0) return;
@@ -586,9 +574,9 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
           }
           cs.usedCombatSkills[playerId].push(skillId);
           const techName = skillId === 'mathematics' ? '수학' : '탄도학';
-          cs.log.push({ message: `💥 ${player.name}이(가) '${techName}'(으)로 적 부대에 데미지를 입혔습니다!` });
+          cs.log.push({ message: `💥 ${player.name}이(가) ${useSecretResource ? '오두막 철' : '사치품 철'}을 소모하여 '${techName}'(으)로 적 부대에 데미지를 입혔습니다!` });
         } else {
-          alert("철이 부족합니다.");
+          alert(`${useSecretResource ? '오두막' : '사치품'} 철이 부족합니다.`);
         }
         return;
       }
@@ -618,18 +606,14 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       // 🔨 금속가공 (철 1 소모): 손패 카드를 전장에 낼 때 공격력 영구 버프
       // ==========================================
       if (skillId === 'metal_casting' && targetCardId) {
-        // 🌟 수정: 철 지불 엔진 연결!
-        if (hasEnoughLuxuryResource(player, 'iron', 1)) {
-          consumeLuxuryResource(player, state.marketResources, 'iron', 1); 
-          
-          // 1. 원본 덱 카드 버프 부여 (전투 종료 시 롤백을 위함)
+        // 🌟 [수정] 헬퍼를 통해 결제 확인 후 기존 로직 100% 실행
+        if (tryConsumeIron()) {
           const baseCard = player.armyCards.find(c => c.id === targetCardId);
           if (baseCard) {
             baseCard.attack += 3;
             (baseCard as any).metalCastingBuff = ((baseCard as any).metalCastingBuff || 0) + 3;
           }
           
-          // 2. 현재 전투 중인 대기열(손패) 카드 버프 부여
           const availableCards = isAttacker ? cs.attackerAvailableCards : cs.defenderAvailableCards;
           const handCard = availableCards.find(c => c.id === targetCardId);
           if (handCard) {
@@ -638,9 +622,9 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
           }
           
           cs.usedCombatSkills[playerId].push(skillId);
-          cs.log.push({ message: `🔨 ${player.name}이(가) '금속가공' 버프를 적용하여 부대를 배치합니다!` });
+          cs.log.push({ message: `🔨 ${player.name}이(가) ${useSecretResource ? '오두막 철' : '사치품 철'}을 소모하여 '금속가공' 버프를 적용합니다!` });
         } else {
-          alert("철이 부족합니다.");
+          alert(`${useSecretResource ? '오두막' : '사치품'} 철이 부족합니다.`);
         }
         return;
       }
@@ -651,7 +635,6 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     const cs = get().combatState;
     if (!cs.isActive || cs.phase !== 'resolution') return;
     
-    // 마을인 경우 원본 ID가 없으므로 안전한 문자열 사용
     const originalMoverId = cs.originalMoverId || 'unknown';
     const attackerRoleId = cs.attackerRoleId || 'unknown';
 
@@ -688,7 +671,6 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       }
       cs.log = [...cs.log, ...result.log];
       
-      // 마을 전투면 바로 결과 단계로 (약탈 단계 생략)
       if (cs.defenderRoleId === 'village') {
           cs.maxLootSelections = 0;
           cs.phase = 'result';
@@ -725,7 +707,6 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
           cs.phase = 'result';
           return;
       }
-      // 마을 상대로는 약탈 단계가 없으므로 loser가 플레이어일 때만 동작
       const loser = state.players.find((p) => p.id === cs.loserPlayerId);
       if (!loser) return;
       
@@ -753,7 +734,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       const winnerId = state.combatState.winnerPlayerId;
       const loserId = state.combatState.loserPlayerId;
       const moverId = state.combatState.originalMoverId;
-      const defenderId = state.combatState.originalDefenderId; // 방어자 ID (플레이어 또는 'village')
+      const defenderId = state.combatState.originalDefenderId;
       const targetPos = state.combatState.targetTilePosition;
       
       const winner = winnerId ? state.players.find((p) => p.id === winnerId) : null;
@@ -770,12 +751,11 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         p.armyCards.forEach(card => {
           if ((card as any).metalCastingBuff) {
             card.attack -= (card as any).metalCastingBuff;
-            (card as any).metalCastingBuff = 0; // 초기화
+            (card as any).metalCastingBuff = 0; 
           }
         });
       });
 
-      // 혹시 전사해서 묘지에 간 카드도 스탯을 돌려놓음 (다시 부활할 때를 대비)
       state.combatState.graveyard.forEach(card => {
         if ((card as any).metalCastingBuff) {
           card.attack -= (card as any).metalCastingBuff;
@@ -783,7 +763,6 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         }
       });
 
-      // 1. 전리품 지급 (PvP인 경우에만 해당, 마을 상대로는 lootSelections가 비어있음)
       if (winner && state.combatState.lootSelections.length > 0) {
         for (const loot of state.combatState.lootSelections) {
           if (loot.type === 'trade') {
@@ -794,27 +773,16 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         }
       }
 
-      // 법계 화폐 로직
       if (winner) {
-        // 승자의 기술 목록에서 법계를 찾습니다.
         const legalism = winner.technologies.find(t => t.id === 'code_of_laws');
-        
-        // 기술이 존재하고, 이번 턴(라운드)에 아직 능력을 발동하지 않았다면?
         if (legalism && !legalism.abilityUsedThisTurn) {
             const maxTokens = legalism.resourceAbility?.maxTokens || 4; 
-            const currentTokens = legalism.tokensOnCard || 0; // 값이 깨지지 않도록 안전장치
-            
-            // 토큰(카운터)이 한도(4개)보다 적을 때만 획득 가능
+            const currentTokens = legalism.tokensOnCard || 0;
             if (currentTokens < maxTokens) {
-                // 1. 기술 카드 위에 발동 횟수(카운터) 1 증가
                 legalism.tokensOnCard = currentTokens + 1;
-                legalism.abilityUsedThisTurn = true; // 이번 턴 발동 완료 처리
-                
-                // 2. 플레이어의 실제 주머니 화폐를 +1 증가 (최대 15 제한)
+                legalism.abilityUsedThisTurn = true;
                 const oldCurrency = winner.resources.currency || 0;
                 winner.resources.currency = Math.min(15, oldCurrency + 1);
-                
-                // 전투 로그에 기록
                 state.combatState.log.push({ 
                     message: `⚖️ ${winner.name}이(가) 전투 승리로 '법계' 능력을 발동하여 화폐를 1 획득했습니다! 💰(${legalism.tokensOnCard}/${maxTokens})` 
                 });
@@ -822,7 +790,6 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         }
       }
 
-      // 2. 묘지 처리 (카드 체력 회복 로직이 없다면 덱에서 제거)
       const graveyardIds = new Set(state.combatState.graveyard.map((c) => c.id));
       if (winner) {
         winner.armyCards = winner.armyCards.filter((c) => !graveyardIds.has(c.id));
@@ -833,21 +800,14 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
 
       const targetTile = state.map.tiles[targetPos.y][targetPos.x];
       
-      // ------------------------------------------------------------------
-      // [CASE A] 마을 전투 처리
-      // ------------------------------------------------------------------
       if (defenderId === 'village') {
-        // startVillageCombat에서 저장한 attackerUnitId 가져오기
         const attackerUnitId = (state.combatState as any).attackerUnitId;
 
         if (mover && winnerId === moverId) {
-          // [승리] 보상 획득 + 마을 제거 + 유닛 이동
           if (targetTile.object?.type === 'village') {
             const reward = targetTile.object.reward;
             
-            // 보상 지급
             if (reward.type === 'resource') {
-              // 🌟 신규: 비밀 자원(마을)으로 추가!
               if (!mover.secretResources) mover.secretResources = [];
               mover.secretResources.push({
                   id: uuidv4(),
@@ -862,18 +822,13 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
               mover.nuclearMaterial += 1;
             }
 
-            // 마을 객체 제거
             targetTile.object = undefined;
 
-            // 유닛 이동 처리
             if (attackerUnitId) {
               const unit = mover.units.find(u => u.id === attackerUnitId);
               if (unit) {
-                // 이전 타일에서 제거
                 const oldTile = state.map.tiles[unit.position.y][unit.position.x];
                 oldTile.unitIds = oldTile.unitIds.filter(id => id !== unit.id);
-                
-                // 새 타일로 이동
                 unit.position = { x: targetPos.x, y: targetPos.y };
                 unit.movement = 0;
                 unit.hasMoved = true;
@@ -884,30 +839,21 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
             }
           }
         } else if (mover && winnerId !== moverId) {
-          // [패배] 유닛 삭제 (마을은 유지)
           if (attackerUnitId) {
             const unitIndex = mover.units.findIndex(u => u.id === attackerUnitId);
             if (unitIndex !== -1) {
               const unit = mover.units[unitIndex];
-              // 맵에서 유닛 ID 제거
               const tile = state.map.tiles[unit.position.y][unit.position.x];
               tile.unitIds = tile.unitIds.filter(id => id !== unit.id);
-              // 플레이어 유닛 목록에서 제거
               mover.units.splice(unitIndex, 1);
             }
           }
         }
       }
-      
-      // ------------------------------------------------------------------
-      // [CASE B] 플레이어 간 전투 (PvP) 처리
-      // ------------------------------------------------------------------
       else {
-        // 공격자 승리
         if (mover && winnerId === moverId) {
           const defenderPlayer = state.players.find((p) => p.id === defenderId);
           
-          // 적 유닛 제거
           if (defenderPlayer) {
             const enemyUnitIds = targetTile.unitIds.filter((id) =>
               defenderPlayer.units.some((u) => u.id === id)
@@ -920,7 +866,6 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
             );
           }
 
-          // 공격 유닛 이동
           const movingUnitIds = state.selectedUnits.length > 0
             ? state.selectedUnits
             : state.selectedUnit ? [state.selectedUnit] : [];
@@ -939,15 +884,12 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
             }
           }
 
-          // 도시 점령/초토화
-          // 도시 점령/초토화
           if (state.combatState.combatType === 'city' && state.combatState.targetCityId && defenderPlayer) {
             const cityIndex = defenderPlayer.cities.findIndex(
               (c) => c.id === state.combatState.targetCityId
             );
             if (cityIndex !== -1) {
               defenderPlayer.cities.splice(cityIndex, 1);
-              // 주변 9칸 타일 소유권 초기화
               const directions = [
                   {x:0, y:0}, {x:-1,y:-1}, {x:0,y:-1}, {x:1,y:-1}, 
                   {x:-1,y:0}, {x:1,y:0}, {x:-1,y:1}, {x:0,y:1}, {x:1,y:1}
@@ -960,13 +902,12 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
                       tile.ownerId = null;
                       tile.cityId = null;
                       tile.buildingType = null;
-                      tile.wonder = undefined; // 🌟 [추가] 물리적으로 타일에서 불가사의 완전 제거!
+                      tile.wonder = undefined; 
                   }
               });
             }
           }
           
-          // 수도 점령 시 게임 종료
           if (state.combatState.combatType === 'capital') {
             state.winner = moverId;
             state.winCondition = 'military';
@@ -974,7 +915,6 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
           }
 
         } else if (mover && winnerId !== moverId) {
-          // 방어자 승리 -> 공격 유닛 제거
           const movingUnitIds = state.selectedUnits.length > 0
             ? state.selectedUnits
             : state.selectedUnit ? [state.selectedUnit] : [];
@@ -992,29 +932,24 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
 
       if (winner && winner.nation === 'rome') {
         if (defenderId === 'village' || state.combatState.combatType === 'city' || state.combatState.combatType === 'capital') {
-            // 헬퍼 함수를 사용하여 정상적으로 카드/위인 지급 및 로그 출력
             handleCultureTrackAdvancement(state, winner.id, `🏛️ [로마 제국] 전투 승리로 문화 트랙이 1칸 전진했습니다!`);
         }
       }
 
-      // 🌟 중국 특성: 전투 종료 후 무덤에서 내 카드 1장 부활 모달 호출
       const chinaPlayers = allPlayersInCombat.filter(p => p.nation === 'china');
       chinaPlayers.forEach(chinaPlayer => {
         const chinaDeadCards = state.combatState.graveyard.filter(c => c.ownerId === chinaPlayer.id);
         if (chinaDeadCards.length > 0) {
-            // UI 슬라이스에 정의된 상태에 데이터를 주입하여 모달을 엽니다.
             state.chinaGraveyardPrompt = { playerId: chinaPlayer.id, cards: chinaDeadCards };
         }
       });
       
-      // 전투 상태 초기화
       state.combatState = { ...initialCombatState };
       state.selectedUnits = [];
     });
   },
 
   startDevCombat: (attackerCards, defenderCards, attackerBonus, defenderBonus, attackerCityDefense, defenderCityDefense, combatType) => {
-    // (기존 코드 유지)
     const devAttackerId = 'dev-attacker';
     const devDefenderId = 'dev-defender';
     set((state) => {

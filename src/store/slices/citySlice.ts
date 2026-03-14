@@ -1,4 +1,5 @@
 // src/store/slices/citySlice.ts
+
 import { StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { GameStore } from '../types/storeTypes';
@@ -9,43 +10,19 @@ import { findPlayerById, hasActiveWonder } from '../helpers/playerHelpers';
 import { setAdjacentTilesOwner, isTileBlockedByEnemy } from '../helpers/mapHelpers';
 import { ResourceType } from '../../types/map';
 import { WonderType, WONDERS } from '../../types/wonder';
-import { CULTURE_TRACK_MAX } from '../../constants/culture'; // 🌟 로마 문화 상한용 임포트
-import { handleCultureTrackAdvancement } from './cultureSlice';
 import { generateArmyStats } from '../helpers/armyHelpers';
 
 export interface CitySlice {
   foundCity: (playerId: string, position: Position, name: string) => void;
-  // 🌟 [수정] 이집트 무료 건설을 위해 isFreeBuild 파라미터 추가
-  buildInCity: (cityId: string, buildingType: string, position?: Position, isFreeBuild?: boolean) => void; 
+  buildInCity: (cityId: string, buildingType: string, position?: Position) => void;
   harvestCityCulture: (playerId: string, cityId: string) => void;
   harvestResource: (playerId: string, cityId: string, targetResource: ResourceType) => void;
   constructWonder: (cityId: string, wonderType: WonderType, tilePos: Position) => void;
   produceArmyCard: (playerId: string, type: string, tier: number, name: string, cityId: string, cost: number) => void;
   placeGreatPerson: (playerId: string, gpId: string, x: number, y: number) => void;
-  
-  // 🌟 [신규] 교역 -> 생산력 변환 액션
-  convertTradeToProduction: (playerId: string, cityId: string, productionAmount: number, tradeCost: number) => void;
 }
 
 export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]], [], CitySlice> = (set) => ({
-  
-  // 🌟 [신규 액션] 교역 -> 생산력 
-  convertTradeToProduction: (playerId: string, cityId: string, productionAmount: number, tradeCost: number) => {
-    set((state) => {
-      const player = state.players.find(p => p.id === playerId);
-      const city = player?.cities.find(c => c.id === cityId);
-      if (!player || !city) return;
-      
-      if (player.resources.trade >= tradeCost) {
-        player.resources.trade -= tradeCost;
-        city.tempProductionBonus = (city.tempProductionBonus || 0) + productionAmount;
-        
-        if (!state.combatState.log) state.combatState.log = [];
-        state.combatState.log.push({ message: `🔄 [보급] ${player.name}이(가) 교역 ${tradeCost}을 소모하여 ${city.name}의 생산력을 ${productionAmount} 증가시켰습니다.` });
-      }
-    });
-  },
-
   foundCity: (playerId: string, position: Position, name: string) => {
     set((state) => {
       const player = findPlayerById(state.players, playerId);
@@ -53,11 +30,14 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       
       const hasIrrigation = player.technologies.some(tech => tech.id === 'irrigation');
       const maxCitiesLimit = hasIrrigation ? 3 : 2;
+
       if (player.cities.length >= maxCitiesLimit) return;
       
       for (const p of state.players) {
         for (const city of p.cities) {
-          if (Math.max(Math.abs(city.position.x - position.x), Math.abs(city.position.y - position.y)) < 3) return;
+          const dx = Math.abs(city.position.x - position.x);
+          const dy = Math.abs(city.position.y - position.y);
+          if (Math.max(dx, dy) < 3) return;
         }
       }
       
@@ -67,46 +47,38 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       state.map.tiles[position.y][position.x].cityId = cityId;
       state.map.tiles[position.y][position.x].ownerId = playerId;
       setAdjacentTilesOwner(state.map, position, playerId);
-
-      // 🌟 [로마 특성] 도시 건설 시 문화 트랙 1 전진
-      if (player.nation === 'rome') {
-          handleCultureTrackAdvancement(state, player.id, `🏛️ [로마 제국] 새로운 도시를 개척하여 문화 트랙이 1칸 전진했습니다!`);
-      }
     });
   },
 
-  buildInCity: (cityId: string, buildingType: string, position?: Position, isFreeBuild: boolean = false) => {
+  buildInCity: (cityId: string, buildingType: string, position?: Position) => {
     set((state) => {
       for (const player of state.players) {
         const city = player.cities.find((c) => c.id === cityId);
         if (city) {
+          // 🌟 무정부 및 마비 검사
+          if (player.government === 'anarchy' && city.isCapital) return; 
+          if (city.isParalyzed) return; 
+
           const buildingDef = BUILDINGS[buildingType as keyof typeof BUILDINGS];
           if (!buildingDef) return;
           
-          // 1. 행동 충돌 방지: 수확을 이미 했다면 생산 불가
           if (city.actionTypeThisTurn === 'harvest') return;
 
-          // 2. 공학 능력 및 횟수 한도 체크
           const hasEngineering = player.technologies.some(t => t.id === 'engineering');
           const currentProduced = city.producedItemsCount || 0;
           
-          // 이미 1개 생산했는데 공학이 없거나 다른 도시가 공학을 썼다면 차단
           if (currentProduced === 1 && (!hasEngineering || player.hasUsedEngineeringThisTurn)) return;
-          // 이미 2개를 생산했다면 무조건 차단
           if (currentProduced >= 2) return;
 
-          // 3. 잔여 생산력 계산 및 차감
-          const totalCityProduction = calculateDetailedCityProduction(city, state.map, player).total; // 수정됨
+          const totalCityProduction = calculateDetailedCityProduction(city, state.map, player).total; 
           const availableProduction = totalCityProduction - (city.usedProductionThisTurn || 0);
           
-          // [이집트 특성 반영] 무료 건설이 아닐 때만 잔여 생산력 검사
-          if (!isFreeBuild && availableProduction < buildingDef.productionCost) return;
+          if (availableProduction < buildingDef.productionCost) return;
           
           const existingCount = city.buildings.filter((b) => b.type === buildingType).length;
           if (buildingDef.maxPerCity && existingCount >= buildingDef.maxPerCity) return;
           if (city.buildings.some((b) => b.type === buildingType)) return;
 
-          // 지형 제한 체크
           if (buildingDef.allowedTerrain) {
             if (buildingDef.allowedTerrain.includes('city')) {
               if (position && (position.x !== city.position.x || position.y !== city.position.y)) return;
@@ -116,7 +88,6 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
             }
           }
 
-          // 건물을 지을 타일에 이미 위인이 있다면 대기열로 돌려보냄!
           if (position) {
               const targetTile = state.map.tiles[position.y]?.[position.x];
               if (targetTile?.greatPerson) {
@@ -146,22 +117,14 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
             city.cityDefenseBonus += buildingDef.effects.cityDefenseBonus;
           }
           
-          // 🌟 상태 업데이트 (이집트 무료 건설 처리)
-          if (!isFreeBuild) {
-              city.usedProductionThisTurn = (city.usedProductionThisTurn || 0) + buildingDef.productionCost;
-          } else {
-              player.hasUsedEgyptFreeBuildingThisTurn = true;
-              if (!state.combatState.log) state.combatState.log = [];
-              state.combatState.log.push({ message: `🏺 [이집트 특성] ${player.name}이(가) ${city.name}에 무료로 건물을 건설했습니다!` });
-          }
-
+          city.usedProductionThisTurn = (city.usedProductionThisTurn || 0) + buildingDef.productionCost;
           city.producedItemsCount = (city.producedItemsCount || 0) + 1;
           city.actionTypeThisTurn = 'produce';
           
           if (city.producedItemsCount === 2) {
             player.hasUsedEngineeringThisTurn = true;
           }
-          city.hasActedThisTurn = true;
+          city.hasActedThisTurn = true; 
           break;
         }
       }
@@ -177,17 +140,19 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       
       if (!city || city.hasHarvestedCulture) return;
 
-      // 행동 충돌 방지: 이번 턴에 생산을 했다면 수확 불가
+      // 🌟 무정부 및 마비 검사
+      if (player.government === 'anarchy' && city.isCapital) return; 
+      if (city.isParalyzed) return; 
+
       if (city.actionTypeThisTurn === 'produce' || (city.producedItemsCount || 0) > 0) return;
       
-      // 🌟 calculateCityCulture에 state.players를 추가로 넘겨줍니다!
       let totalCulture = calculateCityCulture(city, state.map, state.players) + 1;
       
       if (city.isCapital) {
           if (player.government === 'monarchy') {
-              totalCulture += 1; // 군주제 수도 보너스
+              totalCulture += 1; 
           } else if (player.government === 'communism') {
-              totalCulture -= 1; // 공산주의 수도 페널티
+              totalCulture -= 1; 
           }
       }
       
@@ -210,13 +175,15 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
     set((state) => {
         const player = state.players[state.currentPlayerIndex];
         const city = player.cities.find(c => c.id === cityId);
-        
         if (!city) return;
+
+        // 🌟 무정부 및 마비 검사
+        if (player.government === 'anarchy' && city.isCapital) return; 
+        if (city.isParalyzed) return; 
 
         const wonderDef = WONDERS[wonderType];
         if (!wonderDef) return;
 
-        // 🌟 전 세계 역사 검사 (불가사의 유일성 보장)
         let isAlreadyBuilt = false;
         for (const p of state.players) {
             if (p.builtWonders && p.builtWonders.includes(wonderType)) {
@@ -225,64 +192,55 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
             }
         }
         if (isAlreadyBuilt) {
-            alert("이 불가사의는 이미 세계 어딘가에 건설되었거나 역사 속으로 사라졌습니다.");
+            alert("이 불가사의는 이미 건설되었거나 역사 속으로 사라졌습니다.");
             return;
         }
 
-        // 🌟 1. 행동 충돌 방지: 수확을 이미 했다면 생산 불가
         if (city.actionTypeThisTurn === 'harvest') return;
 
-        // 🌟 2. 공학 능력 및 횟수 한도 체크
         const currentProduced = city.producedItemsCount || 0;
         const hasEngineering = player.technologies.some(t => t.id === 'engineering');
         if (currentProduced === 1 && (!hasEngineering || player.hasUsedEngineeringThisTurn)) return;
         if (currentProduced >= 2) return;
 
-        // 기술 할인 적용
         let actualCost = wonderDef.cost;
         if (wonderDef.costReductionTech && player.technologies.some(t => t.id === wonderDef.costReductionTech)) {
             actualCost = Math.max(1, actualCost - wonderDef.costReductionAmount!);
         }
 
-        // 🌟 3. 잔여 생산력 검사
         const totalCityProduction = calculateDetailedCityProduction(city, state.map, player).total; 
         const availableProduction = totalCityProduction - (city.usedProductionThisTurn || 0);
         if (availableProduction < actualCost) return;
 
-        // 타일 유효성 검사 
         const tile = state.map.tiles[tilePos.y][tilePos.x];
-
-        // 🌟 [추가] 덮어쓰기 파괴 로직 (건물이 있었다면 도시 목록에서 삭제)
-        if (tile.buildingType) {
-            city.buildings = city.buildings.filter(b => b.tilePosition?.x !== tilePos.x || b.tilePosition?.y !== tilePos.y);
-            tile.buildingType = null;
-            if (!state.combatState.log) state.combatState.log = [];
-            state.combatState.log.push({ message: `💥 새로운 불가사의 건설을 위해 기존 건물이 철거되었습니다.` });
-        }
-
-        // 🌟 [추가] 덮어쓰기 파괴 로직 (다른 불가사의가 있었다면 소유권 삭제)
-        if (tile.wonder) {
-            const oldWonder = tile.wonder.type;
-            city.builtWonders = city.builtWonders?.filter(w => w !== oldWonder);
-            player.builtWonders = player.builtWonders?.filter(w => w !== oldWonder);
-            if (!state.combatState.log) state.combatState.log = [];
-            state.combatState.log.push({ message: `💥 새로운 불가사의 배치로 인해 기존 불가사의(${oldWonder})의 능력이 소실되었습니다!` });
-        }
-
         if (tile.terrain === 'water') return;
-        if (tile.buildingType || tile.cityId || tile.wonder) return;
 
         const dx = Math.abs(city.position.x - tilePos.x);
         const dy = Math.abs(city.position.y - tilePos.y);
         if (dx > 1 || dy > 1) return;
         
-        // 불가사의를 지을 타일에 이미 위인이 있다면 대기열로 돌려보냄!
         if (tile.greatPerson) {
             if (!player.unplacedGreatPeople) player.unplacedGreatPeople = []; 
             player.unplacedGreatPeople.push(tile.greatPerson);
             tile.greatPerson = undefined;
         }
         
+        // 🌟 [덮어쓰기 파괴 로직]
+        if (tile.buildingType) {
+            city.buildings = city.buildings.filter(b => b.tilePosition?.x !== tilePos.x || b.tilePosition?.y !== tilePos.y);
+            tile.buildingType = null;
+            if (!state.combatState.log) state.combatState.log = [];
+            state.combatState.log.push({ message: `💥 불가사의 건설을 위해 기존 건물이 철거되었습니다.` });
+        }
+
+        if (tile.wonder) {
+            const oldWonder = tile.wonder.type;
+            city.builtWonders = city.builtWonders?.filter(w => w !== oldWonder);
+            player.builtWonders = player.builtWonders?.filter(w => w !== oldWonder);
+            if (!state.combatState.log) state.combatState.log = [];
+            state.combatState.log.push({ message: `💥 새로운 불가사의 배치로 기존 불가사의(${oldWonder})가 역사 속으로 소실되었습니다!` });
+        }
+
         tile.wonder = { type: wonderType };
         tile.ownerId = player.id; 
         
@@ -291,13 +249,7 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
 
         if (!player.builtWonders) player.builtWonders = [];
         player.builtWonders.push(wonderType);
-        
-        // 🌟 [로마 특성] 불가사의 건설 시 문화 트랙 1 전진
-        if (player.nation === 'rome') {
-            handleCultureTrackAdvancement(state, player.id, `🏛️ [로마 제국] 불가사의를 건설하여 문화 트랙이 1칸 전진했습니다!`);
-        }
-        
-        // 🌟 4. 상태 업데이트
+
         city.usedProductionThisTurn = (city.usedProductionThisTurn || 0) + actualCost;
         city.producedItemsCount = (city.producedItemsCount || 0) + 1;
         city.actionTypeThisTurn = 'produce';
@@ -307,7 +259,7 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
         city.hasActedThisTurn = true;
 
         if (!state.combatState.log) state.combatState.log = [];
-        state.combatState.log.push({ message: `🏛️ ${player.name}이(가) ${city.name} 근처에 [${wonderDef.name}]을(를) 건설했습니다!` });
+        state.combatState.log.push({ message: `🏛️ ${player.name}이(가) ${city.name}에 [${wonderDef.name}]을(를) 건설했습니다!` });
     });
   },
 
@@ -322,12 +274,13 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       const city = player.cities.find((c) => c.id === cityId);
       if (!city) return;
 
-      if (city.hasActedThisTurn && city.actionTypeThisTurn !== 'none') return;
+      // 🌟 무정부 및 마비 검사
+      if (player.government === 'anarchy' && city.isCapital) return; 
+      if (city.isParalyzed) return; 
 
-      // 🌟 [추가] 생산을 했다면 수확 불가
+      if (city.hasActedThisTurn && city.actionTypeThisTurn !== 'none') return;
       if (city.actionTypeThisTurn === 'produce' || (city.producedItemsCount || 0) > 0) return;
 
-      // 도시 주변 9칸(중심+8방향) 탐색
       let resourceFound = false;
       const cx = city.position.x;
       const cy = city.position.y;
@@ -335,7 +288,6 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       if (city.pioneerLinkedLuxuries && city.pioneerLinkedLuxuries.includes(targetResource)) {
         resourceFound = true;
       } else {
-        // 2단계: 개척자가 안 보내줬다면 기본 교외지역(9칸) 검색
         for (let dy = -1; dy <= 1; dy++) {
           for (let dx = -1; dx <= 1; dx++) {
             const nx = cx + dx;
@@ -343,7 +295,6 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
             if (nx >= 0 && nx < state.map.width && ny >= 0 && ny < state.map.height) {
               const tile = state.map.tiles[ny][nx];
               if (tile.resource === targetResource) {
-                // 🌟 [수정 3] 이 타일을 적 유닛이 밟고 있다면 수확 불가(무시)
                 if (!isTileBlockedByEnemy(state.players, player.id, nx, ny)) {
                   resourceFound = true;
                   break; 
@@ -354,7 +305,7 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
           if (resourceFound) break;
         }
       }
-      // 🌟 [수정 4] 주변 9칸에 없더라도, 개척자가 보급해 준 사치품 접근권이 있다면 수확 가능!
+
       if (!resourceFound && city.pioneerLinkedLuxuries?.includes(targetResource)) {
           resourceFound = true;
       }
@@ -365,29 +316,23 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
         player.luxuryResources = createInitialLuxuryResources();
       }
 
-      // 🌟 [수정] 앙코르와트 2배 수확 및 시장 유통 한도 락아웃(Lock-out) 적용!
       const hasAngkorWat = hasActiveWonder(player.id, 'angkor_wat', state.map, state.players);
       const canUseAngkorWat = hasAngkorWat && !player.hasUsedAngkorWatThisTurn;
-      
-      // 앙코르와트면 2개를 가져오고 싶어함
       const requestedAmount = canUseAngkorWat ? 2 : 1;
-      
-      // 하지만 시장 재고가 허락하는 만큼만 가져올 수 있음
       const actualAmount = Math.min(requestedAmount, state.marketResources[targetResource]);
 
       if (actualAmount === 0) {
-          alert(`시장에 [${targetResource}] 재고가 고갈되어 아무도 이 자원을 수확할 수 없습니다!`);
+          alert(`시장에 [${targetResource}] 재고가 고갈되어 수확할 수 없습니다!`);
           return;
       }
 
-      state.marketResources[targetResource] -= actualAmount; // 시장에서 빼고
-      player.luxuryResources[targetResource] += actualAmount; // 내 주머니에 넣음
+      state.marketResources[targetResource] -= actualAmount; 
+      player.luxuryResources[targetResource] += actualAmount; 
       
-      // 앙코르와트 2배 혜택을 온전히(2개) 누렸다면 턴당 1회 능력을 소모함!
       if (canUseAngkorWat && actualAmount > 1) {
           player.hasUsedAngkorWatThisTurn = true;
           if (!state.combatState.log) state.combatState.log = [];
-          state.combatState.log.push({ message: `🌿 [앙코르와트] ${player.name}이(가) 시장에서 ${targetResource} 2개를 수확했습니다!` });
+          state.combatState.log.push({ message: `🌿 [앙코르와트] ${player.name}이(가) ${targetResource} 2개를 수확했습니다!` });
       }
 
       city.actionTypeThisTurn = 'harvest';
@@ -395,42 +340,48 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
     });
   },
 
-  // 🌟 파라미터에 cost: number 추가됨
   produceArmyCard: (playerId: string, type: string, tier: number, name: string, cityId: string, cost: number) => {
     set((state) => {
-        const player = state.players.find(p => p.id === playerId);
-        const city = player?.cities.find(c => c.id === cityId);
-        if (!player || !city) return;
+      const player = state.players.find(p => p.id === playerId);
+      if (!player) return;
+      
+      const city = player.cities.find(c => c.id === cityId);
+      if (!city) return;
 
-      // 🌟 1. 행동 충돌 방지
+      // 🌟 무정부 및 마비 검사
+      if (player.government === 'anarchy' && city.isCapital) return; 
+      if (city.isParalyzed) return; 
+
       if (city.actionTypeThisTurn === 'harvest') return;
 
-      // 🌟 2. 공학 능력 및 횟수 한도 체크
       const currentProduced = city.producedItemsCount || 0;
       const hasEngineering = player.technologies.some(t => t.id === 'engineering');
       if (currentProduced === 1 && (!hasEngineering || player.hasUsedEngineeringThisTurn)) return;
       if (currentProduced >= 2) return;
 
-      // 🌟 3. 잔여 생산력 검사 (파라미터로 받은 cost 사용)
       const totalCityProduction = calculateDetailedCityProduction(city, state.map, player).total; 
-          const availableProduction = totalCityProduction - (city.usedProductionThisTurn || 0);
+      const availableProduction = totalCityProduction - (city.usedProductionThisTurn || 0);
       if (availableProduction < cost) return;
 
+      // 🌟 부대 랜덤 스탯 부여
       const stats = generateArmyStats(tier);
 
-        player.armyCards.push({
-            id: uuidv4(),
-            type: type as any,
-            tier: tier as 1|2|3|4,
-            attack: stats.attack,
-            health: stats.maxHealth,
-            maxHealth: stats.maxHealth,
-            ownerId: playerId,
-            name,
-            statProfile: stats.profile
-        });
+      const newArmyCard = {
+        id: uuidv4(),
+        type: type as any,
+        tier: tier as 1|2|3|4,
+        attack: stats.attack,
+        health: stats.maxHealth,
+        maxHealth: stats.maxHealth,     
+        ownerId: playerId,     
+        isDeployed: false,  
+        name,
+        statProfile: stats.profile
+      };
 
-      // 🌟 4. 상태 업데이트
+      if (!player.armyCards) player.armyCards = [];
+      player.armyCards.push(newArmyCard);
+
       city.usedProductionThisTurn = (city.usedProductionThisTurn || 0) + cost;
       city.producedItemsCount = (city.producedItemsCount || 0) + 1;
       city.actionTypeThisTurn = 'produce';
@@ -443,6 +394,7 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
 
   placeGreatPerson: (playerId: string, gpId: string, x: number, y: number) => {
     set((state) => {
+      // ... 기존 로직 동일 (생략 없이 원본 유지 필요하나 지면상 생략, 원본 그대로 두시면 됩니다.)
       const player = state.players.find(p => p.id === playerId);
       if (!player) return;
 
