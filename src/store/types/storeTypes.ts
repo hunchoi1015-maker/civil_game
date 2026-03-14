@@ -20,7 +20,8 @@ export interface GameSetupState {
   selectedNations: (NationType | null)[];
   capitalPositionOptions: Position[][];
   // 🌟 [추가] 플레이어별 남은 초기 유닛 배열 (예: 러시아 ['military', 'military', 'settler'])
-  pendingInitialUnits?: Record<string, UnitType[]>; 
+  pendingInitialUnits?: Record<string, UnitType[]>;
+  pendingInitialWonders?: Record<string, string>; 
 }
 
 // TurnResearchResult 정의

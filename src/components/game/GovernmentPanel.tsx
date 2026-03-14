@@ -1,3 +1,5 @@
+// src/components/game/GovernmentPanel.tsx 파일 전체를 아래로 교체해주세요.
+
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../../store/gameStore';
@@ -19,30 +21,30 @@ const GOVERNMENT_ICONS: Record<GovernmentType, string> = {
 };
 
 export function GovernmentPanel() {
-  const { map, players, currentPlayerIndex, currentPhase, changeGovernment } = useGameStore(); // 🌟 map, players 가져오기
+  const { map, players, currentPlayerIndex, currentPhase, changeGovernment } = useGameStore();
   const currentPlayer = players[currentPlayerIndex];
   
-  // 🌟 피라미드 보유 확인
   const hasPyramids = map ? hasActiveWonder(currentPlayer.id, 'pyramids', map, players) : false;
-  
   const [showModal, setShowModal] = useState(false);
 
   const canChangeGovernment = currentPhase === 'start';
-  // 초기 게임 시작 시 government가 null일 경우 기본값 처리
   const currentGov = currentPlayer.government || 'despotism'; 
   const researchedTechIds = currentPlayer.technologies.map(t => t.id);
 
+  // 🌟 [추가] 상대의 공격으로 인한 강제 무정부 상태(타이머) 여부 확인
+  const forcedAnarchy = (currentPlayer.anarchyTurnsLeft || 0) > 0;
+
   const isGovUnlocked = (gov: GovernmentType): boolean => {
-    if (gov === 'anarchy' || hasPyramids) return true; // 🌟 피라미드: 기술 무시 모두 해제!
+    if (gov === 'anarchy' || hasPyramids) return true;
     const govDef = GOVERNMENTS[gov];
     return govDef.requiredTech === null || researchedTechIds.includes(govDef.requiredTech);
   };
 
   const getCanSelect = (gov: GovernmentType): boolean => {
+    if (forcedAnarchy) return false; // 🌟 강제 폭동 기간 중엔 꼼수로 다른 체제 선택 불가!
     if (currentGov === gov) return false;
     if (!isGovUnlocked(gov)) return false;
 
-    // 🌟 피라미드 보유 시 즉시 아무 체제로나 변경 가능!
     if (hasPyramids || currentGov === 'anarchy' || currentPlayer.freeGovernmentSwitch) {
       return true;
     }
@@ -60,7 +62,6 @@ export function GovernmentPanel() {
   const handleChangeGovernment = (gov: GovernmentType) => {
     if (!getCanSelect(gov)) return;
     
-    // 무정부를 선택할 경우 확인창 띄우기
     if (gov === 'anarchy') {
         const confirmAnarchy = window.confirm("무정부 상태로 돌입하시겠습니까?\n이번 턴 '도시 경영' 단계에서 수도는 아무 행동도 할 수 없게 됩니다.");
         if (!confirmAnarchy) return;
@@ -72,17 +73,17 @@ export function GovernmentPanel() {
 
   return (
     <>
-      {/* 1. 우측 사이드바에 보이는 현재 체제 패널 */}
       <div className="bg-slate-700 rounded-lg p-3">
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-white font-medium">정치체제</h4>
-          {canChangeGovernment && (
+          
+          {/* 🌟 강제 무정부가 아닐 때만 변경 버튼 노출 */}
+          {canChangeGovernment && !forcedAnarchy && (
             <button
               onClick={() => setShowModal(true)}
               className="text-xs px-2 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded transition-colors relative"
             >
               변경
-              {/* 무료 전환 기회가 있으면 버튼에 알림 표시 */}
               {currentPlayer.freeGovernmentSwitch && (
                   <span className="absolute -top-1 -right-1 flex h-3 w-3">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -90,6 +91,13 @@ export function GovernmentPanel() {
                   </span>
               )}
             </button>
+          )}
+
+          {/* 🌟 상대 공격에 의해 묶인 경우 경고 라벨 렌더링 */}
+          {forcedAnarchy && (
+            <span className="text-xs bg-red-900/80 text-red-200 px-2 py-1 rounded border border-red-500 animate-pulse font-bold shadow-md">
+                🔥 폭동 진압 중 (변경 불가)
+            </span>
           )}
         </div>
 
@@ -105,14 +113,13 @@ export function GovernmentPanel() {
           </div>
         </div>
 
-        {!canChangeGovernment && (
+        {!canChangeGovernment && !forcedAnarchy && (
           <p className="text-xs text-slate-500 mt-2 text-center">
             차례 시작 단계에서만 변경 가능
           </p>
         )}
       </div>
 
-      {/* 2. 정치체제 선택 모달 창 */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
           <motion.div
@@ -134,8 +141,8 @@ export function GovernmentPanel() {
                 {currentPlayer.freeGovernmentSwitch 
                     ? "방금 연구한 기술의 효과로 무정부 페널티 없이 즉시 체제를 바꿀 수 있습니다." 
                     : currentGov === 'anarchy' 
-                        ? "무정부 상태입니다! 새롭게 도입할 정치체제를 선택하세요." 
-                        : "다른 정치체제로 변경하려면 반드시 '무정부'를 먼저 선언하여 한 턴의 페널티를 거쳐야 합니다."}
+                        ? "무정부 상태를 거쳤습니다! 새롭게 도입할 정치체제를 선택하세요." 
+                        : "다른 정치체제로 변경하려면 반드시 '무정부'를 먼저 선언하여 한 턴의 수도 마비 페널티를 거쳐야 합니다."}
             </p>
 
             <div className="grid grid-cols-2 gap-4">

@@ -75,10 +75,13 @@ function LocationModal({ name, city, currentPlayer, onSelect, onClose, mode }: L
         let isValid = false;
 
         if (mode === 'unit') {
-            isValid = tile.terrain !== 'water' && tile.terrain !== 'mountain' && myUnitsCount < stackingLimit && tile.isExplored;
+            isValid = tile.terrain !== 'water' && myUnitsCount < stackingLimit && tile.isExplored;
+        } else if (mode === 'wonder') {
+            // 불가사의: 수도(isCenter) 불가. 건물/불가사의 여부 따지지 않음 (덮어쓰기 허용)
+            isValid = !isCenter && tile.terrain !== 'water' && tile.ownerId === city.ownerId && tile.isExplored;
         } else {
-            isValid = !tile.buildingType && !tile.wonder && tile.terrain !== 'water' && tile.terrain !== 'mountain' && tile.ownerId === city.ownerId && tile.isExplored;
-            if (mode === 'wonder' && isCenter) isValid = false;
+            // 일반 건물: 빈 땅 또는 수도 중앙
+            isValid = !tile.buildingType  && tile.ownerId === city.ownerId && tile.isExplored;
             if (mode === 'building' && isCenter) isValid = true;
         }
 
@@ -235,12 +238,18 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
   const totalCityProduction = productionDetails.total;
   const availableProduction = totalCityProduction - (selectedCity?.usedProductionThisTurn || 0);
   
+  // 무정부 상태인 수도이거나, 스파이에게 마비된 상태인지 통합 검사
+  const isAnarchyCapital = currentPlayer.government === 'anarchy' && selectedCity?.isCapital;
+  const isCityParalyzed = selectedCity?.isParalyzed || isAnarchyCapital;
+
+  // 생산/수확 불가 조건에 isCityParalyzed(무정부/마비)를 최우선으로 추가
   const cannotProduce = 
+      isCityParalyzed || 
       actionType === 'harvest' || 
       currentProduced >= 2 || 
       (currentProduced === 1 && (!hasEngineering || currentPlayer.hasUsedEngineeringThisTurn));
 
-  const cannotHarvest = selectedCity?.hasActedThisTurn || currentProduced > 0 || actionType === 'produce';
+  const cannotHarvest = isCityParalyzed || selectedCity?.hasActedThisTurn || currentProduced > 0 || actionType === 'produce';
 
   let selectedCityCulture = 0;
   if (selectedCity && map) {
@@ -360,7 +369,11 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
 
   let actionStatusText = '가능';
   let actionStatusColor = 'text-green-400';
-  if (selectedCity?.isParalyzed) {
+  
+  if (isAnarchyCapital) {
+     actionStatusText = '🔥 무정부 폭동 (수도 기능 마비)';
+     actionStatusColor = 'text-red-500 font-bold animate-pulse';
+  } else if (isCityParalyzed) {
      actionStatusText = '마비됨 (행동 불가)';
      actionStatusColor = 'text-red-400';
   } else if (actionType === 'harvest') {
@@ -550,7 +563,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
           {/* 생산 패널 */}
           <div className="bg-slate-800 rounded-lg p-4">
 
-            {canManageCity && !cannotProduce && !selectedCity?.isParalyzed && (
+            {canManageCity && !cannotProduce && !isCityParalyzed && (
                <div className="mb-4 p-3 bg-slate-750 border border-amber-600/50 rounded-lg">
                  <div className="flex justify-between items-center mb-2">
                    <h4 className="text-sm font-bold text-amber-400">🔄 교역품 긴급 조달</h4>
@@ -580,7 +593,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
                 {availableBuildings.map((building) => {
                   const canAfford = availableProduction >= building.productionCost;
                   const canUseEgyptFreeBuild = currentPlayer.nation === 'egypt' && !currentPlayer.hasUsedEgyptFreeBuildingThisTurn;
-                  const cityActed = cannotProduce || selectedCity?.isParalyzed;
+                  const cityActed = cannotProduce || isCityParalyzed;
                   
                   return (
                     <div key={building.type} className={clsx('p-3 rounded-lg text-left transition-colors flex flex-col justify-between', (canManageCity && (canAfford || canUseEgyptFreeBuild) && !cityActed) ? 'bg-slate-700' : 'bg-slate-700 opacity-40')}>
@@ -630,7 +643,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
               </div>
             )}
 
-            {canManageCity && cannotProduce && actionType !== 'harvest' && !selectedCity?.isParalyzed && (
+            {canManageCity && cannotProduce && actionType !== 'harvest' && !isCityParalyzed && (
               <div className="mb-4 p-3 bg-red-900/50 border border-red-600 rounded-lg">
                 <p className="text-red-400 text-sm">
                   ⚠️ 생산 한도 도달: {currentProduced >= 2 ? '공학 능력(최대 2회)을 모두 소모했습니다.' : '다른 도시에서 이미 공학 능력을 사용했거나, 공학 기술이 없습니다.'}
@@ -654,7 +667,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
                   }
 
                   const canAfford = availableProduction >= actualCost; 
-                  const cityActed = cannotProduce || selectedCity?.isParalyzed;
+                  const cityActed = cannotProduce || isCityParalyzed;
                   
                   let isAlreadyBuilt = false;
                   for (const p of players) {
@@ -703,7 +716,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
                   const currentCount = unitType === 'military' ? militaryCount : settlerCount;
                   const isMaxed = currentCount >= (unitType === 'military' ? 6 : 2);
                   const canAfford = availableProduction >= def.productionCost;
-                  const cityActed = cannotProduce || selectedCity?.isParalyzed;
+                  const cityActed = cannotProduce || isCityParalyzed;
                   const isDisabled = isMaxed || !canManageCity || !canAfford || cityActed;
                   return (
                     <button key={unitType} onClick={() => handleProduceUnit(unitType)} disabled={isDisabled} className={clsx('p-3 rounded-lg text-left transition-colors', isDisabled ? 'bg-slate-700 opacity-40 cursor-not-allowed' : 'bg-slate-700 hover:bg-slate-600')}>
@@ -718,12 +731,12 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
               </div>
             )}
             
-            {/* 🌟 [수정] 모달을 삭제하고 랜덤 스탯 징집 버튼으로 교체된 탭 */}
+            {/* 모달을 삭제하고 랜덤 스탯 징집 버튼으로 교체된 탭 */}
             {productionTab === 'armyCards' && (
               <div className="grid grid-cols-2 gap-2">
                 {availableArmyCards.map((card) => {
                   const canAfford = availableProduction >= card.productionCost;
-                  const cityActed = cannotProduce || selectedCity?.isParalyzed;
+                  const cityActed = cannotProduce || isCityParalyzed;
                   const isDisabled = !canManageCity || !canAfford || cityActed;
                   const cardIcon = ({ infantry: '🗡️', artillery: '💣', cavalry: '🐴', airforce: '✈️', settler: '' } as Record<string, string>)[card.type] || '🗡️';
 

@@ -251,6 +251,24 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
 
         // 타일 유효성 검사 
         const tile = state.map.tiles[tilePos.y][tilePos.x];
+
+        // 🌟 [추가] 덮어쓰기 파괴 로직 (건물이 있었다면 도시 목록에서 삭제)
+        if (tile.buildingType) {
+            city.buildings = city.buildings.filter(b => b.tilePosition?.x !== tilePos.x || b.tilePosition?.y !== tilePos.y);
+            tile.buildingType = null;
+            if (!state.combatState.log) state.combatState.log = [];
+            state.combatState.log.push({ message: `💥 새로운 불가사의 건설을 위해 기존 건물이 철거되었습니다.` });
+        }
+
+        // 🌟 [추가] 덮어쓰기 파괴 로직 (다른 불가사의가 있었다면 소유권 삭제)
+        if (tile.wonder) {
+            const oldWonder = tile.wonder.type;
+            city.builtWonders = city.builtWonders?.filter(w => w !== oldWonder);
+            player.builtWonders = player.builtWonders?.filter(w => w !== oldWonder);
+            if (!state.combatState.log) state.combatState.log = [];
+            state.combatState.log.push({ message: `💥 새로운 불가사의 배치로 인해 기존 불가사의(${oldWonder})의 능력이 소실되었습니다!` });
+        }
+
         if (tile.terrain === 'water') return;
         if (tile.buildingType || tile.cityId || tile.wonder) return;
 

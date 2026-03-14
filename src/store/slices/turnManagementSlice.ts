@@ -167,6 +167,11 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
         player.hasUsedEgyptFreeBuildingThisTurn = false;
         player.hasUsedRussiaTechStealThisTurn = false;
         
+        // 시민 봉기에 의한 무정부 타이머 
+        if (player.anarchyTurnsLeft && player.anarchyTurnsLeft > 0) {
+            player.anarchyTurnsLeft -= 1;
+        }
+
         if (player.technologies) {
           player.technologies.forEach(tech => {
             tech.abilityUsedThisTurn = false;
