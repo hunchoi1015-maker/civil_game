@@ -74,10 +74,36 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
           const availableProduction = totalCityProduction - (city.usedProductionThisTurn || 0);
           
           if (availableProduction < buildingDef.productionCost) return;
+
+          // 🌟 [추가] 특성화 건물 덮어쓰기 (철거) 로직
+          if (buildingDef.isSpecialty) {
+            const existingSpecialtyIndex = city.buildings.findIndex(b => BUILDINGS[b.type].isSpecialty);
+            if (existingSpecialtyIndex !== -1) {
+              const existingSpecialty = city.buildings[existingSpecialtyIndex];
+              
+              // 클릭한 위치가 기존 건물이 있는 위치인지 검증
+              if (position && existingSpecialty.tilePosition && (position.x !== existingSpecialty.tilePosition.x || position.y !== existingSpecialty.tilePosition.y)) {
+                alert("도시 특성화 건물은 1도시에 1개만 존재할 수 있습니다. 기존 특성화 건물을 클릭하여 교체하세요.");
+                return;
+              }
+
+              // 맵 타일에서 기존 건물 외형 지우기
+              if (existingSpecialty.tilePosition) {
+                const tile = state.map.tiles[existingSpecialty.tilePosition.y]?.[existingSpecialty.tilePosition.x];
+                if (tile && tile.buildingType === existingSpecialty.type) {
+                  tile.buildingType = null;
+                }
+              }
+              
+              // 도시 데이터에서 기존 특성화 건물 파괴!
+              city.buildings.splice(existingSpecialtyIndex, 1);
+              if (!state.combatState.log) state.combatState.log = [];
+              state.combatState.log.push({ message: `🏗️ 특성화 교체: ${city.name}의 기존 특성화 건물이 철거되고 새 건물로 교체됩니다!` });
+            }
+          }
           
           const existingCount = city.buildings.filter((b) => b.type === buildingType).length;
           if (buildingDef.maxPerCity && existingCount >= buildingDef.maxPerCity) return;
-          if (city.buildings.some((b) => b.type === buildingType)) return;
 
           if (buildingDef.allowedTerrain) {
             if (buildingDef.allowedTerrain.includes('city')) {

@@ -118,7 +118,10 @@ export function getAvailableTrade(player: Player): number {
 
 export function getPlayerPassives(player: Player) {
   let maxMovement = 2; // 기본 이동력 2
-  let stackingLimitBonus = 0;
+  
+  // 🌟 [수정] 기술 보너스를 더하기 전에, 국가 특성으로 얻은 기본 배치 보너스(예: 러시아 +1)를 먼저 깔아줍니다!
+  let stackingLimitBonus = player.stackingLimitBonus || 0; 
+  
   let cultureCardLimitBonus = 0;
   let waterMovement = false;
   let waterStop = false;

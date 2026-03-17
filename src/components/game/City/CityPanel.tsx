@@ -47,15 +47,16 @@ interface LocationModalProps {
   onSelect: (position: Position) => void;
   onClose: () => void;
   mode: 'building' | 'wonder' | 'unit';
+  buildingDef?: BuildingDefinition; 
 }
 
-function LocationModal({ name, city, currentPlayer, onSelect, onClose, mode }: LocationModalProps) {
+function LocationModal({ name, city, currentPlayer, onSelect, onClose, mode, buildingDef }: LocationModalProps) {
   const { map } = useGameStore();
   const stackingLimit = 2 + getPlayerPassives(currentPlayer).stackingLimitBonus;
 
   const getAdjacentTiles = () => {
     if (!map) return []; 
-    const tiles: { position: Position; isValid: boolean; terrain: string; hasBuilding: boolean; hasWonder: boolean; myUnitsCount: number }[] = [];
+    const tiles: { position: Position; isValid: boolean; isReplacement: boolean; terrain: string; hasBuilding: boolean; hasWonder: boolean; myUnitsCount: number }[] = [];
     const directions = [
       { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
       { x: -1, y: 0 },  { x: 0, y: 0 },  { x: 1, y: 0 },
@@ -72,21 +73,31 @@ function LocationModal({ name, city, currentPlayer, onSelect, onClose, mode }: L
         const myUnitsCount = tile.unitIds.filter(id => currentPlayer.units.some(u => u.id === id)).length;
         
         let isValid = false;
+        let isReplacement = false; // 🌟 덮어쓰기 여부 파악
 
         if (mode === 'unit') {
             isValid = tile.terrain !== 'water' && tile.terrain !== 'mountain' && myUnitsCount < stackingLimit && tile.isExplored;
         } else if (mode === 'wonder') {
-            // 불가사의: 수도(isCenter) 불가. 건물/불가사의 여부 따지지 않음 (덮어쓰기 허용)
-            isValid = !isCenter && tile.terrain !== 'water' && tile.terrain !== 'mountain' && tile.ownerId === city.ownerId && tile.isExplored;
+            isValid = !isCenter && tile.terrain !== 'water' && tile.ownerId === city.ownerId && tile.isExplored;
         } else {
-            // 일반 건물: 빈 땅 또는 수도 중앙
-            isValid = !tile.buildingType && !tile.wonder && tile.terrain !== 'water' && tile.terrain !== 'mountain' && tile.ownerId === city.ownerId && tile.isExplored;
-            if (mode === 'building' && isCenter) isValid = true;
+            // 🌟 [추가] 일반 건물 vs 특성화 건물 덮어쓰기 로직 분기
+            const existingSpecialty = city.buildings.find(b => BUILDINGS[b.type].isSpecialty);
+            
+            if (buildingDef?.isSpecialty && existingSpecialty) {
+                // 특성화 건물 교체 모드
+                isValid = tile.position.x === existingSpecialty.tilePosition?.x && tile.position.y === existingSpecialty.tilePosition?.y;
+                isReplacement = isValid;
+            } else {
+                // 일반 건물 건설 모드
+                isValid = !tile.buildingType && !tile.wonder && tile.ownerId === city.ownerId && tile.isExplored;
+                if (isCenter && !tile.wonder) isValid = true;
+            }
         }
 
         tiles.push({
           position: { x, y },
           isValid,
+          isReplacement,
           terrain: tile.terrain,
           hasBuilding: !!tile.buildingType || (isCenter && city.buildings.length > 0),
           hasWonder: !!tile.wonder,
@@ -116,7 +127,9 @@ function LocationModal({ name, city, currentPlayer, onSelect, onClose, mode }: L
                 className={clsx(
                   'w-16 h-16 rounded flex flex-col items-center justify-center text-xs transition-all relative',
                   TERRAIN_COLORS[tile.terrain],
-                  tile.isValid ? 'hover:ring-2 hover:ring-amber-400 cursor-pointer' : 'opacity-40 cursor-not-allowed',
+                  tile.isValid 
+                    ? (tile.isReplacement ? 'ring-4 ring-red-500 animate-pulse cursor-pointer' : 'hover:ring-2 hover:ring-amber-400 cursor-pointer') 
+                    : 'opacity-40 cursor-not-allowed',
                   isCenter && 'ring-2 ring-white'
                 )}
               >
@@ -142,7 +155,7 @@ function LocationModal({ name, city, currentPlayer, onSelect, onClose, mode }: L
           {mode === 'unit' ? (
               <p>배치 한도(Stacking Limit): 타일당 {stackingLimit}개</p>
           ) : (
-              <p>🏛️ = 도시 중앙 | 🏗️ = 지어진 건물 | 🗽 = 불가사의</p>
+              <p>빨간색 반짝이는 타일 = 철거 및 특성 교체 대상</p>
           )}
           <p>어두운 타일 = {mode === 'unit' ? '배치 불가 (물/산/한도 초과/미탐험)' : '건설 불가 (물/산/소유권 없음/미탐험)'}</p>
         </div>
@@ -373,7 +386,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
     <div className="flex gap-6">
       
       {selectedBuildingToBuild && selectedCity && (
-        <LocationModal name={selectedBuildingToBuild.def.name} city={selectedCity} currentPlayer={currentPlayer} mode="building" onSelect={handleBuildAtLocation} onClose={() => setSelectedBuildingToBuild(null)} />
+        <LocationModal name={selectedBuildingToBuild.def.name} city={selectedCity} currentPlayer={currentPlayer} mode="building" buildingDef={selectedBuildingToBuild.def} onSelect={handleBuildAtLocation} onClose={() => setSelectedBuildingToBuild(null)} />
       )}
       {selectedWonderToBuild && selectedCity && (
         <LocationModal name={selectedWonderToBuild.name} city={selectedCity} currentPlayer={currentPlayer} mode="wonder" onSelect={handleWonderAtLocation} onClose={() => setSelectedWonderToBuild(null)} />

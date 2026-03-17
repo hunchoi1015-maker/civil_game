@@ -202,6 +202,8 @@ function PlacementPhase() {
   const currentDeployCount = isAttackerTurn ? cs.placement.attackerDeployCount : cs.placement.defenderDeployCount;
   const currentMaxCards = isAttackerTurn ? cs.placement.attackerMaxCards : cs.placement.defenderMaxCards;
 
+  const canPlayMore = currentCards.length > 0 && currentDeployCount < currentMaxCards;
+
   const handlePlaceCard = (battlefieldId: string | null) => {
     if (!selectedCard) return;
 
@@ -355,9 +357,16 @@ function PlacementPhase() {
 
           <button
             onClick={handlePass}
-            className="px-4 py-3 bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors"
+            disabled={canPlayMore}
+            className={clsx(
+              "px-4 py-3 rounded-lg transition-colors font-bold",
+              canPlayMore 
+                ? "bg-slate-800 border border-slate-700 text-slate-600 cursor-not-allowed" 
+                : "bg-slate-600 hover:bg-slate-500 text-white shadow-lg shadow-slate-900/50"
+            )}
+            title={canPlayMore ? "아직 전장에 배치할 수 있는 카드가 있습니다!" : "더 이상 카드를 낼 수 없어 배치를 마칩니다."}
           >
-            패스
+            {canPlayMore ? '카드 배치 필요' : '패스 (배치 종료)'}
           </button>
 
           {currentTurnPlayer.id !== 'village' && (
@@ -512,8 +521,10 @@ function PlacementPhase() {
                             <span className="text-xl">{CARD_ICONS[targetCard.type]}</span>
                             <div>
                               <div className="text-white font-bold text-sm">{targetCard.name}</div>
-                              <div className="text-xs text-slate-400">
-                                체력: {targetCard.health}/{targetCard.maxHealth}
+                              <div className="text-xs font-medium flex items-center gap-2 bg-slate-800/50 px-1.5 py-0.5 rounded">
+                                <span className="text-red-300 drop-shadow-sm">⚔️ 공격: {targetCard.attack}</span>
+                                <span className="text-slate-500">|</span>
+                                <span className="text-green-300 drop-shadow-sm">❤️ 체력: {targetCard.health}/{targetCard.maxHealth}</span>
                               </div>
                             </div>
                           </div>

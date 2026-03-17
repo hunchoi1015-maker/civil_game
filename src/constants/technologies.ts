@@ -13,7 +13,7 @@ export const TECHNOLOGIES: Technology[] = [
     passiveEffects: { movementBonus: 1 }, resourceAbility: { description: "비단 1개 소모 -> 교역 9 (상대 1명 교역 6)" }
   },
   {
-    id: 'masonry', name: '석조기술', level: 1, isStartingTechFor: 'china',
+    id: 'masonry', name: '석조기술', level: 1,
     description: "배치제한: 3\n해제 건물: 성벽",
     unlocksBuildings: ['walls'], passiveEffects: { stackingLimitBonus: 1 }
   },
@@ -38,7 +38,7 @@ export const TECHNOLOGIES: Technology[] = [
     unlocksBuildings: ['trading_post'], unlocksGovernment: 'republic', resourceAbility: { description: "전투 승리 시 -> 화폐 토큰 +1 (수동 발동)", maxTokens: 4 }
   },
   {
-    id: 'writing', name: '기록', level: 1,
+    id: 'writing', name: '기록', level: 1, isStartingTechFor: 'china', 
     description: "해제 건물: 도서관\n도시경영: 스파이 1개 소모해 다음 턴 상대 도시 1곳 행동 불가",
     unlocksBuildings: ['library'], resourceAbility: { description: "스파이 1개 소모 -> 상대 도시 지목 (다음 턴 행동 불가)" }
   },

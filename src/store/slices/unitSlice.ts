@@ -11,7 +11,6 @@ import { calculateTileYield } from '../../engine/ResourceCalculator';
 import { canLearnTechInPyramid } from '../helpers/validationHelpers';
 
 export interface UnitSlice {
-  // 🌟 [수정] 4번째 파라미터(sourceCityId) 추가!
   createUnit: (playerId: string, type: UnitType, position: Position, sourceCityId?: string) => void;
   moveUnit: (unitId: string, newPosition: Position) => void;
   removeUnit: (unitId: string) => void;
@@ -22,7 +21,6 @@ export interface UnitSlice {
 }
 
 export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]], [], UnitSlice> = (set, get) => ({
-  // 🌟 [수정] 4번째 파라미터(sourceCityId) 추가!
   createUnit: (playerId: string, type: UnitType, position: Position, sourceCityId?: string) => {
     set((state) => {
       const player = findPlayerById(state.players, playerId);
@@ -32,23 +30,19 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       let cost = 0;
 
       if (state.currentPhase === 'cityManagement') {
-        // 🌟 [수정] sourceCityId가 있다면 그 도시를 찾고, 없다면 타일 위치로 찾습니다.
         const city = sourceCityId 
             ? player.cities.find((c) => c.id === sourceCityId)
             : player.cities.find((c) => c.position.x === position.x && c.position.y === position.y);
             
         if (!city) return;
 
-        // 1. 행동 충돌 방지
         if (city.actionTypeThisTurn === 'harvest') return;
 
-        // 2. 공학 능력 및 횟수 한도 체크
         const currentProduced = city.producedItemsCount || 0;
         const hasEngineering = player.technologies.some(t => t.id === 'engineering');
         if (currentProduced === 1 && (!hasEngineering || player.hasUsedEngineeringThisTurn)) return;
         if (currentProduced >= 2) return;
 
-        // 3. 잔여 생산력 검사
         cost = UNIT_DEFINITIONS[type].productionCost;
         const totalCityProduction = calculateDetailedCityProduction(city, state.map, player).total;
         const availableProduction = totalCityProduction - (city.usedProductionThisTurn || 0);
@@ -155,14 +149,22 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
         }
       }
     }
+
+    // 🌟 [추가] 민주주의 체제 페널티: 타 문명 도시/수도 타일 공격 불가 방어막
+    let isEnemyCity = false;
+    if (targetTile.cityId) {
+      isEnemyCity = state.players.some(p => p.id !== currentPlayer.id && p.cities.some(c => c.id === targetTile.cityId));
+    }
+    if (isEnemyCity && currentPlayer.government === 'democracy') {
+      alert("🕊️ 민주주의 체제에서는 타 문명의 도시나 수도를 무력으로 선제 공격할 수 없습니다.");
+      return; // 이동 및 전투 취소
+    }
     
-    // 👇👇 [여기부터 추가] 👇👇
     // 🌟 러시아 특성: 적 도시에 진입 시 기술 도용 체크
     if (enemyPlayerId && targetTile.cityId) {
       if (currentPlayer.nation === 'russia' && !currentPlayer.hasUsedRussiaTechStealThisTurn) {
         const enemyPlayer = state.players.find(p => p.id === enemyPlayerId);
         if (enemyPlayer) {
-          // 피라미드 제약을 만족하며 내가 없는 기술 필터링
           const stealableTechs = enemyPlayer.technologies.filter(t => 
             !currentPlayer.technologies.some(myT => myT.id === t.id) && 
             canLearnTechInPyramid(currentPlayer, t.id).canResearch
@@ -170,7 +172,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
 
           if (stealableTechs.length > 0) {
             get().setRussiaStealPrompt({ unitId, targetPlayerId: enemyPlayer.id, targetPos: newPosition });
-            return; // 🌟 이동 및 전투를 멈추고 모달의 선택을 기다립니다.
+            return; 
           } else {
             alert("상대에게 도용할 수 있는 기술이 없어 바로 전투에 돌입합니다.");
           }
@@ -202,14 +204,12 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
                     const p = s.players.find(pl => pl.id === currentPlayer.id);
                     const u = p?.units.find(un => un.id === unitId);
                     if (p && u) {
-                        // 👇👇 [여기 추가] 중국 오두막 문화 +3 특성 👇👇
                         if (p.nation === 'china') {
                             p.resources.culture += 3;
                             if (!s.combatState.log) s.combatState.log = [];
                             s.combatState.log.push({ message: `🐉 [중국 특성] 오두막을 발견하여 문화 3개를 획득했습니다!` });
                         }
                         if (obj.reward.type === 'resource') {
-                            // 🌟 신규: 일반 주머니가 아닌 비밀 자원(오두막) 주머니에 추가!
                             if (!p.secretResources) p.secretResources = [];
                             p.secretResources.push({
                                 id: uuidv4(),
@@ -328,6 +328,16 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
         }
       }
     }
+
+    // 🌟 [추가] 민주주의 체제 페널티: 타 문명 도시/수도 타일 공격 불가 방어막 (다중 선택 이동 시)
+    let isEnemyCity = false;
+    if (targetTile.cityId) {
+      isEnemyCity = currentState.players.some(p => p.id !== player.id && p.cities.some(c => c.id === targetTile.cityId));
+    }
+    if (isEnemyCity && player.government === 'democracy') {
+      alert("🕊️ 민주주의 체제에서는 타 문명의 도시나 수도를 무력으로 선제 공격할 수 없습니다.");
+      return; // 이동 및 전투 취소
+    }
     
     if (enemyPlayerId) {
       get().startCombat(player.id, newPosition);
@@ -349,14 +359,13 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       if (obj.type === 'hut') {
           if (!hasMilitary && !(hasSettler && isRepublic)) {
               alert("오두막은 군사 유닛 또는 공화제일 때의 개척자만 진입할 수 있습니다.");
-              return; // 이동 취소
+              return;
           }
       } else if (obj.type === 'village') {
           if (!hasMilitary) {
               alert("마을은 군사 유닛이 포함되어야 진입할 수 있습니다.");
-              return; // 이동 취소
+              return;
           }
-          // 군사 유닛을 대표로 마을 전투 시작 (그룹 전체가 전투에 휘말림)
           const militaryUnit = unitsToMove.find(u => u.type === 'military')!;
           get().startVillageCombat(militaryUnit.id, newPosition);
           return;
@@ -366,7 +375,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
     set((state) => {
       const currentPlayer = state.players[state.currentPlayerIndex];
       const tile = state.map.tiles[newPosition.y][newPosition.x];
-      const passives = getPlayerPassives(currentPlayer); // 🌟 동적 패시브 계산
+      const passives = getPlayerPassives(currentPlayer); 
       const unitsToMove = state.selectedUnits
         .map((id) => currentPlayer.units.find((u) => u.id === id))
         .filter((u): u is NonNullable<typeof u> => u !== undefined && u.movement > 0);
@@ -391,7 +400,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       let claimedHut = false; 
 
       if (tile.object && tile.object.type === 'hut') {
-          claimedHut = true; // 오두막을 먹었다고 체크!
+          claimedHut = true; 
           const obj = tile.object;
           if (currentPlayer.nation === 'china') {
               currentPlayer.resources.culture += 3;
@@ -412,13 +421,11 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
           tile.object = undefined;
       }
       
-      // 🌟 유닛 이동 및 이동력 차감 처리
       for (const unit of actualMovingUnits) {
         const oldTile = state.map.tiles[unit.position.y][unit.position.x];
         oldTile.unitIds = oldTile.unitIds.filter((id) => id !== unit.id);
         unit.position = newPosition;
         
-        // 👇👇 [수정된 부분] 오두막을 먹었다면 남은 이동력에 상관없이 즉시 0으로 고갈!
         if (claimedHut) {
             unit.movement = 0;
         } else {
@@ -438,7 +445,6 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
           const player = state.players.find(p => p.id === playerId);
           if (!player) return;
           if (reward.type === 'resource') {
-              // 🌟 신규: 비밀 자원(오두막)으로 추가!
               if (!player.secretResources) player.secretResources = [];
               player.secretResources.push({
                   id: uuidv4(),
@@ -451,7 +457,6 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       });
   },
 
-  // 🌟 [추가] 개척자 보급 스킬 구현부
   sendPioneerTileToCity: (pioneerId: string, cityId: string) => {
     set((state) => {
       const player = state.players[state.currentPlayerIndex];
@@ -461,27 +466,20 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       if (!pioneer || !city) return;
 
       const tile = state.map.tiles[pioneer.position.y][pioneer.position.x];
-      
-      // 🌟 calculateTileYield를 사용하여 실제 타일의 자원 산출량을 가져옵니다.
       const tileYield = calculateTileYield(tile, state.players);
 
-      // 🌟 1. 생산력과 교역 복사
       city.pioneerProductionBonus = tileYield.production || 0;
       city.pioneerTradeBonus = tileYield.trade || 0;
       
-      // 🌟 2. 사치품 접근권(Link) 복사
       city.pioneerLinkedLuxuries = [];
       if (tile.resource) {
           city.pioneerLinkedLuxuries.push(tile.resource);
       }
 
-      // 전투/액션 로그에 기록
-      //if (!state.combatState) state.combatState = { log: [] }; // 방어 로직
       if (!state.combatState.log) state.combatState.log = [];
       state.combatState.log.push({ 
           message: `⛺ [보급] 개척자가 타일의 자원(생산+${city.pioneerProductionBonus}, 교역+${city.pioneerTradeBonus})을 ${city.name}에 전송했습니다!` 
       });
-
     });
   },
 });

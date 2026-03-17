@@ -119,7 +119,7 @@ export const createUISlice: StateCreator<GameStore, [["zustand/immer", never]], 
   russiaStealPrompt: null,
   setRussiaStealPrompt: (prompt) => set({ russiaStealPrompt: prompt }),
   resolveRussiaSteal: (techId) => {
-    const state = get(); // 이제 get()을 정상적으로 사용할 수 있습니다!
+    const state = get(); 
     const prompt = state.russiaStealPrompt;
     if (!prompt) return;
     
@@ -130,14 +130,27 @@ export const createUISlice: StateCreator<GameStore, [["zustand/immer", never]], 
       set((s) => {
         const player = s.players[s.currentPlayerIndex];
         const techDef = TECHNOLOGIES.find(t => t.id === techId);
+        
         if (techDef) {
           // 기술 추가
           player.technologies.push({ ...techDef, tokensOnCard: 0, abilityUsedThisTurn: false, usedPhases: [] });
-          // 유닛 희생 (맵과 플레이어 목록에서 제거)
+          
+          // 유닛이 현재 "실제로" 서 있는 원래 위치를 찾아 타일에서 제거합니다.
+          const unitToSacrifice = player.units.find(u => u.id === prompt.unitId);
+          if (unitToSacrifice) {
+            const { x, y } = unitToSacrifice.position;
+            s.map.tiles[y][x].unitIds = s.map.tiles[y][x].unitIds.filter(id => id !== prompt.unitId);
+          }
+
+          // 플레이어 유닛 목록에서 제거
           player.units = player.units.filter(u => u.id !== prompt.unitId);
-          s.map.tiles[prompt.targetPos.y][prompt.targetPos.x].unitIds = s.map.tiles[prompt.targetPos.y][prompt.targetPos.x].unitIds.filter(id => id !== prompt.unitId);
+          
+          // 선택 상태(UI)에서도 희생된 유닛을 깔끔하게 지워줍니다.
+          s.selectedUnits = s.selectedUnits.filter(id => id !== prompt.unitId);
+          if (s.selectedUnit === prompt.unitId) s.selectedUnit = null;
           
           player.hasUsedRussiaTechStealThisTurn = true;
+          
           if (!s.combatState.log) s.combatState.log = [];
           s.combatState.log.push({ message: `🐻 [러시아 특성] 유닛을 희생하여 적의 '${techDef.name}' 기술을 도용했습니다!` });
         }

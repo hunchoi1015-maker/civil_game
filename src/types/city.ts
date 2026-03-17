@@ -60,6 +60,7 @@ export interface BuildingDefinition {
   allowedTerrain: string[] | null;
   maxPerCity: number;
   isWonder?: boolean;
+  isSpecialty?: boolean; 
 }
 
 export interface BuildingEffect {

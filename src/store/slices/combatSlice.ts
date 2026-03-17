@@ -331,6 +331,8 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     );
     
     let attackerGeneralBonus = 0;
+    
+    // 1. 위인이 제공하는 전투 보너스 합산
     state.map.tiles.forEach(row => {
       row.forEach(tile => {
         if (tile.ownerId === currentPlayer.id && tile.greatPerson && tile.greatPerson.stats.combatBonus) {
@@ -338,6 +340,16 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
         }
       });
     });
+
+    // 🌟 [추가] 2. 도시 건물이 제공하는 전투 보너스 합산 (일반 전투와 동일하게 반영)
+    for (const city of currentPlayer.cities) {
+        city.buildings.forEach(b => {
+            const def = BUILDINGS[b.type as keyof typeof BUILDINGS];
+            if (def && def.effects && def.effects.combatBonus) {
+                attackerGeneralBonus += def.effects.combatBonus;
+            }
+        });
+    }
     
     set((s) => {
         s.combatState = {
@@ -365,7 +377,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
             },
             graveyard: [],
             phase: 'placement',
-            attackerCombatBonus: attackerGeneralBonus,
+            attackerCombatBonus: attackerGeneralBonus, // 🌟 이제 위인 + 건물 보너스가 모두 포함됨
             defenderCombatBonus: 0, 
             attackerCityDefenseBonus: 0,
             defenderCityDefenseBonus: 0,
@@ -482,6 +494,14 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
 
       if (!isAttacker && !isDefender) return;
 
+      const availableCards = isAttacker ? cs.attackerAvailableCards : cs.defenderAvailableCards;
+      const currentDeployCount = isAttacker ? cs.placement.attackerDeployCount : cs.placement.defenderDeployCount;
+      const currentMaxCards = isAttacker ? cs.placement.attackerMaxCards : cs.placement.defenderMaxCards;
+      
+      if (availableCards.length > 0 && currentDeployCount < currentMaxCards) {
+          return; // 패스 거부
+      }
+      
       if (isAttacker) cs.placement.attackerPassed = true;
       else cs.placement.defenderPassed = true;
 
