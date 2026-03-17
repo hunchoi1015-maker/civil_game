@@ -86,7 +86,7 @@ export const NATIONS: Record<NationType, Nation> = {
     },
     specialAbility: {
       type: 'culture_on_events',
-      description: '마을 승리/도시 건설/불가사의 건설/도시 파괴 시 문화 +1. 교역 3 → 생산력 1',
+      description: '마을 승리/도시 건설/불가사의 건설/도시 파괴 시 문화 트랙 +1.',
       tradeToProductionRatio: 1,
       cultureEvents: {
         villageDefeat: 1,
@@ -129,7 +129,7 @@ export const NATIONS: Record<NationType, Nation> = {
     },
     specialAbility: {
       type: 'village_culture',
-      description: '오두막/마을 획득 시 문화 +3. 교역 3 → 생산력 1',
+      description: '오두막/마을 획득 시 문화 +3',
       tradeToProductionRatio: 1,
       villageCulture: 3,
     },
@@ -150,7 +150,7 @@ export const NATIONS: Record<NationType, Nation> = {
     },
     specialAbility: {
       type: 'tech_steal',
-      description: '유닛 소모로 적 기술 복사 가능. 교역 3 → 생산력 1',
+      description: '유닛 소모로 적 기술 복사 가능.',
       tradeToProductionRatio: 1,
       canStealTech: true,
     },
@@ -171,7 +171,7 @@ export const NATIONS: Record<NationType, Nation> = {
     },
     specialAbility: {
       type: 'free_army_on_research',
-      description: '부대 진급 기술 연구 시 해당 카드 1장 획득. 교역 3 → 생산력 1',
+      description: '부대 진급 기술 연구 시 해당 카드 1장 획득.',
       tradeToProductionRatio: 1,
       armyCardOnTechResearch: true,
     },

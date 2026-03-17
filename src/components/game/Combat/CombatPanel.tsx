@@ -876,6 +876,14 @@ function ResultPhase() {
           {cs.combatType === 'city' && cs.winnerPlayerId === cs.originalMoverId && (
             <p className="text-amber-400">도시를 점령했습니다!</p>
           )}
+
+          {cs.defenderRoleId === 'village' && cs.winnerPlayerId === cs.originalMoverId && (
+            <p className="text-amber-400 text-lg font-bold mt-2">
+               마을을 정복했습니다! <br/>
+               <span className="text-sm text-slate-400 font-normal">획득한 보상은 전투 종료 시 인벤토리에 추가됩니다.</span>
+            </p>
+          )}
+          
           {cs.winnerPlayerId !== cs.originalMoverId && (
             <p className="text-slate-400">공격이 격퇴되었습니다.</p>
           )}

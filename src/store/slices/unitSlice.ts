@@ -333,6 +333,35 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       get().startCombat(player.id, newPosition);
       return;
     }
+
+    const unitsToMove = currentState.selectedUnits
+      .map((id) => player.units.find((u) => u.id === id))
+      .filter((u): u is NonNullable<typeof u> => u !== undefined && u.movement > 0);
+
+    if (unitsToMove.length === 0) return;
+
+    if (targetTile.object) {
+      const obj = targetTile.object;
+      const hasMilitary = unitsToMove.some(u => u.type === 'military');
+      const hasSettler = unitsToMove.some(u => u.type === 'settler');
+      const isRepublic = player.government === 'republic';
+
+      if (obj.type === 'hut') {
+          if (!hasMilitary && !(hasSettler && isRepublic)) {
+              alert("오두막은 군사 유닛 또는 공화제일 때의 개척자만 진입할 수 있습니다.");
+              return; // 이동 취소
+          }
+      } else if (obj.type === 'village') {
+          if (!hasMilitary) {
+              alert("마을은 군사 유닛이 포함되어야 진입할 수 있습니다.");
+              return; // 이동 취소
+          }
+          // 군사 유닛을 대표로 마을 전투 시작 (그룹 전체가 전투에 휘말림)
+          const militaryUnit = unitsToMove.find(u => u.type === 'military')!;
+          get().startVillageCombat(militaryUnit.id, newPosition);
+          return;
+      }
+    }
     
     set((state) => {
       const currentPlayer = state.players[state.currentPlayerIndex];
@@ -359,11 +388,43 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       
       if (actualMovingUnits.length === 0) return;
       
+      let claimedHut = false; 
+
+      if (tile.object && tile.object.type === 'hut') {
+          claimedHut = true; // 오두막을 먹었다고 체크!
+          const obj = tile.object;
+          if (currentPlayer.nation === 'china') {
+              currentPlayer.resources.culture += 3;
+              if (!state.combatState.log) state.combatState.log = [];
+              state.combatState.log.push({ message: `🐉 [중국 특성] 오두막을 발견하여 문화 3개를 획득했습니다!` });
+          }
+          if (obj.reward.type === 'resource') {
+              if (!currentPlayer.secretResources) currentPlayer.secretResources = [];
+              currentPlayer.secretResources.push({
+                  id: uuidv4(),
+                  type: obj.reward.resource as any,
+                  source: 'hut'
+              });
+          } else if (obj.reward.type === 'spy') currentPlayer.spies += 1;
+          else if (obj.reward.type === 'greatPerson') currentPlayer.greatPeople += 1;
+          else if (obj.reward.type === 'nuclear') currentPlayer.nuclearMaterial += 1;
+
+          tile.object = undefined;
+      }
+      
+      // 🌟 유닛 이동 및 이동력 차감 처리
       for (const unit of actualMovingUnits) {
         const oldTile = state.map.tiles[unit.position.y][unit.position.x];
         oldTile.unitIds = oldTile.unitIds.filter((id) => id !== unit.id);
         unit.position = newPosition;
-        unit.movement -= 1;
+        
+        // 👇👇 [수정된 부분] 오두막을 먹었다면 남은 이동력에 상관없이 즉시 0으로 고갈!
+        if (claimedHut) {
+            unit.movement = 0;
+        } else {
+            unit.movement -= 1;
+        }
+        
         if (unit.movement <= 0) {
           unit.hasMoved = true;
         }

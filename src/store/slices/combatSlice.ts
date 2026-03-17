@@ -671,12 +671,8 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       }
       cs.log = [...cs.log, ...result.log];
       
-      if (cs.defenderRoleId === 'village') {
-          cs.maxLootSelections = 0;
-          cs.phase = 'result';
-      } else {
-          cs.phase = 'scoring';
-      }
+      // 🌟 [수정] 마을과의 전투라도 무조건 점수(Scoring) 단계를 거치도록 변경
+      cs.phase = 'scoring';
     });
   },
 
@@ -684,6 +680,14 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     set((state) => {
       const cs = state.combatState;
       if (!cs.isActive) return;
+
+      // 🌟 [추가] 마을과의 전투는 전리품 갈취 단계가 없으므로 바로 결과창으로 넘어감
+      if (cs.defenderRoleId === 'village') {
+        cs.maxLootSelections = 0;
+        cs.phase = 'result';
+        return;
+      }
+
       if (cs.combatType === 'capital' && cs.winnerPlayerId === cs.originalMoverId) {
         cs.maxLootSelections = 0;
         cs.phase = 'result';
@@ -802,6 +806,10 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
       
       if (defenderId === 'village') {
         const attackerUnitId = (state.combatState as any).attackerUnitId;
+        // 🌟 다중 선택된 유닛이 있으면 가져오고, 단일 유닛 전투라면 attackerUnitId를 가져옵니다.
+        const movingUnitIds = state.selectedUnits.length > 0 
+            ? state.selectedUnits 
+            : (state.selectedUnit ? [state.selectedUnit] : (attackerUnitId ? [attackerUnitId] : []));
 
         if (mover && winnerId === moverId) {
           if (targetTile.object?.type === 'village') {
@@ -824,8 +832,9 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
 
             targetTile.object = undefined;
 
-            if (attackerUnitId) {
-              const unit = mover.units.find(u => u.id === attackerUnitId);
+            // 🌟 승리 시: 전투에 참여한 유닛 그룹 전체를 마을 타일로 이동
+            for (const uId of movingUnitIds) {
+              const unit = mover.units.find(u => u.id === uId);
               if (unit) {
                 const oldTile = state.map.tiles[unit.position.y][unit.position.x];
                 oldTile.unitIds = oldTile.unitIds.filter(id => id !== unit.id);
@@ -839,8 +848,9 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
             }
           }
         } else if (mover && winnerId !== moverId) {
-          if (attackerUnitId) {
-            const unitIndex = mover.units.findIndex(u => u.id === attackerUnitId);
+          // 🌟 패배 시: 그룹 전체 유닛 파괴
+          for (const uId of movingUnitIds) {
+            const unitIndex = mover.units.findIndex(u => u.id === uId);
             if (unitIndex !== -1) {
               const unit = mover.units[unitIndex];
               const tile = state.map.tiles[unit.position.y][unit.position.x];
