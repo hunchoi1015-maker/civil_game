@@ -26,6 +26,7 @@ export function ActionPanel() {
     debugSkipPhase,
     startTargeting, 
     targetingMode,
+    addToast
   } = useGameStore();
 
   // 🌟 모달 팝업 상태 관리
@@ -148,7 +149,7 @@ export function ActionPanel() {
                 <button
                   onClick={() => {
                     startTargeting('place_great_person', 'tile');
-                    alert("지도에서 위인을 배치할 타일을 클릭하세요. (도심부, 물, 불가사의 제외)");
+                    addToast("지도에서 위인을 배치할 타일을 클릭하세요. (도심부, 물, 불가사의 제외)");
                   }}
                   className={`w-full py-2 rounded font-bold transition-colors ${
                     targetingMode?.techId === 'place_great_person' 

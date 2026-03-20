@@ -14,7 +14,8 @@ export function TechAbilityWidget() {
     startResourceSelection,
     targetingMode,     
     cancelTargeting,
-    setSteamPowerSource     
+    setSteamPowerSource,
+    addToast     
   } = useGameStore();
   
   const player = players[currentPlayerIndex];
@@ -57,7 +58,7 @@ export function TechAbilityWidget() {
             movement: '이동'
         };
         const allowedNames = Array.isArray(reqPhase) ? reqPhase.map(p => phaseNames[p]).join(' 또는 ') : phaseNames[reqPhase as string];
-        alert(`이 능력은 ${allowedNames} 단계에서만 사용할 수 있습니다.`);
+        addToast(`이 능력은 ${allowedNames} 단계에서만 사용할 수 있습니다.`);
         return;
     }
 
@@ -76,7 +77,7 @@ export function TechAbilityWidget() {
       } else if (currentPhase === 'movement') {
         // 핵무기 발사: 맵 타겟팅 모드로 진입
         startTargeting(tech.id, 'tile');
-        alert("지도에서 핵 공격을 감행할 타일(도시)을 클릭하세요.");
+        addToast("지도에서 핵 공격을 감행할 타일(도시)을 클릭하세요.");
       }
       setIsOpen(false);
       return;

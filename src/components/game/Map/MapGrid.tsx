@@ -12,7 +12,7 @@ export function MapGrid() {
     currentPhase, players, currentPlayerIndex,
     activeCardTargeting, handleCardMapClick,
     targetingMode, cancelTargeting, useTechResourceAbility,
-    placeGreatPerson,
+    placeGreatPerson,addToast
   } = useGameStore();
 
   const currentPlayer = players[currentPlayerIndex];
@@ -36,10 +36,10 @@ export function MapGrid() {
             useTechResourceAbility('writing', { targetCityId: tile.cityId, targetPlayerId: cityOwner.id });
             cancelTargeting();
           } else {
-            alert('자신의 도시는 지목할 수 없습니다. 상대방 도시를 선택하세요.');
+            addToast('자신의 도시는 지목할 수 없습니다. 상대방 도시를 선택하세요.');
           }
         } else {
-          alert('도시가 있는 칸을 선택해야 합니다.');
+          addToast('도시가 있는 칸을 선택해야 합니다.');
         }
       } 
       // 공산주의
@@ -56,7 +56,7 @@ export function MapGrid() {
       else if (targetingMode.techId === 'atomic_theory') {
         // 클릭한 타일에 도시가 있는지 1차 검사 (수도 등 자세한 검사는 스토어에서 처리)
         if (!tile.cityId) {
-          alert('핵 공격은 도시가 있는 타일(🏛️)에만 할 수 있습니다.');
+          addToast('핵 공격은 도시가 있는 타일(🏛️)에만 할 수 있습니다.');
           return;
         }
         useTechResourceAbility('atomic_theory', { x, y });
@@ -111,7 +111,7 @@ export function MapGrid() {
         if (flightDecision) return; 
 
         if (tile.terrain === 'water' && !hasNavigation && !hasFlight && selectedUnitData.movement === 1) {
-            alert("항해술(1레벨)만으로는 물 타일에서 턴을 마칠 수 없습니다. 육지로 빠져나가야 합니다.");
+            addToast("항해술(1레벨)만으로는 물 타일에서 턴을 마칠 수 없습니다. 육지로 빠져나가야 합니다.");
             return;
         }
 

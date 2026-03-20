@@ -87,7 +87,7 @@ export const createPlayerSlice: StateCreator<GameStore, [["zustand/immer", never
 
   changeGovernment: (playerId: string, targetGovernment: string) => {
     if (get().currentPhase !== 'start') {
-      alert("정치체제는 턴의 '시작' 단계에서만 변경할 수 있습니다.");
+      get().addToast("정치체제는 턴의 '시작' 단계에서만 변경할 수 있습니다.");
       return;
     }
     set((state) => {
@@ -116,7 +116,7 @@ export const createPlayerSlice: StateCreator<GameStore, [["zustand/immer", never
           
           // 🌟 피라미드가 없다면 기술 검사
           if (!hasPyramids && govDef.requiredTech && !player.technologies.some(t => t.id === govDef.requiredTech)) {
-              alert("해당 체제를 해금하는 기술이 없습니다.");
+              get().addToast("해당 체제를 해금하는 기술이 없습니다.");
               return;
           }
 

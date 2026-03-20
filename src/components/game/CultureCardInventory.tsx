@@ -10,7 +10,8 @@ export function CultureCardInventory() {
   const { 
     players, currentPlayerIndex, 
     startCardTargeting,
-    discardCultureCard 
+    discardCultureCard,
+    addToast 
   } = useGameStore();
 
   const player = players[currentPlayerIndex];
@@ -56,7 +57,7 @@ export function CultureCardInventory() {
                     <button 
                       onClick={() => {
                         if (isOverLimit) {
-                            alert(`보유 한도를 초과했습니다. 휴지통을 눌러 카드를 버려주세요.`);
+                            addToast(`보유 한도를 초과했습니다. 휴지통을 눌러 카드를 버려주세요.`);
                             return;
                         }
                         startCardTargeting(card.id);

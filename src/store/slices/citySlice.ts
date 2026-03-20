@@ -13,6 +13,7 @@ import { WonderType, WONDERS } from '../../types/wonder';
 import { generateArmyStats } from '../helpers/armyHelpers';
 
 export interface CitySlice {
+  foundCity: (playerId: string, position: Position, name: string) => void;
   buildInCity: (cityId: string, buildingType: string, position?: Position, isFree?: boolean) => void;
   harvestCityCulture: (playerId: string, cityId: string) => void;
   harvestResource: (playerId: string, cityId: string, targetResource: ResourceType) => void;
@@ -46,6 +47,7 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       state.map.tiles[position.y][position.x].cityId = cityId;
       state.map.tiles[position.y][position.x].ownerId = playerId;
       setAdjacentTilesOwner(state.map, position, playerId);
+      get().addToast(`${name} 도시가 건설되었습니다!`);
     });
   },
 

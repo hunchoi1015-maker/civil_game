@@ -346,7 +346,7 @@ export const createTurnManagementSlice: StateCreator<GameStore, [["zustand/immer
               });
               
               if (destroyedSomething) {
-                  alert(`🔥 [연소] 기술 효과! ${currentPlayer.name}의 군대가 이동을 마치며 적 교외 건물을 파괴했습니다!`);
+                  get().addToast(`🔥 [연소] 기술 효과! ${currentPlayer.name}의 군대가 이동을 마치며 적 교외 건물을 파괴했습니다!`);
               }
           }
       }

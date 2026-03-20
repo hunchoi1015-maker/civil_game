@@ -28,7 +28,7 @@ const LEVEL_NAMES: Record<TechLevel, string> = {
 const getTechsByLevel = (level: TechLevel) => TECHNOLOGIES.filter(t => t.level === level);
 
 export function TechTree() {
-  const { players, currentPlayerIndex, currentPhase, researchTech, endPhaseForCurrentPlayer } = useGameStore();
+  const { players, currentPlayerIndex, currentPhase, researchTech, endPhaseForCurrentPlayer,addToast } = useGameStore();
   const currentPlayer = players[currentPlayerIndex];
   const [selectedTech, setSelectedTech] = useState<Technology | null>(null);
 
@@ -45,7 +45,7 @@ export function TechTree() {
 
     // 2. 모자라다면 경고창을 띄우고 함수를 그 자리에서 종료(return)합니다!
     if (availableTrade < cost) {
-      alert(`사용 가능한 교역 토큰이 부족합니다. (비용: ${cost}, 사용 가능: ${availableTrade})`);
+      addToast(`사용 가능한 교역 토큰이 부족합니다. (비용: ${cost}, 사용 가능: ${availableTrade})`);
       return; 
     }
 

@@ -23,7 +23,8 @@ export function ResourceSelectionModal() {
     currentPlayerIndex, 
     resourceSelectionMode, 
     cancelResourceSelection,
-    useTechResourceAbility 
+    useTechResourceAbility,
+    addToast 
   } = useGameStore();
 
   const player = players[currentPlayerIndex];
@@ -59,7 +60,7 @@ export function ResourceSelectionModal() {
 
   const handleConfirm = () => {
     if (totalSelected !== requiredAmount) {
-      alert(`자원 ${requiredAmount}개를 정확히 선택해주세요.`);
+      addToast(`자원 ${requiredAmount}개를 정확히 선택해주세요.`);
       return;
     }
     // 진짜로 스킬 발동! (어떤 자원을 선택했는지 Payload에 담아 보냅니다)

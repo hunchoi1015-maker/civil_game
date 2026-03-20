@@ -5,7 +5,7 @@ import { useGameStore } from '../../store/gameStore';
 import { getEffectiveTechLevel, canLearnTechInPyramid } from '../../store/helpers/validationHelpers';
 
 export const CultureCardTargetModal: React.FC = () => {
-  const { players, currentPlayerIndex, activeCardTargeting, cancelCardTargeting, playCultureCard } = useGameStore();
+  const { players, currentPlayerIndex, activeCardTargeting, cancelCardTargeting, playCultureCard,addToast } = useGameStore();
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedResource, setSelectedResource] = useState<string | null>(null);
   const [selectedTechId, setSelectedTechId] = useState<string | null>(null);
@@ -95,21 +95,21 @@ export const CultureCardTargetModal: React.FC = () => {
 
   const handleConfirm = () => {
     if (isCivilUprising) {
-      if (!selectedPlayerId) return alert("대상을 선택해주세요.");
+      if (!selectedPlayerId) return addToast("대상을 선택해주세요.");
       playCultureCard(activeCardTargeting.cardId, { targetPlayerId: selectedPlayerId });
       cancelCardTargeting();
     } else if (isGift || isBountifulGift) {
-      if (isGift && !selectedPlayerId) return alert("대상을 선택해주세요.");
-      if (!selectedResource) return alert("자원을 선택해주세요.");
+      if (isGift && !selectedPlayerId) return addToast("대상을 선택해주세요.");
+      if (!selectedResource) return addToast("자원을 선택해주세요.");
       playCultureCard(activeCardTargeting.cardId, { targetPlayerId: selectedPlayerId, resourceType: selectedResource });
       cancelCardTargeting();
     } 
     else if (isMassExile) {
-      if (selectedUnitIds.length === 0) return alert("제거할 대상을 1~2개 선택해주세요.");
+      if (selectedUnitIds.length === 0) return addToast("제거할 대상을 1~2개 선택해주세요.");
       playCultureCard(activeCardTargeting.cardId, { targetUnitIds: selectedUnitIds });
       cancelCardTargeting();
     } else if (isCityBoost) {
-      if (!selectedCityId) return alert("도시를 선택해주세요.");
+      if (!selectedCityId) return addToast("도시를 선택해주세요.");
       playCultureCard(activeCardTargeting.cardId, { cityId: selectedCityId });
       cancelCardTargeting();
     }
@@ -194,7 +194,7 @@ export const CultureCardTargetModal: React.FC = () => {
   const toggleUnitSelection = (id: string) => {
       if (selectedUnitIds.includes(id)) setSelectedUnitIds(selectedUnitIds.filter(uid => uid !== id));
       else {
-          if (selectedUnitIds.length >= 2) return alert("최대 2개까지만 선택할 수 있습니다.");
+          if (selectedUnitIds.length >= 2) return addToast("최대 2개까지만 선택할 수 있습니다.");
           setSelectedUnitIds([...selectedUnitIds, id]);
       }
   };
