@@ -25,6 +25,7 @@ import { WonderActionModal } from '../components/game/WonderActionModal';
 import { CultureTrackWidget } from '../components/game/CultureTrackWidget';
 import { CultureCardTargetModal } from '../components/game/CultureCardTargetModal';
 import { NationModals } from '../components/game/NationModals';
+import { ToastNotification } from '../components/game/ToastNotification';
 
 type PanelView = 'map' | 'tech' | 'city' | 'units';
 
@@ -84,6 +85,9 @@ export function GameScreen() {
 
   return (
     <div className="relative w-full h-screen bg-slate-950 flex flex-col overflow-hidden text-slate-100">
+      
+      <ToastNotification />
+      
       {/* 상단 바 */}
       <header className="bg-slate-800 border-b border-slate-700 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-4">

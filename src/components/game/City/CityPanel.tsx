@@ -178,7 +178,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
     players, currentPlayerIndex, currentPhase, 
     buildInCity, createUnit, produceArmyCard, 
     harvestCityCulture, harvestResource, constructWonder,
-    map, advanceCultureTrack,
+    map, advanceCultureTrack, addToast,
   } = useGameStore();
   
   const currentPlayer = players[currentPlayerIndex];
@@ -296,7 +296,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
   const handleBuild = (building: BuildingDefinition, useFreeBuild: boolean = false) => {
     if (!canManageCity || cannotProduce) return;
     if (!useFreeBuild && availableProduction < building.productionCost) {
-      alert(`잔여 생산력이 부족합니다.`);
+      addToast(`잔여 생산력이 부족합니다.`);
       return;
     }
     setSelectedBuildingToBuild({ def: building, isFree: useFreeBuild } as any);
@@ -309,7 +309,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
         actualCost = Math.max(1, actualCost - wonder.costReductionAmount!);
     }
     if (availableProduction < actualCost) {
-      alert(`잔여 생산력이 부족합니다. (현재: ${availableProduction}, 필요: ${actualCost})`);
+      addToast(`잔여 생산력이 부족합니다. (현재: ${availableProduction}, 필요: ${actualCost})`);
       return;
     }
     setSelectedWonderToBuild(wonder);
@@ -317,7 +317,8 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
 
   const handleBuildAtLocation = (position: Position) => {
     if (selectedCity && selectedBuildingToBuild) {
-      buildInCity(selectedCity.id, selectedBuildingToBuild.def.type, position);
+      // 마지막 매개변수로 selectedBuildingToBuild.isFree 플래그를 전달합니다!
+      buildInCity(selectedCity.id, selectedBuildingToBuild.def.type, position, selectedBuildingToBuild.isFree);
       setSelectedBuildingToBuild(null);
     }
   };
@@ -332,9 +333,9 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
   const handleProduceUnit = (type: UnitType) => {
     if (!canManageCity || !selectedCity || cannotProduce) return;
     const def = UNIT_DEFINITIONS[type];
-    if (availableProduction < def.productionCost) return alert('잔여 생산력이 부족합니다.');
-    if (type === 'military' && militaryCount >= 6) return alert('군사 유닛 한도 도달.');
-    if (type === 'settler' && settlerCount >= 2) return alert('개척자 한도 도달.');
+    if (availableProduction < def.productionCost) return addToast('잔여 생산력이 부족합니다.');
+    if (type === 'military' && militaryCount >= 6) return addToast('군사 유닛 한도 도달.');
+    if (type === 'settler' && settlerCount >= 2) return addToast('개척자 한도 도달.');
     setSelectedUnitToProduce(type);
   };
 
@@ -347,7 +348,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
 
   const handleProduceArmyCard = (type: string, tier: number, name: string, cost: number) => {
     if (!selectedCity || !canManageCity || cannotProduce) return;
-    if (availableProduction < cost) return alert('잔여 생산력이 부족합니다.');
+    if (availableProduction < cost) return addToast('잔여 생산력이 부족합니다.');
     produceArmyCard(currentPlayer.id, type, tier, name, selectedCity.id, cost);
   };
 

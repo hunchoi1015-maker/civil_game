@@ -296,7 +296,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
     });
 
     if (willDestroyWall) {
-        alert(`🔥 [연소] 기술 발동! 전투 시작 전 대상 도시의 성벽이 파괴되었습니다!`);
+        get().addToast(`🔥 [연소] 기술 발동! 전투 시작 전 대상 도시의 성벽이 파괴되었습니다!`,"info");
     }
   },
 
@@ -596,7 +596,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
           const techName = skillId === 'mathematics' ? '수학' : '탄도학';
           cs.log.push({ message: `💥 ${player.name}이(가) ${useSecretResource ? '오두막 철' : '사치품 철'}을 소모하여 '${techName}'(으)로 적 부대에 데미지를 입혔습니다!` });
         } else {
-          alert(`${useSecretResource ? '오두막' : '사치품'} 철이 부족합니다.`);
+          get().addToast(`${useSecretResource ? '오두막' : '사치품'} 철이 부족합니다.`,"warning");
         }
         return;
       }
@@ -644,7 +644,7 @@ export const createCombatSlice: StateCreator<GameStore, [["zustand/immer", never
           cs.usedCombatSkills[playerId].push(skillId);
           cs.log.push({ message: `🔨 ${player.name}이(가) ${useSecretResource ? '오두막 철' : '사치품 철'}을 소모하여 '금속가공' 버프를 적용합니다!` });
         } else {
-          alert(`${useSecretResource ? '오두막' : '사치품'} 철이 부족합니다.`);
+          get().addToast(`${useSecretResource ? '오두막' : '사치품'} 철이 부족합니다.`,"warning");
         }
         return;
       }

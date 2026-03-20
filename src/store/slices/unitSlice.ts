@@ -114,11 +114,11 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
     if (!passives.ignoreTerrain) { 
       if (targetTile.terrain === 'water') {
         if (!passives.waterMovement) {
-          alert("물 타일로 이동하려면 '항해술' 기술이 필요합니다.");
+          get().addToast("물 타일로 이동하려면 '항해술' 이상의 이동 기술이 필요합니다.","info");
           return;
         }
         if (!passives.waterStop && unit.movement === 1) {
-          alert("물 타일에서 이동을 마칠 수 없습니다. ('범선항해술' 기술 필요)");
+          get().addToast("물 타일에서 이동을 마칠 수 없습니다. ('범선항해술' 이상의 기술 필요)","warning");
           return;
         }
       }
@@ -156,7 +156,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       isEnemyCity = state.players.some(p => p.id !== currentPlayer.id && p.cities.some(c => c.id === targetTile.cityId));
     }
     if (isEnemyCity && currentPlayer.government === 'democracy') {
-      alert("🕊️ 민주주의 체제에서는 타 문명의 도시나 수도를 무력으로 선제 공격할 수 없습니다.");
+      get().addToast("🕊️ 민주주의 체제에서는 타 문명의 도시나 수도를 무력으로 선제 공격할 수 없습니다.","info");
       return; // 이동 및 전투 취소
     }
     
@@ -174,7 +174,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
             get().setRussiaStealPrompt({ unitId, targetPlayerId: enemyPlayer.id, targetPos: newPosition });
             return; 
           } else {
-            alert("상대에게 도용할 수 있는 기술이 없어 바로 전투에 돌입합니다.");
+            get().addToast("상대에게 도용할 수 있는 기술이 없어 바로 전투에 돌입합니다.","info");
           }
         }
       }
@@ -233,14 +233,14 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
                 });
                 return;
             } else {
-                alert("오두막은 군사 유닛 또는 공화제일 때의 개척자만 진입할 수 있습니다.");
+                get().addToast("오두막은 군사 유닛 또는 공화제일 때의 개척자만 진입할 수 있습니다.","info");
                 return; 
             }
         }
 
         if (obj.type === 'village') {
             if (unit.type !== 'military') {
-                alert("마을은 군사 유닛으로만 진입할 수 있습니다.");
+                get().addToast("마을은 군사 유닛으로만 진입할 수 있습니다.","info");
                 return;
             }
             get().startVillageCombat(unitId, newPosition);
@@ -335,7 +335,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
       isEnemyCity = currentState.players.some(p => p.id !== player.id && p.cities.some(c => c.id === targetTile.cityId));
     }
     if (isEnemyCity && player.government === 'democracy') {
-      alert("🕊️ 민주주의 체제에서는 타 문명의 도시나 수도를 무력으로 선제 공격할 수 없습니다.");
+      get().addToast("🕊️ 민주주의 체제에서는 타 문명의 도시나 수도를 무력으로 선제 공격할 수 없습니다.","warning");
       return; // 이동 및 전투 취소
     }
     
@@ -358,12 +358,12 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
 
       if (obj.type === 'hut') {
           if (!hasMilitary && !(hasSettler && isRepublic)) {
-              alert("오두막은 군사 유닛 또는 공화제일 때의 개척자만 진입할 수 있습니다.");
+              get().addToast("오두막은 군사 유닛 또는 공화제일 때의 개척자만 진입할 수 있습니다.","info");
               return;
           }
       } else if (obj.type === 'village') {
           if (!hasMilitary) {
-              alert("마을은 군사 유닛이 포함되어야 진입할 수 있습니다.");
+              get().addToast("마을은 군사 유닛이 포함되어야 진입할 수 있습니다.","info");
               return;
           }
           const militaryUnit = unitsToMove.find(u => u.type === 'military')!;

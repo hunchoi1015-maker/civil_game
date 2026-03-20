@@ -13,8 +13,7 @@ import { WonderType, WONDERS } from '../../types/wonder';
 import { generateArmyStats } from '../helpers/armyHelpers';
 
 export interface CitySlice {
-  foundCity: (playerId: string, position: Position, name: string) => void;
-  buildInCity: (cityId: string, buildingType: string, position?: Position) => void;
+  buildInCity: (cityId: string, buildingType: string, position?: Position, isFree?: boolean) => void;
   harvestCityCulture: (playerId: string, cityId: string) => void;
   harvestResource: (playerId: string, cityId: string, targetResource: ResourceType) => void;
   constructWonder: (cityId: string, wonderType: WonderType, tilePos: Position) => void;
@@ -22,7 +21,7 @@ export interface CitySlice {
   placeGreatPerson: (playerId: string, gpId: string, x: number, y: number) => void;
 }
 
-export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]], [], CitySlice> = (set) => ({
+export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]], [], CitySlice> = (set,get) => ({
   foundCity: (playerId: string, position: Position, name: string) => {
     set((state) => {
       const player = findPlayerById(state.players, playerId);
@@ -50,12 +49,11 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
     });
   },
 
-  buildInCity: (cityId: string, buildingType: string, position?: Position) => {
+  buildInCity: (cityId: string, buildingType: string, position?: Position, isFree?: boolean) => {
     set((state) => {
       for (const player of state.players) {
         const city = player.cities.find((c) => c.id === cityId);
         if (city) {
-          // 🌟 무정부 및 마비 검사
           if (player.government === 'anarchy' && city.isCapital) return; 
           if (city.isParalyzed) return; 
 
@@ -73,29 +71,24 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
           const totalCityProduction = calculateDetailedCityProduction(city, state.map, player).total; 
           const availableProduction = totalCityProduction - (city.usedProductionThisTurn || 0);
           
-          if (availableProduction < buildingDef.productionCost) return;
+          // 🌟 [수정] 무료 건설(isFree)이 아닐 때만 생산력 부족을 검사합니다!
+          if (!isFree && availableProduction < buildingDef.productionCost) return;
 
-          // 🌟 [추가] 특성화 건물 덮어쓰기 (철거) 로직
+          // (특성화 건물 덮어쓰기 로직 - 기존과 동일하게 유지)
           if (buildingDef.isSpecialty) {
             const existingSpecialtyIndex = city.buildings.findIndex(b => BUILDINGS[b.type].isSpecialty);
             if (existingSpecialtyIndex !== -1) {
               const existingSpecialty = city.buildings[existingSpecialtyIndex];
-              
-              // 클릭한 위치가 기존 건물이 있는 위치인지 검증
               if (position && existingSpecialty.tilePosition && (position.x !== existingSpecialty.tilePosition.x || position.y !== existingSpecialty.tilePosition.y)) {
-                alert("도시 특성화 건물은 1도시에 1개만 존재할 수 있습니다. 기존 특성화 건물을 클릭하여 교체하세요.");
+                get().addToast("도시 특성화 건물은 1도시에 1개만 존재할 수 있습니다. 기존 특성화 건물을 클릭하여 교체하세요.","warning");
                 return;
               }
-
-              // 맵 타일에서 기존 건물 외형 지우기
               if (existingSpecialty.tilePosition) {
                 const tile = state.map.tiles[existingSpecialty.tilePosition.y]?.[existingSpecialty.tilePosition.x];
                 if (tile && tile.buildingType === existingSpecialty.type) {
                   tile.buildingType = null;
                 }
               }
-              
-              // 도시 데이터에서 기존 특성화 건물 파괴!
               city.buildings.splice(existingSpecialtyIndex, 1);
               if (!state.combatState.log) state.combatState.log = [];
               state.combatState.log.push({ message: `🏗️ 특성화 교체: ${city.name}의 기존 특성화 건물이 철거되고 새 건물로 교체됩니다!` });
@@ -143,7 +136,16 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
             city.cityDefenseBonus += buildingDef.effects.cityDefenseBonus;
           }
           
-          city.usedProductionThisTurn = (city.usedProductionThisTurn || 0) + buildingDef.productionCost;
+          // 🌟 [수정] 이집트 무료 건설 처리: 생산력을 차감하지 않고 특성 사용 완료 처리
+          if (isFree) {
+            player.hasUsedEgyptFreeBuildingThisTurn = true;
+            if (!state.combatState.log) state.combatState.log = [];
+            state.combatState.log.push({ message: `🏺 [이집트 특성] ${city.name}에 ${buildingDef.name}을(를) 무료로 건설했습니다!` });
+          } else {
+            // 일반 건설일 때만 생산력 차감
+            city.usedProductionThisTurn = (city.usedProductionThisTurn || 0) + buildingDef.productionCost;
+          }
+          
           city.producedItemsCount = (city.producedItemsCount || 0) + 1;
           city.actionTypeThisTurn = 'produce';
           
@@ -192,7 +194,7 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
         if (!state.combatState.log) state.combatState.log = [];
         state.combatState.log.push({ message: `🎭 ${player.name}이(가) ${city.name}에서 문화 ${totalCulture}을(를) 수확했습니다!` });
       } else {
-        alert("수확할 문화가 없습니다.");
+        get().addToast("수확할 문화가 없습니다.","error");
       }
     });
   },
@@ -218,7 +220,7 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
             }
         }
         if (isAlreadyBuilt) {
-            alert("이 불가사의는 이미 건설되었거나 역사 속으로 사라졌습니다.");
+            get().addToast("이 불가사의는 이미 건설되었거나 역사 속으로 사라졌습니다.","error");
             return;
         }
 
@@ -348,7 +350,7 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       const actualAmount = Math.min(requestedAmount, state.marketResources[targetResource]);
 
       if (actualAmount === 0) {
-          alert(`시장에 [${targetResource}] 재고가 고갈되어 수확할 수 없습니다!`);
+          get().addToast(`시장에 [${targetResource}] 재고가 고갈되어 수확할 수 없습니다!`,"warning");
           return;
       }
 
@@ -432,7 +434,7 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       const tile = state.map.tiles[y][x];
 
       if (tile.cityId || tile.terrain === 'water') {
-        alert("이 지형에는 위인을 배치할 수 없습니다.");
+        get().addToast("이 지형에는 위인을 배치할 수 없습니다.","warning");
         return;
       }
 
@@ -449,7 +451,7 @@ export const createCitySlice: StateCreator<GameStore, [["zustand/immer", never]]
       }
 
       if (tile.wonder) {
-          alert("불가사의가 있는 타일에는 위인을 배치할 수 없습니다.");
+          get().addToast("불가사의가 있는 타일에는 위인을 배치할 수 없습니다.","warning");
           player.unplacedGreatPeople.push(gp);
           return;
       }

@@ -4,6 +4,13 @@ import { StateCreator } from 'zustand';
 import { GameStore } from '../types/storeTypes';
 import { Position, ArmyCard } from '../../types'; 
 import { TECHNOLOGIES } from '../../constants/technologies'; 
+import { v4 as uuidv4 } from 'uuid';
+
+export interface ToastMessage {
+  id: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+}
 
 export interface ResourceSelectionMode {
   isActive: boolean;
@@ -18,6 +25,11 @@ export interface TargetingMode {
 }
 
 export interface UISlice {
+  // 🌟 [추가] 토스트 관련 상태와 액션
+  toasts: ToastMessage[];
+  addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
+  removeToast: (id: string) => void;
+
   selectedTile: Position | null;
   selectedUnit: string | null;
   selectedUnits: string[];
@@ -52,6 +64,19 @@ export interface UISlice {
 
 // (set) => ({ ... }) 에서 (set, get) => ({ ... }) 로 변경했습니다!
 export const createUISlice: StateCreator<GameStore, [["zustand/immer", never]], [], UISlice> = (set, get) => ({
+  // 🌟 [추가] 토스트 상태 및 함수 구현
+  toasts: [],
+  addToast: (message, type = 'info') => set((state) => {
+    // 알림이 너무 많아지지 않게 최대 5개로 유지
+    if (state.toasts.length >= 5) {
+      state.toasts.shift();
+    }
+    state.toasts.push({ id: uuidv4(), message, type });
+  }),
+  removeToast: (id) => set((state) => {
+    state.toasts = state.toasts.filter(t => t.id !== id);
+  }),
+
   selectedTile: null,
   selectedUnit: null,
   selectedUnits: [],
@@ -172,7 +197,7 @@ export const createUISlice: StateCreator<GameStore, [["zustand/immer", never]], 
       if (!state.combatState.log) state.combatState.log = [];
       state.combatState.log.push({ message: `⚙️ [독일 특성] 시장에서 ${resource} 자원을 추가로 획득했습니다!` });
     } else {
-      alert("시장에 해당 자원이 고갈되었습니다.");
+      get().addToast("시장에 해당 자원이 고갈되었습니다.");
     }
   }),
 
