@@ -208,6 +208,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
                             p.resources.culture += 3;
                             if (!s.combatState.log) s.combatState.log = [];
                             s.combatState.log.push({ message: `🐉 [중국 특성] 오두막을 발견하여 문화 3개를 획득했습니다!` });
+                            get().addFloatingText(newPosition.x, newPosition.y, `+3 🎭`, 'text-fuchsia-400');
                         }
                         if (obj.reward.type === 'resource') {
                             if (!p.secretResources) p.secretResources = [];
@@ -406,6 +407,7 @@ export const createUnitSlice: StateCreator<GameStore, [["zustand/immer", never]]
               currentPlayer.resources.culture += 3;
               if (!state.combatState.log) state.combatState.log = [];
               state.combatState.log.push({ message: `🐉 [중국 특성] 오두막을 발견하여 문화 3개를 획득했습니다!` });
+              get().addFloatingText(newPosition.x, newPosition.y, `+3 🎭`, 'text-fuchsia-400');
           }
           if (obj.reward.type === 'resource') {
               if (!currentPlayer.secretResources) currentPlayer.secretResources = [];

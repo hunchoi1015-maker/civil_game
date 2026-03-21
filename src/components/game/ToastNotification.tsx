@@ -48,14 +48,18 @@ function ToastItem({ toast, onRemove }: { toast: any; onRemove: () => void }) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
       className={clsx(
-        'flex items-center gap-3 px-5 py-3 rounded-lg border shadow-xl backdrop-blur-md min-w-[320px] max-w-lg pointer-events-auto',
+        // 🌟 [수정] panel-texture 와 font-serif 적용
+        'flex items-center gap-3 px-5 py-3 rounded-lg border shadow-glow-gold backdrop-blur-md min-w-[320px] max-w-lg pointer-events-auto font-serif relative overflow-hidden',
         TOAST_COLORS[toast.type as keyof typeof TOAST_COLORS]
       )}
     >
-      <span className="text-xl drop-shadow-md">
+      {/* 🌟 텍스처 오버레이 */}
+      <div className="absolute inset-0 bg-texture-dark opacity-40 mix-blend-overlay pointer-events-none" />
+      
+      <span className="text-2xl drop-shadow-md relative z-10">
         {TOAST_ICONS[toast.type as keyof typeof TOAST_ICONS]}
       </span>
-      <p className="text-sm font-medium leading-snug break-keep text-shadow-sm">
+      <p className="text-base font-semibold leading-snug break-keep text-shadow-sm relative z-10 text-amber-50">
         {toast.message}
       </p>
     </motion.div>

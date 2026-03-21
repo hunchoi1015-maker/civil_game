@@ -246,7 +246,7 @@ export function calculatePlayerProduction(player: Player, map: GameMap, players?
   }
   
   if (player.government === 'communism') {
-      totalProduction += (player.cities.length * 2);
+      totalProduction +=  2;
   }
   
   return totalProduction;

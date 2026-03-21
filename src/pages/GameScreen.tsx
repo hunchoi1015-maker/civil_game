@@ -31,12 +31,12 @@ type PanelView = 'map' | 'tech' | 'city' | 'units';
 
 export function GameScreen() {
   const navigate = useNavigate();
-  const { players, turn, isGameOver, winner, currentPlayerIndex, combatState, setupState, marketResources } = useGameStore();
+  // 🌟 [수정] currentPhase 추가
+  const { players, turn, currentPhase, isGameOver, winner, currentPlayerIndex, combatState, setupState, marketResources } = useGameStore();
   const [activeView, setActiveView] = useState<PanelView>('map');
   const [showPlayerTransition, setShowPlayerTransition] = useState(false);
   const [previousPlayerIndex, setPreviousPlayerIndex] = useState(currentPlayerIndex);
 
-  // 플레이어 변경 시 전환 화면 표시
   useEffect(() => {
     if (players.length === 0) {
       navigate('/');
@@ -50,24 +50,13 @@ export function GameScreen() {
     }
   }, [currentPlayerIndex, previousPlayerIndex, players.length]);
 
-
-  if (players.length === 0) {
-    return null;
-  }
+  if (players.length === 0) return null;
 
   const currentPlayer = players[currentPlayerIndex];
 
-  // 국가 선택 화면
-  if (setupState.phase === 'nationSelect') {
-    return <NationSelectionScreen />;
-  }
+  if (setupState.phase === 'nationSelect') return <NationSelectionScreen />;
+  if (setupState.phase === 'capitalSelect') return <CapitalSelectionScreen />;
 
-  // 수도 위치 선택 화면
-  if (setupState.phase === 'capitalSelect') {
-    return <CapitalSelectionScreen />;
-  }
-
-  // 플레이어 전환 화면
   if (showPlayerTransition) {
     return (
       <PlayerTransition
@@ -78,59 +67,78 @@ export function GameScreen() {
     );
   }
 
-  // 전투 화면
-  if (combatState.isActive) {
-    return <CombatPanel />;
-  }
+  if (combatState.isActive) return <CombatPanel />;
 
   return (
     <div className="relative w-full h-screen bg-slate-950 flex flex-col overflow-hidden text-slate-100">
       
       <ToastNotification />
       
-      {/* 상단 바 */}
-      <header className="bg-slate-800 border-b border-slate-700 px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate('/')}
-            className="text-slate-400 hover:text-white"
-          >
-            ← 메뉴
-          </button>
-          <div className="text-amber-500 font-semibold">턴 {turn}</div>
-        </div>
+      {/* 🌟 [수정] 테마가 적용된 상단 헤더 바 */}
+      <header className="panel-texture px-5 py-2 flex flex-wrap items-center justify-between shadow-md z-20">
+        <div className="panel-content w-full flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <button
+              onClick={() => navigate('/')}
+              className="text-slate-400 hover:text-amber-400 transition-colors font-serif text-sm border border-transparent hover:border-amber-700/50 px-2 py-1 rounded"
+            >
+              ← 메뉴
+            </button>
+            <h1 className="text-2xl md:text-3xl font-cinzel font-black text-amber-500 text-glow-gold tracking-widest drop-shadow-lg leading-none mt-1">
+              CIVILIZATION
+            </h1>
+            <div className="hidden sm:flex items-center text-sm font-serif text-amber-200/80 gap-3 border-l border-amber-700/30 pl-6">
+              <span>
+                턴 <span className="font-cinzel font-bold text-amber-400 text-lg mx-1">{turn}</span>
+              </span>
+              <span className="px-3 py-1 bg-slate-900/80 border border-amber-700/50 rounded-md text-amber-300 shadow-inner">
+                {currentPhase === 'start' ? '시작 단계' : 
+                 currentPhase === 'trade' ? '교역 단계' : 
+                 currentPhase === 'cityManagement' ? '도시 경영 단계' : 
+                 currentPhase === 'movement' ? '이동 단계' : '기술 연구 단계'}
+              </span>
+            </div>
+          </div>
 
-        <PhaseIndicator />
+          <div className="flex items-center justify-center flex-1 mx-4 max-w-sm hidden lg:block">
+             <PhaseIndicator />
+          </div>
 
-        <div className="flex items-center gap-4">
-          <div className="text-slate-400">
-            현재: <span className="text-white font-semibold">{currentPlayer.name}</span>
+          <div className="flex items-center gap-4 text-sm font-serif text-slate-300">
+            <div className="bg-slate-900/60 px-3 py-1.5 rounded-lg border border-slate-700">
+              현재 턴: <span className="text-white font-bold text-base ml-1">{currentPlayer.name}</span>
+            </div>
           </div>
         </div>
       </header>
-      <div className="bg-slate-900/80 border-b border-slate-700 px-4 py-2 flex justify-center items-center gap-6 shadow-md z-10 text-sm">
-        <div className="font-bold text-slate-300 flex items-center gap-2">
-          <span>⚖️</span> 공용 시장 재고
-        </div>
-        <div className="flex gap-4">
-          <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1 rounded border border-slate-700 shadow-inner">
-            <span>🏺 향료</span>
-            <span className="font-mono font-bold text-amber-400">{marketResources?.spice ?? 0}</span>
-          </div>
-          <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1 rounded border border-slate-700 shadow-inner">
-            <span>🌾 밀</span>
-            <span className="font-mono font-bold text-amber-400">{marketResources?.wheat ?? 0}</span>
-          </div>
-          <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1 rounded border border-slate-700 shadow-inner">
-            <span>🧣 비단</span>
-            <span className="font-mono font-bold text-amber-400">{marketResources?.silk ?? 0}</span>
-          </div>
-          <div className="flex items-center gap-1.5 bg-slate-800 px-3 py-1 rounded border border-slate-700 shadow-inner">
-            <span>⛏️ 철</span>
-            <span className="font-mono font-bold text-amber-400">{marketResources?.iron ?? 0}</span>
-          </div>
+
+      {/* 🌟 [수정] 테마가 적용된 공용 시장 재고 바 */}
+      <div className="panel-texture border-t-0 border-b border-amber-700/30 px-4 py-1.5 flex justify-center items-center gap-6 shadow-md z-10 text-sm">
+        <div className="panel-content flex items-center gap-6">
+            <div className="font-bold text-amber-200/80 font-serif flex items-center gap-2">
+            <span className="text-lg">⚖️</span> 공용 시장 재고
+            </div>
+            <div className="flex gap-3">
+            <div className="flex items-center gap-2 bg-slate-900/80 px-3 py-1 rounded-md border border-amber-700/40 shadow-inner">
+                <span title="향료" className="text-lg">🏺</span>
+                <span className="font-cinzel font-bold text-amber-400 text-glow-gold text-lg">{marketResources?.spice ?? 0}</span>
+            </div>
+            <div className="flex items-center gap-2 bg-slate-900/80 px-3 py-1 rounded-md border border-amber-700/40 shadow-inner">
+                <span title="밀" className="text-lg">🌾</span>
+                <span className="font-cinzel font-bold text-amber-400 text-glow-gold text-lg">{marketResources?.wheat ?? 0}</span>
+            </div>
+            <div className="flex items-center gap-2 bg-slate-900/80 px-3 py-1 rounded-md border border-amber-700/40 shadow-inner">
+                <span title="비단" className="text-lg">🧣</span>
+                <span className="font-cinzel font-bold text-amber-400 text-glow-gold text-lg">{marketResources?.silk ?? 0}</span>
+            </div>
+            <div className="flex items-center gap-2 bg-slate-900/80 px-3 py-1 rounded-md border border-amber-700/40 shadow-inner">
+                <span title="철" className="text-lg">⛏️</span>
+                <span className="font-cinzel font-bold text-amber-400 text-glow-gold text-lg">{marketResources?.iron ?? 0}</span>
+            </div>
+            </div>
         </div>
       </div>
+
       {/* 메인 컨텐츠 */}
       <div className="flex-1 flex overflow-hidden">
         {/* 왼쪽 패널 - 플레이어 정보 */}
@@ -141,51 +149,51 @@ export function GameScreen() {
         {/* 중앙 - 맵/기술/도시 뷰 */}
         <main className="flex-1 flex flex-col overflow-hidden">
           {/* 뷰 전환 탭 */}
-          <div className="bg-slate-800 border-b border-slate-700 px-4 py-2 flex gap-2">
+          <div className="bg-slate-900 border-b border-slate-700 px-4 py-2 flex gap-2 shadow-sm z-10">
             <button
               onClick={() => setActiveView('map')}
-              className={`px-4 py-2 rounded-lg transition-colors ${
+              className={`px-5 py-2 rounded-t-lg transition-colors font-serif font-semibold border-b-2 ${
                 activeView === 'map'
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  ? 'bg-slate-800 text-amber-400 border-amber-500'
+                  : 'bg-transparent text-slate-400 border-transparent hover:bg-slate-800/50 hover:text-slate-200'
               }`}
             >
-              맵
+              🗺️ 맵
             </button>
             <button
               onClick={() => setActiveView('tech')}
-              className={`px-4 py-2 rounded-lg transition-colors ${
+              className={`px-5 py-2 rounded-t-lg transition-colors font-serif font-semibold border-b-2 ${
                 activeView === 'tech'
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  ? 'bg-slate-800 text-amber-400 border-amber-500'
+                  : 'bg-transparent text-slate-400 border-transparent hover:bg-slate-800/50 hover:text-slate-200'
               }`}
             >
-              기술 트리
+              ⚙️ 기술 트리
             </button>
             <button
               onClick={() => setActiveView('city')}
-              className={`px-4 py-2 rounded-lg transition-colors ${
+              className={`px-5 py-2 rounded-t-lg transition-colors font-serif font-semibold border-b-2 ${
                 activeView === 'city'
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  ? 'bg-slate-800 text-amber-400 border-amber-500'
+                  : 'bg-transparent text-slate-400 border-transparent hover:bg-slate-800/50 hover:text-slate-200'
               }`}
             >
-              도시 관리
+              🏛️ 도시 관리
             </button>
             <button
               onClick={() => setActiveView('units')}
-              className={`px-4 py-2 rounded-lg transition-colors ${
+              className={`px-5 py-2 rounded-t-lg transition-colors font-serif font-semibold border-b-2 ${
                 activeView === 'units'
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  ? 'bg-slate-800 text-amber-400 border-amber-500'
+                  : 'bg-transparent text-slate-400 border-transparent hover:bg-slate-800/50 hover:text-slate-200'
               }`}
             >
-              유닛 관리
+              ⚔️ 유닛 관리
             </button>
           </div>
 
           {/* 뷰 컨텐츠 */}
-          <div className="flex-1 overflow-auto p-4">
+          <div className="flex-1 overflow-auto p-4 relative bg-slate-900">
             {activeView === 'map' && <MapGrid />}
             {activeView === 'tech' && <TechTree />}
             {activeView === 'city' && <CityPanel />}
@@ -194,52 +202,26 @@ export function GameScreen() {
         </main>
             
         {/* 오른쪽 패널 - 액션 */}
-        <aside className="w-72 bg-slate-800 border-l border-slate-700 overflow-y-auto z-10">
+        <aside className="w-72 bg-slate-800 border-l border-slate-700 overflow-y-auto z-10 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.5)]">
           <ActionPanel />
         </aside>
       </div>
 
+      {/* 오버레이 위젯들 */}
       <div className="fixed bottom-6 right-6 z-40 flex items-end gap-4 pointer-events-none">
-        {/* 문화 트랙 상시 확인 위젯 */}
-        <div className="pointer-events-auto">
-          <CultureTrackWidget />
-        </div>
-        
-        {/* pointer-events-auto를 줘서 버튼 클릭이 가능하게 합니다 */}
-        <div className="pointer-events-auto">
-          {/* 부대 카드 위젯 */}
-          <ArmyCardsWidget />
-        </div>
-
-        <div className="pointer-events-auto">
-          {/* 문화 이벤트 카드 인벤토리 */}
-          <CultureCardInventory />
-        </div>
-        
-        <div className="pointer-events-auto">
-          <TechAbilityWidget />
-        </div>     
+        <div className="pointer-events-auto shadow-xl"><CultureTrackWidget /></div>
+        <div className="pointer-events-auto shadow-xl"><ArmyCardsWidget /></div>
+        <div className="pointer-events-auto shadow-xl"><CultureCardInventory /></div>
+        <div className="pointer-events-auto shadow-xl"><TechAbilityWidget /></div>     
       </div>
 
-      {/* 공공 서비스 방해 모달 */}
+      {/* 모달들 */}
       <InterruptModal />
-
-      {/* 승리 모달 */}
       {isGameOver && winner && <VictoryModal />}
-      
-      {/*자원 선택 모달 */}
       <ResourceSelectionModal />
-
-      {/* 연구 결과 모달 */}
       <ResearchResultsModal />
-      
-      {/*불가사의 모달 */}
       <WonderActionModal />
-      
-      {/* 문화 카드 타겟 모달*/}
       <CultureCardTargetModal />
-      
-      {/* 국가 모달 */}
       <NationModals />
     </div>
   );

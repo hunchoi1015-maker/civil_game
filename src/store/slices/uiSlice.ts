@@ -12,6 +12,15 @@ export interface ToastMessage {
   type: 'info' | 'success' | 'warning' | 'error';
 }
 
+// 🌟 [추가] 플로팅 텍스트 타입 정의
+export interface FloatingText {
+  id: string;
+  x: number;
+  y: number;
+  text: string;
+  color?: string; // 예: 'text-amber-400'
+}
+
 export interface ResourceSelectionMode {
   isActive: boolean;
   techId: string | null;
@@ -25,10 +34,14 @@ export interface TargetingMode {
 }
 
 export interface UISlice {
-  // 🌟 [추가] 토스트 관련 상태와 액션
   toasts: ToastMessage[];
   addToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   removeToast: (id: string) => void;
+
+  // 🌟 [추가] 플로팅 텍스트 상태 및 액션 인터페이스
+  floatingTexts: FloatingText[];
+  addFloatingText: (x: number, y: number, text: string, color?: string) => void;
+  removeFloatingText: (id: string) => void;
 
   selectedTile: Position | null;
   selectedUnit: string | null;
@@ -37,6 +50,7 @@ export interface UISlice {
   setSelectedUnit: (unitId: string | null) => void;
   setSelectedUnits: (unitIds: string[]) => void;
   toggleUnitSelection: (unitId: string) => void;
+  
   targetingMode: TargetingMode;
   startTargeting: (techId: string, targetType: 'city' | 'tile'|'my_city'|'wonder_location'  ) => void;
   cancelTargeting: () => void;
@@ -62,12 +76,9 @@ export interface UISlice {
   resolveChinaGraveyard: (cardId: string) => void;
 }
 
-// (set) => ({ ... }) 에서 (set, get) => ({ ... }) 로 변경했습니다!
 export const createUISlice: StateCreator<GameStore, [["zustand/immer", never]], [], UISlice> = (set, get) => ({
-  // 🌟 [추가] 토스트 상태 및 함수 구현
   toasts: [],
   addToast: (message, type = 'info') => set((state) => {
-    // 알림이 너무 많아지지 않게 최대 5개로 유지
     if (state.toasts.length >= 5) {
       state.toasts.shift();
     }
@@ -75,6 +86,15 @@ export const createUISlice: StateCreator<GameStore, [["zustand/immer", never]], 
   }),
   removeToast: (id) => set((state) => {
     state.toasts = state.toasts.filter(t => t.id !== id);
+  }),
+
+  // 🌟 [추가] 플로팅 텍스트 로직 구현
+  floatingTexts: [],
+  addFloatingText: (x, y, text, color = 'text-white') => set((state) => {
+    state.floatingTexts.push({ id: uuidv4(), x, y, text, color });
+  }),
+  removeFloatingText: (id) => set((state) => {
+    state.floatingTexts = state.floatingTexts.filter(t => t.id !== id);
   }),
 
   selectedTile: null,
@@ -112,11 +132,11 @@ export const createUISlice: StateCreator<GameStore, [["zustand/immer", never]], 
       state.selectedUnit = state.selectedUnits.length > 0 ? state.selectedUnits[0] : null;
     });
   },
+  
   targetingMode: { isActive: false, techId: null, targetType: null },
   
   startTargeting: (techId: string, targetType: 'city' | 'tile'|'my_city' | 'wonder_location') => set((state) => {
     state.targetingMode = { isActive: true, techId, targetType };
-    // 타겟팅에 집중할 수 있도록 열려있던 다른 선택창들을 닫아줍니다. 
     state.selectedTile = null;
     state.selectedUnit = null; 
     state.selectedUnits = [];
@@ -125,15 +145,15 @@ export const createUISlice: StateCreator<GameStore, [["zustand/immer", never]], 
   cancelTargeting: () => set((state) => {
     state.targetingMode = { isActive: false, techId: null, targetType: null };
   }),
+  
   resourceSelectionMode: { isActive: false, techId: null, requiredAmount: 0 },
   
   startResourceSelection: (techId: string, requiredAmount: number) => set((state) => {
     state.resourceSelectionMode = { isActive: true, techId, requiredAmount };
-    // 다른 선택창 닫기
     state.selectedTile = null; 
     state.selectedUnit = null; 
     state.selectedUnits = [];
-    if (state.targetingMode) state.targetingMode.isActive = false; // 타겟팅 모드 끄기
+    if (state.targetingMode) state.targetingMode.isActive = false; 
   }),
   
   cancelResourceSelection: () => set((state) => {
@@ -148,7 +168,6 @@ export const createUISlice: StateCreator<GameStore, [["zustand/immer", never]], 
     const prompt = state.russiaStealPrompt;
     if (!prompt) return;
     
-    // 모달 닫기
     set({ russiaStealPrompt: null });
 
     if (techId) {
@@ -157,20 +176,16 @@ export const createUISlice: StateCreator<GameStore, [["zustand/immer", never]], 
         const techDef = TECHNOLOGIES.find(t => t.id === techId);
         
         if (techDef) {
-          // 기술 추가
           player.technologies.push({ ...techDef, tokensOnCard: 0, abilityUsedThisTurn: false, usedPhases: [] });
           
-          // 유닛이 현재 "실제로" 서 있는 원래 위치를 찾아 타일에서 제거합니다.
           const unitToSacrifice = player.units.find(u => u.id === prompt.unitId);
           if (unitToSacrifice) {
             const { x, y } = unitToSacrifice.position;
             s.map.tiles[y][x].unitIds = s.map.tiles[y][x].unitIds.filter(id => id !== prompt.unitId);
           }
 
-          // 플레이어 유닛 목록에서 제거
           player.units = player.units.filter(u => u.id !== prompt.unitId);
           
-          // 선택 상태(UI)에서도 희생된 유닛을 깔끔하게 지워줍니다.
           s.selectedUnits = s.selectedUnits.filter(id => id !== prompt.unitId);
           if (s.selectedUnit === prompt.unitId) s.selectedUnit = null;
           
@@ -181,7 +196,6 @@ export const createUISlice: StateCreator<GameStore, [["zustand/immer", never]], 
         }
       });
     } else {
-      // 도용을 거절했으므로 정상적으로 전투 시작
       get().startCombat(state.players[state.currentPlayerIndex].id, prompt.targetPos);
     }
   },
@@ -191,13 +205,21 @@ export const createUISlice: StateCreator<GameStore, [["zustand/immer", never]], 
   resolveGermanyResource: (resource) => set((state) => {
     state.germanyResourcePrompt = false;
     const player = state.players[state.currentPlayerIndex];
+    
+    // (선택사항) 여기서도 Toast 패턴을 원하신다면 get().addToast()를 직접 사용해도 됩니다.
+    // 하지만 상태 변경(set) 내부에서 다른 상태를 덮어쓸 위험이 적은 간단한 로직이므로, 
+    // 필요 시 바깥으로 빼는 "버퍼 패턴"을 적용할 수 있습니다. 
+    // 지금은 기존 연결성을 위해 형태를 유지합니다.
     if (state.marketResources[resource as keyof typeof state.marketResources] > 0) {
       state.marketResources[resource as keyof typeof state.marketResources] -= 1;
-      player.luxuryResources[resource as keyof typeof player.luxuryResources] += 1;
+      // TS 에러 방지를 위해 any 캐스팅 또는 엄격한 타입 검사 적용
+      (player.resources as any)[resource] = ((player.resources as any)[resource] || 0) + 1;
+      
       if (!state.combatState.log) state.combatState.log = [];
       state.combatState.log.push({ message: `⚙️ [독일 특성] 시장에서 ${resource} 자원을 추가로 획득했습니다!` });
     } else {
-      get().addToast("시장에 해당 자원이 고갈되었습니다.");
+      // 🌟 방어 코드: set 블록 밖에서 실행되도록 setTimeout 사용 (Immer 덮어쓰기 방지)
+      setTimeout(() => get().addToast("시장에 해당 자원이 고갈되었습니다.", 'warning'), 0);
     }
   }),
 
