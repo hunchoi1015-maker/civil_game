@@ -163,9 +163,10 @@ export function MapGrid() {
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="inline-block bg-slate-800 p-4 rounded-lg overflow-auto">
+    // 🌟 [수정 1] overflow-auto 대신 w-full h-full 로 영역을 꽉 채우고 중앙 정렬
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full h-full flex flex-col items-center justify-center p-1 sm:p-2 bg-slate-950/40 rounded-xl shadow-inner relative overflow-hidden">
       
-      {/* 🌟 [수정된 모달창] */}
+      {/* 🌟 [수정된 모달창 유지] */}
       {flightDecision && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded-lg">
           <div className="bg-slate-800 border-2 border-indigo-500 rounded-xl p-6 shadow-2xl max-w-sm w-full text-center">
@@ -176,20 +177,17 @@ export function MapGrid() {
             <div className="flex flex-col gap-3">
               <button 
                 onClick={() => {
-                  // [상공 통과]: 스토어의 전투/오두막 로직을 싹 다 무시하고 타일 배열만 강제로 옮깁니다.
                   useGameStore.setState((state) => {
                     const p = state.players[state.currentPlayerIndex];
                     const newTile = state.map.tiles[flightDecision.targetY][flightDecision.targetX];
-                    
                     flightDecision.unitIds.forEach(id => {
                        const u = p.units.find(u => u.id === id);
                        if (u) {
                           const oldTile = state.map.tiles[u.position.y][u.position.x];
                           oldTile.unitIds = oldTile.unitIds.filter(uid => uid !== id);
                           newTile.unitIds.push(id);
-                          
                           u.position = { x: flightDecision.targetX, y: flightDecision.targetY };
-                          u.movement = flightDecision.movementBefore - 1; // 1칸 이동치만 소모!
+                          u.movement = flightDecision.movementBefore - 1; 
                        }
                     });
                   });
@@ -203,13 +201,11 @@ export function MapGrid() {
               
               <button 
                 onClick={() => {
-                  // [착륙]: 스토어의 정상 moveUnit 로직을 태워서 보상을 얻거나 전투를 치릅니다.
                   if (flightDecision.unitIds.length > 1) {
                     moveSelectedUnits({ x: flightDecision.targetX, y: flightDecision.targetY });
                   } else {
                     moveUnit(flightDecision.unitIds[0], { x: flightDecision.targetX, y: flightDecision.targetY });
                   }
-                  
                   setSelectedTile({ x: flightDecision.targetX, y: flightDecision.targetY });
                   setFlightDecision(null);
                 }}
@@ -222,8 +218,16 @@ export function MapGrid() {
         </div>
       )}
 
-      {/* 맵 타일 렌더링 */}
-      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${map.width}, minmax(0, 1fr))` }}>
+      {/* 🌟 [수정 2] 반응형 Grid 적용 (스크롤 방지의 핵심) */}
+      <div 
+        className="grid gap-[1px] md:gap-[2px]" 
+        style={{ 
+          gridTemplateColumns: `repeat(${map.width}, minmax(0, 1fr))`,
+          width: '100%',
+          maxWidth: 'calc(100vh - 16rem)', // 세로 스크롤이 생기지 않도록 높이에 맞춰 최대 너비 제한
+          aspectRatio: `${map.width} / ${map.height}` // 맵 비율 유지
+        }}
+      >
         {map.tiles.map((row, y) =>
           row.map((tile, x) => (
             <TileComponent

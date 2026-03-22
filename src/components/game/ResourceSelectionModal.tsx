@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../../store/gameStore';
 import { ResourceType } from '../../types/map';
+import clsx from 'clsx';
 
 const RESOURCE_EMOJIS: Record<Exclude<ResourceType, 'none'>, string> = {
   wheat: '🌾',
@@ -70,63 +71,78 @@ export function ResourceSelectionModal() {
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md font-serif">
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.9 }}
-          className="bg-slate-800 border-2 border-amber-500/50 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          className="panel-texture border-amber-500/50 rounded-2xl p-7 max-w-sm w-full shadow-2xl"
         >
-          <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
-            <h2 className="text-xl font-bold text-amber-400">자원 지불 선택</h2>
-            <button onClick={cancelResourceSelection} className="text-slate-400 hover:text-white text-xl">✕</button>
-          </div>
-          
-          <p className="text-slate-300 text-sm mb-6 text-center bg-slate-700/50 p-3 rounded-lg">
-            스킬을 사용하기 위해 임의의 자원 <strong className="text-white text-lg">{requiredAmount}</strong>개를 버려야 합니다.
-            <br/><span className="text-amber-300 font-bold">(현재 {totalSelected} / {requiredAmount}개 선택)</span>
-          </p>
+          <div className="panel-content">
+            <div className="flex justify-between items-center mb-5 border-b border-amber-700/30 pb-3">
+              <h2 className="text-2xl font-black text-amber-400 text-glow-gold flex items-center gap-2"><span>⚖️</span> 자원 지불</h2>
+              <button onClick={cancelResourceSelection} className="text-slate-400 hover:text-amber-400 text-2xl transition-colors">✕</button>
+            </div>
+            
+            <div className="bg-slate-950/60 p-4 rounded-xl border border-amber-900/50 shadow-inner text-center mb-6">
+              <p className="text-amber-100/80 text-sm mb-2">
+                스킬을 사용하기 위해 임의의 자원 <strong className="font-cinzel text-amber-400 text-lg mx-1">{requiredAmount}</strong>개를 지불하십시오.
+              </p>
+              <div className="text-sm font-bold mt-2">
+                선택된 자원: <span className="font-cinzel text-2xl text-amber-400 text-glow-gold ml-2">{totalSelected}</span> 
+                <span className="font-cinzel text-amber-200/50 ml-1">/ {requiredAmount}</span>
+              </div>
+            </div>
 
-          <div className="space-y-3 mb-6">
-            {Object.keys(selected).map((resKey) => {
-              const myAmount = player.luxuryResources[resKey as Exclude<ResourceType, 'none'>];
-              const selAmount = selected[resKey];
-              
-              return (
-                <div key={resKey} className="flex items-center justify-between bg-slate-700 p-3 rounded-xl border border-slate-600">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">{RESOURCE_EMOJIS[resKey as keyof typeof RESOURCE_EMOJIS]}</span>
-                    <div>
-                      <div className="text-white font-bold">{RESOURCE_NAMES[resKey as keyof typeof RESOURCE_NAMES]}</div>
-                      <div className="text-xs text-slate-400">보유: {myAmount}개</div>
+            <div className="space-y-3 mb-8">
+              {Object.keys(selected).map((resKey) => {
+                const myAmount = player.luxuryResources[resKey as Exclude<ResourceType, 'none'>];
+                const selAmount = selected[resKey];
+                
+                return (
+                  <div key={resKey} className={clsx(
+                    "flex items-center justify-between p-3 rounded-xl border transition-all",
+                    selAmount > 0 ? "bg-amber-900/20 border-amber-500/50" : "bg-slate-800/80 border-slate-700"
+                  )}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl filter drop-shadow-md">{RESOURCE_EMOJIS[resKey as keyof typeof RESOURCE_EMOJIS]}</span>
+                      <div>
+                        <div className="text-amber-50 font-bold">{RESOURCE_NAMES[resKey as keyof typeof RESOURCE_NAMES]}</div>
+                        <div className="text-xs text-amber-200/50 mt-0.5">보유: <span className="font-cinzel font-bold">{myAmount}</span>개</div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 bg-slate-950/80 rounded-lg p-1 border border-slate-700 shadow-inner">
+                      <button 
+                        onClick={() => handleSub(resKey)}
+                        disabled={selAmount === 0}
+                        className="w-8 h-8 rounded bg-slate-700 hover:bg-red-900/80 disabled:opacity-30 text-white font-bold transition-colors border border-slate-600"
+                      >-</button>
+                      <span className="w-4 text-center font-cinzel font-bold text-amber-400 text-lg">{selAmount}</span>
+                      <button 
+                        onClick={() => handleAdd(resKey)}
+                        disabled={totalSelected >= requiredAmount || selAmount >= myAmount}
+                        className="w-8 h-8 rounded bg-slate-700 hover:bg-emerald-900/80 disabled:opacity-30 text-white font-bold transition-colors border border-slate-600"
+                      >+</button>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center gap-3 bg-slate-800 rounded-lg p-1">
-                    <button 
-                      onClick={() => handleSub(resKey)}
-                      disabled={selAmount === 0}
-                      className="w-8 h-8 rounded bg-slate-600 hover:bg-red-500/80 disabled:opacity-30 text-white font-bold transition-colors"
-                    >-</button>
-                    <span className="w-4 text-center text-white font-bold">{selAmount}</span>
-                    <button 
-                      onClick={() => handleAdd(resKey)}
-                      disabled={totalSelected >= requiredAmount || selAmount >= myAmount}
-                      className="w-8 h-8 rounded bg-slate-600 hover:bg-emerald-500/80 disabled:opacity-30 text-white font-bold transition-colors"
-                    >+</button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
 
-          <button
-            onClick={handleConfirm}
-            disabled={totalSelected !== requiredAmount}
-            className="w-full py-4 bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-500 hover:to-orange-400 disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-500 text-white font-bold rounded-xl shadow-lg transition-all text-lg"
-          >
-            {totalSelected === requiredAmount ? '지불하고 스킬 사용하기' : '자원이 부족합니다'}
-          </button>
+            <button
+              onClick={handleConfirm}
+              disabled={totalSelected !== requiredAmount}
+              className={clsx(
+                "w-full py-4 font-bold rounded-xl transition-all text-lg shadow-md border",
+                totalSelected === requiredAmount 
+                  ? "bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-white border-amber-400 shadow-glow-gold transform hover:scale-[1.02]" 
+                  : "bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed"
+              )}
+            >
+              {totalSelected === requiredAmount ? '지불하고 스킬 사용하기' : '지불할 자원이 부족합니다'}
+            </button>
+          </div>
         </motion.div>
       </div>
     </AnimatePresence>

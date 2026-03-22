@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../../../store/gameStore';
-import { Unit, UNIT_DEFINITIONS, Position, BASE_STACKING_LIMIT } from '../../../types';
+import { Unit, UNIT_DEFINITIONS, Position } from '../../../types';
 import clsx from 'clsx';
 
 const UNIT_ICONS: Record<string, string> = {
@@ -20,7 +20,6 @@ export function UnitPanel() {
     setSelectedUnits,
     toggleUnitSelection,
     setSelectedTile,
-    moveSelectedUnits,
     removeUnit,
     foundCity,
     currentPhase,
@@ -72,8 +71,6 @@ export function UnitPanel() {
     setSelectedUnit(null);
   };
 
-  // 현재 플레이어의 스태킹 제한 계산
-  const stackingLimit = BASE_STACKING_LIMIT + currentPlayer.stackingLimitBonus;
 
   // 주변 4칸에 적대적인 유닛이 있는지 확인 (상하좌우)
   const hasHostileNearby = (position: Position): boolean => {
@@ -230,234 +227,242 @@ export function UnitPanel() {
   const canMove = currentPhase === 'movement';
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-white">유닛 관리</h3>
-
-      {/* 단계별 경고 */}
-      {!canMove && currentPhase !== 'start' && (
-        <div className="p-3 bg-yellow-900/50 border border-yellow-600 rounded-lg">
-          <p className="text-yellow-400 text-sm">
-            ⚠️ 이동 단계에서만 유닛 이동이 가능합니다.
-          </p>
+    <div className="panel-texture p-5 rounded-lg h-full flex flex-col">
+      <div className="panel-content flex flex-col h-full">
+        {/* 🌟 헤더 영역 */}
+        <div className="flex justify-between items-center border-b border-amber-700/30 pb-2 mb-4">
+          <h2 className="text-2xl font-serif font-black text-amber-400 text-glow-gold tracking-wide">
+            ⚔️ 부대 및 개척자 지휘
+          </h2>
+          <span className="text-[10px] text-amber-200/60 font-serif px-2 py-1 bg-slate-950/50 border border-slate-700 rounded shadow-inner">전투 스탯은 부대 카드(🃏)에서 관리</span>
         </div>
-      )}
-      {currentPhase === 'start' && (
-        <div className="p-3 bg-blue-900/50 border border-blue-600 rounded-lg">
-          <p className="text-blue-400 text-sm">
-            💡 시작 단계에서 개척자로 도시를 건설할 수 있습니다.
-          </p>
-        </div>
-      )}
 
-      {/* 유닛 현황 */}
-      <div className="bg-slate-700 rounded-lg p-3">
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div className="text-slate-300">
-            <span className="text-red-400">군사:</span> {militaryUnits.length}/6
-          </div>
-          <div className="text-slate-300">
-            <span className="text-blue-400">개척자:</span> {settlerUnits.length}/2
-          </div>
-        </div>
-      </div>
-
-      {/* 그룹 선택 모드 */}
-      <div className="bg-slate-700 rounded-lg p-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-slate-300">그룹 선택 모드</span>
-          <button
-            onClick={() => setIsGroupSelectMode(!isGroupSelectMode)}
-            className={clsx(
-              'px-3 py-1 text-xs rounded transition-colors',
-              isGroupSelectMode
-                ? 'bg-amber-600 text-white'
-                : 'bg-slate-600 text-slate-300 hover:bg-slate-500'
-            )}
-          >
-            {isGroupSelectMode ? 'ON' : 'OFF'}
-          </button>
-        </div>
-        {isGroupSelectMode && (
-          <p className="text-xs text-slate-400 mt-2">
-            유닛을 클릭하여 여러 유닛을 선택하세요
-          </p>
-        )}
-        {selectedUnits.length > 0 && (
-          <div className="flex gap-2 mt-2">
-            <span className="text-xs text-amber-400">
-              선택됨: {selectedUnits.length}개
-            </span>
-            <button
-              onClick={handleDeselectAll}
-              className="text-xs text-red-400 hover:text-red-300"
-            >
-              선택 해제
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* 유닛 목록 */}
-      <div className="space-y-2">
-        {currentPlayer.units.length === 0 ? (
-          <p className="text-slate-400 text-sm">보유한 유닛이 없습니다.</p>
-        ) : (
-          currentPlayer.units.map((unit) => {
-            const def = UNIT_DEFINITIONS[unit.type];
-            const isSelected = selectedUnit === unit.id;
-            const isInGroup = selectedUnits.includes(unit.id);
-
-            return (
-              <button
-                key={unit.id}
-                onClick={(e) => handleSelectUnit(unit, e)}
-                className={clsx(
-                  'w-full p-3 rounded-lg text-left transition-colors',
-                  isSelected
-                    ? 'bg-amber-600 text-white'
-                    : isInGroup
-                    ? 'bg-amber-700/50 text-white ring-1 ring-amber-500'
-                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  {isGroupSelectMode && (
-                    <span className={clsx(
-                      'w-4 h-4 rounded border flex items-center justify-center text-xs',
-                      isInGroup ? 'bg-amber-500 border-amber-500' : 'border-slate-500'
-                    )}>
-                      {isInGroup && '✓'}
-                    </span>
-                  )}
-                  <span className="text-xl">{UNIT_ICONS[unit.type]}</span>
-                  <div className="flex-1">
-                    <div className="font-medium">{def.name}</div>
-                    <div className="text-xs opacity-75">
-                      위치: ({unit.position.x}, {unit.position.y}) | 이동력: {unit.movement}/{unit.maxMovement}
-                    </div>
-                  </div>
-                  {unit.movement <= 0 && (
-                    <span className="text-xs bg-slate-600 px-2 py-1 rounded">이동완료</span>
-                  )}
-                </div>
-              </button>
-            );
-          })
-        )}
-      </div>
-
-      {/* 선택된 유닛 액션 */}
-      {selectedUnitData && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-slate-700 rounded-lg p-4 space-y-3"
-        >
-          {/* 같은 타일 유닛 그룹 선택 */}
-          {unitsOnSameTile.length > 1 && (
-            <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-600">
-              <span className="text-xs text-slate-400">
-                이 타일에 {unitsOnSameTile.length}개 유닛
-              </span>
-              <button
-                onClick={handleSelectAllOnTile}
-                className="text-xs px-2 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded"
-              >
-                모두 선택
-              </button>
+        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
+          {/* 단계별 경고 */}
+          {!canMove && currentPhase !== 'start' && (
+            <div className="p-3 bg-yellow-950/60 border border-yellow-700/50 rounded-lg shadow-inner">
+              <p className="text-yellow-400 text-sm font-serif font-bold">
+                ⚠️ 부대 이동은 [이동 단계]에서만 지시할 수 있습니다.
+              </p>
+            </div>
+          )}
+          {currentPhase === 'start' && (
+            <div className="p-3 bg-blue-950/60 border border-blue-700/50 rounded-lg shadow-inner">
+              <p className="text-blue-300 text-sm font-serif font-bold">
+                💡 시작 단계입니다. 선택한 개척자로 도시를 건설할 수 있습니다.
+              </p>
             </div>
           )}
 
-          <h4 className="font-medium text-white">
-            {selectedUnits.length > 1 ? (
-              <span>선택된 유닛 {selectedUnits.length}개</span>
-            ) : (
-              <span>{UNIT_ICONS[selectedUnitData.type]} {UNIT_DEFINITIONS[selectedUnitData.type].name}</span>
-            )}
-          </h4>
-
-          {/* 그룹 선택 시 선택된 유닛 목록 */}
-          {selectedUnits.length > 1 && (
-            <div className="flex flex-wrap gap-1">
-              {selectedUnitsData.map((unit) => (
-                <span key={unit.id} className="text-xs bg-slate-600 px-2 py-1 rounded">
-                  {UNIT_ICONS[unit.type]} {unit.movement > 0 ? '✓' : '✗'}
-                </span>
-              ))}
+          {/* 🌟 유닛 보유 현황 요약 (보드게임 스타일) */}
+          <div className="bg-slate-900/80 border border-amber-700/30 rounded-lg p-4 shadow-inner grid grid-cols-2 gap-4 text-sm font-serif">
+            <div className="flex items-center justify-between bg-slate-950/80 p-2 rounded border border-slate-700">
+              <span className="text-slate-300 flex items-center gap-1.5"><span className="text-lg">⚔️</span> 군사 토큰</span>
+              <span className="text-amber-100 font-cinzel font-bold text-lg">{militaryUnits.length}<span className="text-slate-500 text-xs ml-1">/6</span></span>
             </div>
-          )}
-
-          {/* 탐험 버튼 섹션 */}
-          {explorableChunks.length > 0 && (
-            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-600 mt-2">
-              <p className="text-xs text-slate-400 mb-2">🔭 미지의 구역 탐험 (이동력 1 소모):</p>
-              <div className="grid grid-cols-2 gap-2">
-                {explorableChunks.map((chunk, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => exploreChunk(selectedUnitData.id, chunk.chunkPos)}
-                    className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs rounded transition-colors flex items-center justify-center gap-1"
-                  >
-                    <span>🔦</span> {chunk.direction} 구역 개방
-                  </button>
-                ))}
-              </div>
+            <div className="flex items-center justify-between bg-slate-950/80 p-2 rounded border border-slate-700">
+              <span className="text-slate-300 flex items-center gap-1.5"><span className="text-lg">👷</span> 개척자 토큰</span>
+              <span className="text-blue-200 font-cinzel font-bold text-lg">{settlerUnits.length}<span className="text-slate-500 text-xs ml-1">/2</span></span>
             </div>
-          )}
+          </div>
 
-          {selectedUnitData.type === 'settler' && canFoundCity() && (
-            <>
-              {getFoundCityError() ? (
-                <div className="p-2 bg-red-900/50 border border-red-600 rounded-lg">
-                  <p className="text-red-400 text-sm font-bold">{getFoundCityError()}</p>
-                </div>
-              ) : (
+          {/* 🌟 그룹 선택 모드 스위치 */}
+          <div className="bg-slate-900/60 border border-amber-700/30 rounded-lg p-3 shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-sm text-amber-200/80 font-serif font-bold">다중 선택 모드 (부대 묶기)</span>
+              {isGroupSelectMode && <p className="text-[10px] text-slate-400 mt-0.5">여러 부대 토큰을 클릭해 함께 이동시킬 수 있습니다.</p>}
+            </div>
+            <div className="flex flex-col items-end gap-2">
                 <button
-                  onClick={() => setShowFoundCityModal(true)}
-                  className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors"
+                onClick={() => setIsGroupSelectMode(!isGroupSelectMode)}
+                className={clsx(
+                    'px-4 py-1.5 text-xs font-serif font-bold rounded transition-all border',
+                    isGroupSelectMode
+                    ? 'bg-amber-600 text-white border-amber-400 shadow-[0_0_10px_rgba(217,119,6,0.5)]'
+                    : 'bg-slate-800 text-slate-400 border-slate-600 hover:bg-slate-700 hover:text-amber-100'
+                )}
                 >
-                  이 위치에 도시 건설
+                {isGroupSelectMode ? '활성화 됨' : '비활성화'}
                 </button>
-              )}
-            </>
-          )}
-        </motion.div>
-      )}
+                {selectedUnits.length > 0 && (
+                    <button onClick={handleDeselectAll} className="text-[10px] text-red-400 hover:text-red-300 underline font-sans">
+                        {selectedUnits.length}개 선택 해제
+                    </button>
+                )}
+            </div>
+          </div>
 
-      {/* 도시 건설 모달 */}
+          {/* 🌟 유닛 목록 (물리적 토큰 느낌) */}
+          <div className="space-y-2.5">
+            {currentPlayer.units.length === 0 ? (
+              <p className="text-slate-500 text-sm font-serif italic text-center py-4 bg-slate-900/40 rounded-lg border border-slate-700/30">맵에 배치된 부대가 없습니다.</p>
+            ) : (
+              currentPlayer.units.map((unit) => {
+                const def = UNIT_DEFINITIONS[unit.type];
+                const isSelected = selectedUnit === unit.id;
+                const isInGroup = selectedUnits.includes(unit.id);
+
+                return (
+                  <button
+                    key={unit.id}
+                    onClick={(e) => handleSelectUnit(unit, e)}
+                    className={clsx(
+                      'w-full p-3 rounded-md text-left transition-all border shadow-sm font-serif flex items-center gap-4',
+                      isSelected
+                        ? 'bg-amber-900/40 border-amber-500 text-amber-200 shadow-[inset_0_0_15px_rgba(245,158,11,0.2)] text-glow-gold transform scale-[1.01]'
+                        : isInGroup
+                        ? 'bg-indigo-900/40 border-indigo-500 text-indigo-200 shadow-[inset_0_0_15px_rgba(99,102,241,0.2)]'
+                        : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-amber-700/50 hover:text-amber-100'
+                    )}
+                  >
+                    {isGroupSelectMode && (
+                      <div className={clsx(
+                        'w-5 h-5 rounded flex items-center justify-center text-xs border transition-colors',
+                        isInGroup ? 'bg-amber-500 border-amber-400 text-black shadow-glow-gold' : 'bg-slate-900 border-slate-600'
+                      )}>
+                        {isInGroup && '✔'}
+                      </div>
+                    )}
+                    <span className="text-3xl drop-shadow-lg filter">{UNIT_ICONS[unit.type]}</span>
+                    <div className="flex-1 flex flex-col justify-center">
+                      <div className="font-bold text-lg text-amber-100">{def.name}</div>
+                      <div className="text-xs text-slate-400 mt-1 font-sans flex items-center gap-3">
+                        <span className="bg-slate-950/50 px-1.5 py-0.5 rounded border border-slate-700">
+                          맵 좌표 <span className="font-cinzel text-amber-400 ml-1">({unit.position.x}, {unit.position.y})</span>
+                        </span>
+                        <span className="bg-slate-950/50 px-1.5 py-0.5 rounded border border-slate-700">
+                          기동력 <span className={clsx("font-cinzel ml-1 font-bold", unit.movement > 0 ? "text-green-400" : "text-red-400")}>{unit.movement}</span>
+                          <span className="font-cinzel text-slate-600 text-[10px]">/{unit.maxMovement}</span>
+                        </span>
+                      </div>
+                    </div>
+                    {unit.movement <= 0 && (
+                      <span className="text-[10px] font-bold bg-red-900/60 text-red-200 border border-red-700/50 px-2 py-1 rounded shadow-inner whitespace-nowrap">행동 종료</span>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          {/* 🌟 선택된 유닛 상세 액션 (보드게임 액션 창) */}
+          {selectedUnitData && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-slate-900/80 border border-amber-700/50 shadow-inner rounded-lg p-5 mt-4 space-y-4"
+            >
+              {/* 같은 타일 묶기 UI */}
+              {unitsOnSameTile.length > 1 && (
+                <div className="flex items-center justify-between mb-3 pb-3 border-b border-amber-700/30">
+                  <span className="text-xs font-serif text-amber-200/80">
+                    📍 이 좌표에 <span className="font-cinzel text-amber-400 font-bold text-sm">{unitsOnSameTile.length}</span>개의 토큰이 겹쳐 있습니다.
+                  </span>
+                  <button
+                    onClick={handleSelectAllOnTile}
+                    className="text-xs font-serif font-bold px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-amber-50 rounded border border-amber-500 shadow-sm transition-colors"
+                  >
+                    이 타일 전체 묶기
+                  </button>
+                </div>
+              )}
+
+              <h4 className="font-serif font-black text-amber-500 text-glow-gold text-lg">
+                {selectedUnits.length > 1 ? (
+                  <span>다중 선택된 부대 지휘 ({selectedUnits.length}개)</span>
+                ) : (
+                  <span className="flex items-center gap-2">{UNIT_ICONS[selectedUnitData.type]} {UNIT_DEFINITIONS[selectedUnitData.type].name} 지휘</span>
+                )}
+              </h4>
+
+              {selectedUnits.length > 1 && (
+                <div className="flex flex-wrap gap-2 p-2 bg-slate-950/50 rounded border border-slate-700">
+                  {selectedUnitsData.map((unit) => (
+                    <span key={unit.id} className={clsx("text-sm border px-2 py-0.5 rounded flex items-center gap-1 shadow-sm", unit.movement > 0 ? "bg-green-900/30 border-green-700 text-green-300" : "bg-red-900/30 border-red-700 text-red-300")}>
+                      {UNIT_ICONS[unit.type]} {unit.movement > 0 ? '✔' : '✘'}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* 🌟 탐험 버튼 (손맛 나는 디자인) */}
+              {explorableChunks.length > 0 && (
+                <div className="bg-slate-950/80 p-4 rounded-lg border border-indigo-700/50 mt-2 shadow-inner">
+                  <p className="text-sm font-serif font-bold text-indigo-300 mb-3 text-shadow-[0_0_5px_rgba(99,102,241,0.5)]">🔭 미지의 안개 탐험 <span className="text-xs font-sans text-indigo-400/60 font-normal ml-1">(기동력 1 소모)</span></p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {explorableChunks.map((chunk, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => exploreChunk(selectedUnitData.id, chunk.chunkPos)}
+                        className="px-3 py-2.5 bg-gradient-to-br from-indigo-700 to-indigo-900 hover:from-indigo-600 hover:to-indigo-800 text-indigo-100 font-serif font-bold text-sm rounded border border-indigo-500 shadow-md transition-all transform hover:scale-[1.02] flex items-center justify-center gap-2"
+                      >
+                        <span className="text-lg drop-shadow">🔦</span> {chunk.direction} 개방
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 🌟 도시 건설 UI */}
+              {selectedUnitData.type === 'settler' && canFoundCity() && (
+                <div className="pt-2">
+                  {getFoundCityError() ? (
+                    <div className="p-3 bg-red-950/80 border border-red-600 rounded-lg shadow-inner">
+                      <p className="text-red-400 text-sm font-serif font-bold flex items-center gap-2"><span>⚠️</span> {getFoundCityError()}</p>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowFoundCityModal(true)}
+                      className="w-full py-3 bg-gradient-to-r from-blue-700 to-sky-700 hover:from-blue-600 hover:to-sky-600 border border-blue-400 text-white rounded-lg text-sm font-serif font-bold shadow-[0_0_10px_rgba(56,189,248,0.4)] transition-all transform hover:scale-[1.02]"
+                    >
+                      ⛺ 이 타일에 새 도시 개척
+                    </button>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </div>
+      </div>
+
+      {/* 🌟 도시 건설 모달 (양피지 테마) */}
       {showFoundCityModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-sm">
           <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-slate-800 rounded-lg p-6 w-80"
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="panel-texture rounded-xl p-7 w-96 shadow-2xl border-amber-500/50"
           >
-            <h4 className="text-lg font-semibold text-white mb-4">새 도시 건설</h4>
-            <input
-              type="text"
-              value={newCityName}
-              onChange={(e) => setNewCityName(e.target.value)}
-              placeholder="도시 이름"
-              className="w-full px-4 py-2 bg-slate-700 text-white rounded-lg border border-slate-600 focus:border-amber-500 focus:outline-none mb-4"
-              autoFocus
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={handleFoundCity}
-                disabled={!newCityName.trim()}
-                className="flex-1 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-              >
-                건설
-              </button>
-              <button
-                onClick={() => {
-                  setShowFoundCityModal(false);
-                  setNewCityName('');
-                }}
-                className="flex-1 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors"
-              >
-                취소
-              </button>
+            <div className="panel-content">
+              <h4 className="text-2xl font-serif font-black text-amber-400 text-glow-gold mb-2 text-center border-b border-amber-700/30 pb-3">⛺ 새로운 도시 명명</h4>
+              <p className="text-xs text-amber-200/60 font-serif text-center mb-5">위대한 문명의 초석이 될 도시의 이름을 지어주십시오.</p>
+              
+              <input
+                type="text"
+                value={newCityName}
+                onChange={(e) => setNewCityName(e.target.value)}
+                placeholder="Ex. 로마, 워싱턴, 장안"
+                className="w-full px-4 py-3 bg-slate-950 text-amber-100 font-serif font-bold rounded-lg border border-amber-700/50 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-500 mb-6 shadow-inner text-center placeholder-slate-600"
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowFoundCityModal(false);
+                    setNewCityName('');
+                  }}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-300 font-serif font-bold rounded-lg transition-colors shadow-sm"
+                >
+                  명령 취소
+                </button>
+                <button
+                  onClick={handleFoundCity}
+                  disabled={!newCityName.trim()}
+                  className="flex-1 py-2.5 bg-amber-700 hover:bg-amber-600 disabled:bg-slate-800 disabled:border-slate-700 disabled:text-slate-600 border border-amber-500 text-amber-50 font-serif font-bold rounded-lg transition-colors shadow-glow-gold"
+                >
+                  도시 개척
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>

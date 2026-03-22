@@ -107,6 +107,10 @@ export function calculateCityProduction(city: City, map: GameMap, players?: Play
   if (city.pioneerProductionBonus) {
       production += city.pioneerProductionBonus;
   }
+
+  if (owner && owner.government === 'communism') {
+      production += 2;
+  }
   
   return production;
 }
@@ -117,7 +121,8 @@ export function calculateDetailedCityProduction(city: City, map: GameMap, player
   buildings: number, 
   militaryScience: number, 
   tempBonus: number,
-  pioneerBonus: number // 🌟 리턴 타입에 개척자 보너스 명시
+  pioneerBonus: number,
+  governmentBonus?: number // 🌟 리턴 타입에 정치체제 보너스 추가 (CityPanel 에러 방지를 위해 optional 처리)
 } {
   let base = 0;
   let buildings = 0;
@@ -150,12 +155,18 @@ export function calculateDetailedCityProduction(city: City, map: GameMap, player
       militaryScience = Math.floor(player.resources.currency / 3);
   }
 
-  // 🌟 개척자 타일 보급 보너스 합산
   const pioneerBonus = city.pioneerProductionBonus || 0;
 
-  const total = base + buildings + tempBonus + militaryScience + pioneerBonus;
+  // 🌟 [추가] 공산주의 보너스 계산
+  let governmentBonus = 0;
+  if (player.government === 'communism') {
+      governmentBonus = 2;
+  }
 
-  return { total, base, buildings, militaryScience, tempBonus, pioneerBonus };
+  // 총합에 정부 보너스도 포함!
+  const total = base + buildings + tempBonus + militaryScience + pioneerBonus + governmentBonus;
+
+  return { total, base, buildings, militaryScience, tempBonus, pioneerBonus, governmentBonus };
 }
 
 // 🌟 [수정] 교역력 계산에 봉쇄 판정 및 개척자 보너스 반영
@@ -243,10 +254,6 @@ export function calculatePlayerProduction(player: Player, map: GameMap, players?
   
   for (const city of player.cities) {
     totalProduction += calculateDetailedCityProduction(city, map, player, players).total;
-  }
-  
-  if (player.government === 'communism') {
-      totalProduction +=  2;
   }
   
   return totalProduction;

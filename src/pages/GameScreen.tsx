@@ -142,7 +142,7 @@ export function GameScreen() {
       {/* 메인 컨텐츠 */}
       <div className="flex-1 flex overflow-hidden">
         {/* 왼쪽 패널 - 플레이어 정보 */}
-        <aside className="w-64 bg-slate-800 border-r border-slate-700 overflow-y-auto">
+        <aside className="w-96 bg-slate-800 border-r border-slate-700 overflow-y-auto">
           <PlayerPanel />
         </aside>
 
@@ -208,7 +208,8 @@ export function GameScreen() {
       </div>
 
       {/* 오버레이 위젯들 */}
-      <div className="fixed bottom-6 right-6 z-40 flex items-end gap-4 pointer-events-none">
+      {/* 오버레이 위젯들 (좌우 패널을 피해 중앙 맵 우측 하단에 정렬) */}
+      <div className="fixed bottom-6 right-80 z-40 flex items-end gap-4 pointer-events-none">
         <div className="pointer-events-auto shadow-xl"><CultureTrackWidget /></div>
         <div className="pointer-events-auto shadow-xl"><ArmyCardsWidget /></div>
         <div className="pointer-events-auto shadow-xl"><CultureCardInventory /></div>

@@ -1,13 +1,13 @@
 // src/components/game/Map/TileComponent.tsx
 
-import React, { useMemo, useEffect } from 'react'; // useEffect 추가
+import React, { useMemo, useEffect } from 'react';
 import { Tile, TERRAIN_PROPERTIES, Unit } from '../../../types';
 import { useGameStore } from '../../../store/gameStore';
 import { calculateTileYield } from '../../../engine/ResourceCalculator';
 import clsx from 'clsx';
 import { BUILDINGS } from '../../../constants/buildings';
 import { WONDERS } from '../../../types/wonder';
-import { motion, AnimatePresence } from 'framer-motion'; // 🌟 framer-motion 추가
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface TileComponentProps {
   tile: Tile;
@@ -60,13 +60,12 @@ const PLAYER_COLORS: Record<string, string> = {
 };
 
 const PLAYER_BG_COLORS: Record<string, string> = {
-  red: 'bg-red-500',
-  blue: 'bg-blue-500',
-  green: 'bg-green-500',
-  yellow: 'bg-yellow-500',
+  red: 'bg-red-600',
+  blue: 'bg-blue-600',
+  green: 'bg-green-600',
+  yellow: 'bg-yellow-500', // yellow-500은 텍스트 가독성이 비교적 괜찮습니다
 };
 
-// 🌟 [추가] 플로팅 텍스트 애니메이션 컴포넌트
 function FloatingTextComponent({ ft, onComplete }: { ft: any, onComplete: () => void }) {
   useEffect(() => {
     const timer = setTimeout(onComplete, 1500); 
@@ -87,8 +86,6 @@ function FloatingTextComponent({ ft, onComplete }: { ft: any, onComplete: () => 
 }
 
 export const TileComponent = React.memo(({ tile, isSelected, onClick }: TileComponentProps) => {
-  
-  // 🌟 [수정] floatingTexts와 removeFloatingText 스토어에서 가져오기
   const { players, selectedUnit, currentPlayerIndex, floatingTexts, removeFloatingText } = useGameStore();
 
   const owner = tile.ownerId ? players.find((p) => p.id === tile.ownerId) : null;
@@ -114,6 +111,11 @@ export const TileComponent = React.memo(({ tile, isSelected, onClick }: TileComp
 
   const myUnitsOnTile = unitsOnTile.filter(u => u.ownerId === currentPlayer.id);
   const hasEnemyUnits = unitsOnTile.length > myUnitsOnTile.length;
+
+  // 🌟 [추가] 유닛의 소유자(색상) 확인
+  const firstUnit = unitsOnTile.length > 0 ? unitsOnTile[0] : null;
+  const unitOwner = firstUnit ? players.find(p => p.id === firstUnit.ownerId) : null;
+  const unitBgColor = unitOwner ? PLAYER_BG_COLORS[unitOwner.color] : 'bg-slate-600';
 
   let isCityParalyzed = false;
   if (hasCity && owner) {
@@ -147,7 +149,6 @@ export const TileComponent = React.memo(({ tile, isSelected, onClick }: TileComp
     tooltip += `\n위인: ${tile.greatPerson.type.toUpperCase()} ${icon}\n${tile.greatPerson.description}`;
   }
 
-  // 🌟 [추가] 현재 타일에 띄울 플로팅 텍스트 필터링
   const myFloatingTexts = useMemo(() => {
     return floatingTexts.filter(ft => ft.x === tile.position.x && ft.y === tile.position.y);
   }, [floatingTexts, tile.position.x, tile.position.y]);
@@ -156,7 +157,7 @@ export const TileComponent = React.memo(({ tile, isSelected, onClick }: TileComp
     <button
       onClick={onClick}
       className={clsx(
-        'w-12 h-12 rounded-sm flex flex-col items-center justify-center text-xs transition-all relative',
+        'w-full h-full aspect-square rounded-sm flex flex-col items-center justify-center transition-all relative overflow-hidden',
         TERRAIN_COLORS[tile.terrain],
         isSelected && 'ring-2 ring-white scale-110 z-10',
         owner && !isSelected && `ring-1 ${ownerRingClass}`,
@@ -192,31 +193,39 @@ export const TileComponent = React.memo(({ tile, isSelected, onClick }: TileComp
         </div>
       )}
 
-      {/* 🌟 [수정] 유닛 표시 (Framer Motion 레이아웃 애니메이션 적용!) */}
-      {hasUnits && !hasCity && (
+      {/* 🌟 [수정] 유닛 표시 (플레이어 색상 기반 토큰 UI) */}
+      {hasUnits && !hasCity && firstUnit && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-          {/* 배열의 맨 첫 번째 유닛 하나만 대표로 렌더링하면서 애니메이션 적용 */}
           <motion.div
-            layoutId={unitsOnTile[0].id} // 고유 ID로 스르륵 이동 추적
+            layoutId={firstUnit.id}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="flex flex-col items-center"
+            className={clsx(
+              "w-[55%] h-[55%] min-w-[14px] min-h-[14px] max-w-[28px] max-h-[28px] rounded-full flex flex-col items-center justify-center border border-white/70 shadow-md",
+              unitBgColor
+            )}
           >
-            <span className="text-base filter drop-shadow-md">
+            <span className="text-[clamp(8px,1vw,14px)] filter drop-shadow-md">
               {unitsOnTile.some(u => u.type === 'military') ? '⚔️' : '👷'}
             </span>
           </motion.div>
-          {/* 유닛이 여러 마리일 경우 겹침 표시 (애니메이션과 분리하여 안전하게 렌더링) */}
+          {/* 다중 유닛 겹침 표시 뱃지 */}
           {unitsOnTile.length > 1 && (
-            <span className="absolute bottom-3 right-1 text-[8px] text-white bg-black/70 rounded px-1 z-30">
+            <span className={clsx(
+              "absolute bottom-3 right-1 text-[8px] text-white font-bold rounded px-1 z-30 shadow-md border border-white/40",
+              unitBgColor
+            )}>
               x{unitsOnTile.length}
             </span>
           )}
         </div>
       )}
 
-      {/* 도시 위 유닛 수 표시 */}
+      {/* 🌟 [수정] 도시 위 유닛 수 표시 (플레이어 색상 기반) */}
       {hasCity && hasUnits && (
-        <span className="absolute top-0 left-0 text-[10px] bg-black/70 rounded-full w-4 h-4 flex items-center justify-center text-white z-20 pointer-events-none">
+        <span className={clsx(
+          "absolute top-0 left-0 text-[10px] rounded-full w-4 h-4 flex items-center justify-center text-white z-20 pointer-events-none font-bold border border-white/50 shadow-sm",
+          unitBgColor
+        )}>
           {tile.unitIds.length}
         </span>
       )}
@@ -266,25 +275,25 @@ export const TileComponent = React.memo(({ tile, isSelected, onClick }: TileComp
       <div className="absolute bottom-0 w-full flex justify-center gap-0.5 bg-black/30 backdrop-blur-[1px] rounded-b-sm py-[1px] pointer-events-none">
         {tileYield.production > 0 && (
           <div className="flex items-center">
-            <span className="text-[6px] text-orange-300">🔨</span>
-            <span className="text-[6px] text-white font-bold ml-[1px]">{tileYield.production}</span>
+            <span className="text-[clamp(5px,0.6vw,8px)] text-orange-300 leading-none">🔨</span>
+            <span className="text-[clamp(5px,0.6vw,8px)] text-white font-bold ml-[1px] leading-none">{tileYield.production}</span>
           </div>
         )}
         {tileYield.trade > 0 && (
           <div className="flex items-center">
-            <span className="text-[6px] text-yellow-300">📦</span>
-            <span className="text-[6px] text-white font-bold ml-[1px]">{tileYield.trade}</span>
+            <span className="text-[clamp(5px,0.6vw,8px)] text-yellow-300">📦</span>
+            <span className="text-[clamp(5px,0.6vw,8px)] text-white font-bold ml-[1px]">{tileYield.trade}</span>
           </div>
         )}
         {tileYield.culture > 0 && (
           <div className="flex items-center">
-            <span className="text-[6px] text-purple-300">📜</span>
-            <span className="text-[6px] text-white font-bold ml-[1px]">{tileYield.culture}</span>
+            <span className="text-clamp(5px,0.6vw,8px)] text-purple-300">📜</span>
+            <span className="text-[clamp(5px,0.6vw,8px)] text-white font-bold ml-[1px]">{tileYield.culture}</span>
           </div>
         )}
       </div>
 
-      {/* 🌟 [추가] 플로팅 텍스트 렌더링 컨테이너 */}
+      {/* 플로팅 텍스트 렌더링 컨테이너 */}
       <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
         <AnimatePresence>
           {myFloatingTexts.map((ft) => (

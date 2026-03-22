@@ -54,76 +54,78 @@ export const InterruptModal: React.FC = () => {
   const canCounter = canUnDefense || canBreadDefense || canSpyDefense || canJoustingDefense|| canPrimeTimeDefense;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-slate-800 border-2 border-amber-500 rounded-xl p-6 shadow-2xl max-w-md w-full text-center transform transition-all scale-105">
-        
-        <h2 className="text-2xl font-bold text-red-400 mb-2 animate-pulse">⚠️ 액션 감지 ⚠️</h2>
-        <p className="text-slate-300 mb-6">
-          누군가 <span className="text-amber-400 font-bold">
-            {topAction.actionType === 'culture_card' ? '문화 이벤트 카드' : '자원(기술) 능력'}
-          </span>를 사용했습니다!
-        </p>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md font-serif">
+      <div className="panel-texture border-red-900/80 rounded-2xl p-8 shadow-[0_0_40px_rgba(220,38,38,0.2)] max-w-md w-full text-center transform transition-all scale-105">
+        <div className="panel-content">
+          <h2 className="text-3xl font-black text-red-500 mb-3 animate-pulse text-shadow-[0_0_15px_rgba(239,68,68,0.8)] tracking-wider">
+            ⚠️ 액션 감지 ⚠️
+          </h2>
+          <p className="text-amber-100/90 mb-6 leading-relaxed">
+            누군가 <span className="text-amber-400 font-bold text-glow-gold px-1">
+              {topAction.actionType === 'culture_card' ? '문화 이벤트 카드' : '기술 스킬'}
+            </span>를 사용했습니다!
+          </p>
 
-        <div className="text-lg text-white mb-4">
-          현재 <span className="font-bold text-blue-300">{currentResponder?.name}</span>님의 결정을 기다리는 중...
-        </div>
+          <div className="text-lg text-amber-50 mb-5 bg-slate-950/50 py-2 rounded-lg border border-slate-700 shadow-inner">
+            <span className="font-bold text-blue-400 drop-shadow-md">{currentResponder?.name}</span>님의 결정을 대기 중...
+          </div>
 
-        <div className="w-full bg-slate-700 h-4 rounded-full overflow-hidden mb-6">
-          <div 
-            className="h-full bg-amber-500 transition-all duration-100 ease-linear"
-            style={{ width: `${(timeLeft / 7) * 100}%` }}
-          />
-        </div>
-        <div className="text-4xl font-mono text-amber-400 mb-8">{timeLeft}초</div>
+          <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden mb-4 border border-slate-700 shadow-inner">
+            <div 
+              className="h-full bg-gradient-to-r from-orange-600 to-amber-400 transition-all duration-100 ease-linear shadow-[0_0_10px_rgba(245,158,11,0.8)]"
+              style={{ width: `${(timeLeft / 7) * 100}%` }}
+            />
+          </div>
+          <div className="text-5xl font-cinzel font-black text-amber-400 mb-8 text-glow-gold drop-shadow-lg">
+            00:0{timeLeft}
+          </div>
 
-        {/* 🌟 [수정] 여러 방어 버튼이 세로로 깔끔하게 정렬되도록 변경 */}
-        <div className="flex flex-col gap-3 justify-center mt-4">
+          <div className="flex flex-col gap-3 justify-center mt-4">
+            {canUnDefense && (
+              <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'un')} className="px-4 py-3.5 bg-gradient-to-r from-blue-700 to-blue-600 hover:from-blue-600 hover:to-blue-500 text-white font-bold rounded-xl shadow-lg border border-blue-400 flex items-center justify-center gap-2 transition-all transform hover:scale-[1.02]">
+                <span className="text-xl drop-shadow">🌐</span> 국제연합 거부권 행사 <span className="text-xs text-blue-200 ml-1 font-sans">(무료)</span>
+              </button>
+            )}
+            
+            {canBreadDefense && (
+              <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'bread')} className="px-4 py-3.5 bg-gradient-to-r from-indigo-700 to-indigo-600 hover:from-indigo-600 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg border border-indigo-400 flex items-center justify-center gap-2 transition-all transform hover:scale-[1.02]">
+                <span className="text-xl drop-shadow">🍞</span> '빵과 서커스'로 방어
+              </button>
+            )}
+
+            {canJoustingDefense && (
+              <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'jousting')} className="px-4 py-3.5 bg-gradient-to-r from-fuchsia-700 to-fuchsia-600 hover:from-fuchsia-600 hover:to-fuchsia-500 text-white font-bold rounded-xl shadow-lg border border-fuchsia-400 flex items-center justify-center gap-2 transition-all transform hover:scale-[1.02]">
+                <span className="text-xl drop-shadow">🏇</span> '마상시합'으로 방어
+              </button>
+            )}
+
+            {canPrimeTimeDefense && (
+              <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'prime_time_tv')} className="px-4 py-3.5 bg-gradient-to-r from-yellow-600 to-amber-500 hover:from-yellow-500 hover:to-amber-400 text-amber-950 font-black rounded-xl shadow-glow-gold border border-yellow-300 flex items-center justify-center gap-2 transition-all transform hover:scale-[1.02]">
+                <span className="text-xl drop-shadow">📺</span> '황금시간대 TV' 무효화
+              </button>
+            )}
+
+            {canSpyDefense && (
+              <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'spy')} className="px-4 py-3.5 bg-gradient-to-r from-red-800 to-red-700 hover:from-red-700 hover:to-red-600 text-white font-bold rounded-xl shadow-lg border border-red-500 flex items-center justify-center gap-2 transition-all transform hover:scale-[1.02]">
+                <span className="text-xl drop-shadow">🕵️</span> 방첩 스파이 파견 <span className="font-cinzel text-red-200 ml-1">(-1)</span>
+              </button>
+            )}
+            
+            <button
+              onClick={() => passInterrupt()}
+              className="px-4 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl border border-slate-600 shadow-inner flex items-center justify-center transition-colors mt-2"
+            >
+              ⏭️ 개입하지 않음 (통과)
+            </button>
+          </div>
           
-          {canUnDefense && (
-            <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'un')} className="px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors">
-              🌐 국제연합 거부권 행사 (무료)
-            </button>
+          {!canCounter && topAction.actionType === 'culture_card' && (
+            <p className="text-xs text-slate-500 mt-5 font-sans bg-slate-900/50 py-2 rounded">공공서비스 기술과 스파이가 없어 개입할 수 없습니다.</p>
           )}
-          
-          {canBreadDefense && (
-            <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'bread')} className="px-4 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors">
-              🍞 '빵과 서커스' 카드 사용하여 막기
-            </button>
+          {!canCounter && topAction.actionType === 'resource_ability' && (
+            <p className="text-xs text-slate-500 mt-5 font-sans bg-slate-900/50 py-2 rounded">대중매체 기술과 스파이가 없거나 이미 방어권을 소모했습니다.</p>
           )}
-
-          {canJoustingDefense && (
-            <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'jousting')} className="px-4 py-3 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors">
-              🏇 '마상시합' 카드 사용하여 막기
-            </button>
-          )}
-
-          {canPrimeTimeDefense && (
-            <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'prime_time_tv')} className="px-4 py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors">
-              📺 '황금시간대 TV'로 무조건 막기
-            </button>
-          )}
-
-          {canSpyDefense && (
-            <button onClick={() => useSpyCounter(currentResponder!.id, topAction.id, 'spy')} className="px-4 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-colors">
-              🕵️ 스파이 파견하여 막기 (-1)
-            </button>
-          )}
-          
-          <button
-            onClick={() => passInterrupt()}
-            className="px-4 py-3 bg-slate-600 hover:bg-slate-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center transition-colors"
-          >
-            ⏭️ 개입하지 않음 (통과)
-          </button>
         </div>
-        
-        {/* 개입할 수 없는 이유 동적 표시 */}
-        {!canCounter && topAction.actionType === 'culture_card' && (
-          <p className="text-sm text-slate-400 mt-4">(공공서비스 기술과 스파이가 없어 개입할 수 없습니다.)</p>
-        )}
-        {!canCounter && topAction.actionType === 'resource_ability' && (
-          <p className="text-sm text-slate-400 mt-4">(대중매체 기술, 스파이가 없거나 이미 이번 턴에 개입하여 막을 수 없습니다.)</p>
-        )}
       </div>
     </div>
   );
