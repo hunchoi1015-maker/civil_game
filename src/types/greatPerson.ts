@@ -15,4 +15,5 @@ export interface GreatPerson {
   name: string; // 현재는 모두 'basic'
   description: string; // 위인의 한마디!
   stats: GreatPersonStats;
+  ownerId?: string;
 }

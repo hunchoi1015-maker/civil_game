@@ -32,6 +32,22 @@ const RESOURCE_ICONS: Record<ResourceType, string> = {
   none: '',
 };
 
+const WONDER_ICONS: Record<string, string> = {
+  pyramids: '🔺',
+  colossus: '🗿',
+  hanging_gardens: '⛲',
+  stonehenge: '🪨',
+  oracle: '🏛️',
+  louvre: '🖼️',
+  himeji_castle: '🏯',
+  porcelain_tower: '🏺',
+  angkor_wat: '🛕',
+  un: '🌐',
+  statue_of_liberty: '🗽',
+  sydney_opera_house: '🎭',
+  panama_canal: '🚢',
+};
+
 const TERRAIN_COLORS: Record<string, string> = {
   grassland: 'bg-green-600',
   forest: 'bg-green-800',
@@ -56,7 +72,7 @@ function LocationModal({ name, city, currentPlayer, onSelect, onClose, mode, bui
 
   const getAdjacentTiles = () => {
     if (!map) return []; 
-    const tiles: { position: Position; isValid: boolean; isReplacement: boolean; terrain: string; hasBuilding: boolean; hasWonder: boolean; myUnitsCount: number }[] = [];
+    const tiles: { position: Position; isValid: boolean; isReplacement: boolean; terrain: string; hasBuilding: boolean; hasWonder: boolean; wonderType?: string; myUnitsCount: number }[] = [];
     const directions = [
       { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
       { x: -1, y: 0 },  { x: 0, y: 0 },  { x: 1, y: 0 },
@@ -101,6 +117,7 @@ function LocationModal({ name, city, currentPlayer, onSelect, onClose, mode, bui
           terrain: tile.terrain,
           hasBuilding: !!tile.buildingType || (isCenter && city.buildings.length > 0),
           hasWonder: !!tile.wonder,
+          wonderType: tile.wonder?.type,
           myUnitsCount
         });
       }
@@ -135,7 +152,7 @@ function LocationModal({ name, city, currentPlayer, onSelect, onClose, mode, bui
               >
                 {isCenter && <span className="text-lg z-10">🏛️</span>}
                 {tile.hasBuilding && !isCenter && mode !== 'unit' && <span className="text-lg z-10">🏗️</span>}
-                {tile.hasWonder && mode !== 'unit' && <span className="text-lg z-10">🗽</span>}
+                {tile.hasWonder && mode !== 'unit' && <span className="text-lg z-10">{WONDER_ICONS[tile.wonderType!] || '🏛️'}</span>}
                 
                 {mode === 'unit' && tile.myUnitsCount > 0 && (
                     <div className="absolute top-1 right-1 bg-red-600 text-white text-[10px] font-bold px-1 rounded-full z-20 shadow-md border border-red-800">
@@ -532,7 +549,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
                      const wDef = WONDERS[wType];
                      return (
                         <div key={`wonder-${idx}`} className="p-3 bg-indigo-950/60 border border-indigo-500/30 rounded-md shadow-sm">
-                          <div className="text-indigo-300 font-serif font-bold text-sm flex items-center gap-1.5 mb-1"><span className="text-lg">🗽</span> {wDef.name}</div>
+                          <div className="text-indigo-300 font-serif font-bold text-sm flex items-center gap-1.5 mb-1"><span className="text-lg">{WONDER_ICONS[wType] || '🏛️'}</span> {wDef.name}</div>
                           <div className="text-indigo-200/60 text-xs">{wDef.description}</div>
                         </div>
                      )
@@ -600,7 +617,7 @@ export function CityPanel({ city: initialCity }: CityPanelProps) {
                   return (
                     <motion.button key={wonder.type} whileHover={!isDisabled ? { scale: 1.02 } : {}} onClick={() => handleBuildWonder(wonder)} disabled={isDisabled} className={clsx('p-4 rounded-lg text-left transition-colors border relative overflow-hidden', !isDisabled ? 'bg-slate-800 border-indigo-700/50 hover:bg-slate-700 hover:border-indigo-400 shadow-md' : 'bg-slate-800/50 border-slate-700 opacity-60 cursor-not-allowed')}>
                       <div className="text-indigo-300 font-serif font-bold text-sm flex items-center justify-between gap-1 mb-1">
-                          <span>🗽 {wonder.name}</span>
+                          <span>{WONDER_ICONS[wonder.type] || '🏛️'} {wonder.name}</span>
                           {isAlreadyBuilt && <span className="text-[10px] text-red-200 bg-red-900/80 px-1.5 py-0.5 rounded border border-red-500 font-sans">역사 속으로</span>}
                       </div>
                       <div className="text-slate-400 text-xs">{wonder.description}</div>

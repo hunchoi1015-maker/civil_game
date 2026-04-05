@@ -1,7 +1,7 @@
 // src/store/helpers/validationHelpers.ts
 
 import { GamePhase } from '../../types';
-import { Player } from '../../types/player';
+import { Player, GameMap } from '../../types';
 import { NationType } from '../../types/nation';
 import { TECHNOLOGIES } from '../../constants/technologies';
 
@@ -57,4 +57,34 @@ export function canLearnTechInPyramid(player: Player, targetTechId: string): { c
             reason: `피라미드 조건 부족: ${targetLevel}레벨을 연구하려면 ${targetLevel - 1}레벨 기술이 최소 ${currentLevelCount + 2}개 필요합니다. (현재 ${lowerLevelCount}개)` 
         };
     }
+}
+
+export function isValidGreatPersonTile(player: Player, map: GameMap, x: number, y: number): { valid: boolean; reason?: string } {
+  const tile = map.tiles[y][x];
+
+  // 1. 도심부(도시 타일) 검사
+  if (tile.cityId) {
+    return { valid: false, reason: '도심부에는 위인을 배치할 수 없습니다.' };
+  }
+
+  // 2. 지형 제한 검사 (물 타일)
+  if (tile.terrain === 'water') {
+    return { valid: false, reason: '물 타일에는 위인을 배치할 수 없습니다.' };
+  }
+
+  // 3. 불가사의 중복 검사
+  if (tile.wonder) {
+    return { valid: false, reason: '불가사의가 건설된 타일에는 위인을 덮어씌울 수 없습니다.' };
+  }
+
+  // 4. 내 도시 주변 8칸 검사
+  const isNearMyCity = player.cities.some(city =>
+    Math.abs(city.position.x - x) <= 1 && Math.abs(city.position.y - y) <= 1
+  );
+  if (!isNearMyCity) {
+    return { valid: false, reason: '자신의 도시 주변 8칸(교외 지역)에만 배치할 수 있습니다.' };
+  }
+
+  // (기존 건물이나 다른 위인이 있는 경우는 위 조건들을 통과했으므로 정상적으로 덮어씌워짐)
+  return { valid: true };
 }
